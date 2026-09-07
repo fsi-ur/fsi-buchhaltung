@@ -208,7 +208,11 @@ async function sweepAppointmentReminders(now: Date, settings: NotificationSettin
             location: occurrence.location ?? '',
             lead_minutes: lead,
           },
-          recipients: { kind: 'appointmentParticipants', appointmentId: Number(appointment.id) },
+          recipients: {
+            kind: 'appointmentParticipants',
+            appointmentId: Number(appointment.id),
+            occurrenceDate: settings.skip_declined_appointment_reminders ? occurrence.occurrenceDate : undefined,
+          },
           scheduledFor,
           dedupeKey,
         }, conn)

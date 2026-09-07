@@ -163,20 +163,32 @@ async function participantsByEvent(eventId: number, conn?: DbConn): Promise<Memb
   return [...organizers, ...shiftMembers, ...taskMembers]
 }
 
+async function membersWhoDeclinedOccurrence(appointmentId: number, occurrenceDate: string, conn?: DbConn): Promise<Set<number>> {
+  const rows = await query<Array<{ member_id: number }>>(
+    `SELECT member_id FROM appointment_responses
+     WHERE appointment_id = ? AND occurrence_date = ? AND response = 'no'`,
+    [appointmentId, occurrenceDate],
+    conn,
+  )
+  return new Set(rows.map(row => Number(row.member_id)))
+}
+
 /**
  * Everyone in an appointment's scope, plus its creator. The scope itself is resolved by the shared
  * helper in server/utils/appointments/visibility.ts so this can never disagree with what the
- * calendar page and the ICS feed show.
+ * calendar page and the ICS feed show. When `occurrenceDate` is given, members who responded "no"
+ * to that specific occurrence are excluded
  */
-async function recipientsByAppointment(appointmentId: number, conn?: DbConn): Promise<ResolvedRecipient[]> {
+async function recipientsByAppointment(appointmentId: number, occurrenceDate?: string, conn?: DbConn): Promise<ResolvedRecipient[]> {
   const audience = await loadAppointmentAudience(appointmentId, conn)
 
-  const [members, creator] = await Promise.all([
+  const [members, creator, declined] = await Promise.all([
     membersByIds(audience.memberIds, conn),
     audience.createdByUserId != null ? recipientsByUserIds([audience.createdByUserId], conn) : Promise.resolve([]),
+    occurrenceDate ? membersWhoDeclinedOccurrence(appointmentId, occurrenceDate, conn) : Promise.resolve(new Set<number>()),
   ])
 
-  return [...members.map(toRecipient), ...creator]
+  return [...members.filter(row => !declined.has(Number(row.id))).map(toRecipient), ...creator]
 }
 
 async function recipientsByPermission(permission: string, conn?: DbConn): Promise<ResolvedRecipient[]> {
@@ -212,7 +224,7 @@ async function resolveRuleRecipients(rule: RecipientRule, conn?: DbConn): Promis
     case 'taskAssignees': return (await membersByTask(rule.taskId, conn)).map(toRecipient)
     case 'eventOrganizers': return (await organizersByEvent(rule.eventId, conn)).map(toRecipient)
     case 'eventParticipants': return (await participantsByEvent(rule.eventId, conn)).map(toRecipient)
-    case 'appointmentParticipants': return await recipientsByAppointment(rule.appointmentId, conn)
+    case 'appointmentParticipants': return await recipientsByAppointment(rule.appointmentId, rule.occurrenceDate, conn)
     case 'permission': return await recipientsByPermission(rule.permission, conn)
     case 'allActiveMembers': return (await allActiveMembers(conn)).map(toRecipient)
     case 'composite': {

@@ -168,6 +168,17 @@
         </div>
       </div>
 
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-base-100 pt-4">
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-base-800">{{ t('settings.notifications.skipDeclinedAppointmentReminders') }}</p>
+          <p class="text-xs text-base-500">{{ t('settings.notifications.skipDeclinedAppointmentRemindersHelp') }}</p>
+        </div>
+        <CommonToggleSwitch
+          v-model="settings.skip_declined_appointment_reminders"
+          :label="t('settings.notifications.skipDeclinedAppointmentReminders')"
+        />
+      </div>
+
       <div class="flex flex-wrap gap-6 border-t border-base-100 pt-4">
         <div class="field">
           <label for="inbox-retention-days">{{ t('settings.notifications.inboxRetentionDays') }}</label>

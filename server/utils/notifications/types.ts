@@ -10,7 +10,7 @@ export type RecipientRule =
   | { kind: 'taskAssignees', taskId: number }
   | { kind: 'eventOrganizers', eventId: number }
   | { kind: 'eventParticipants', eventId: number }
-  | { kind: 'appointmentParticipants', appointmentId: number }
+  | { kind: 'appointmentParticipants', appointmentId: number, occurrenceDate?: string }
   | { kind: 'permission', permission: string }
   | { kind: 'allActiveMembers' }
   | { kind: 'composite', rules: Exclude<RecipientRule, { kind: 'composite' }>[] }

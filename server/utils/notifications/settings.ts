@@ -17,6 +17,7 @@ const NOTIFICATION_SETTING_KEYS = {
   quiet_hours: 'notifications_quiet_hours',
   retention_days: 'notifications_retention_days',
   inbox_retention_days: 'notifications_inbox_retention_days',
+  skip_declined_appointment_reminders: 'notifications_skip_declined_appointment_reminders',
 } as const
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -41,6 +42,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   quiet_hours: { enabled: false, start: '22:00', end: '07:00' },
   retention_days: 365,
   inbox_retention_days: 30,
+  skip_declined_appointment_reminders: true,
 }
 
 function parseJson<T>(value: string | undefined, fallback: T): T {
@@ -175,6 +177,9 @@ export function normalizeNotificationSettings(input: Partial<NotificationSetting
     },
     retention_days: Number.isInteger(retentionDays) && retentionDays > 0 ? retentionDays : DEFAULT_NOTIFICATION_SETTINGS.retention_days,
     inbox_retention_days: Number.isInteger(inboxRetentionDays) && inboxRetentionDays > 0 ? inboxRetentionDays : DEFAULT_NOTIFICATION_SETTINGS.inbox_retention_days,
+    skip_declined_appointment_reminders: input?.skip_declined_appointment_reminders === undefined
+      ? DEFAULT_NOTIFICATION_SETTINGS.skip_declined_appointment_reminders
+      : Boolean(input.skip_declined_appointment_reminders),
   }
 }
 
@@ -213,6 +218,9 @@ export async function getNotificationSettings(conn?: DbConn): Promise<Notificati
     quiet_hours: parseJson(values.get(NOTIFICATION_SETTING_KEYS.quiet_hours), DEFAULT_NOTIFICATION_SETTINGS.quiet_hours),
     retention_days: Number(values.get(NOTIFICATION_SETTING_KEYS.retention_days)),
     inbox_retention_days: Number(values.get(NOTIFICATION_SETTING_KEYS.inbox_retention_days)),
+    skip_declined_appointment_reminders: values.has(NOTIFICATION_SETTING_KEYS.skip_declined_appointment_reminders)
+      ? values.get(NOTIFICATION_SETTING_KEYS.skip_declined_appointment_reminders) === 'true'
+      : DEFAULT_NOTIFICATION_SETTINGS.skip_declined_appointment_reminders,
   })
 }
 
@@ -235,6 +243,7 @@ export async function saveNotificationSettings(settings: Partial<NotificationSet
     [NOTIFICATION_SETTING_KEYS.quiet_hours, JSON.stringify(normalized.quiet_hours)],
     [NOTIFICATION_SETTING_KEYS.retention_days, String(normalized.retention_days)],
     [NOTIFICATION_SETTING_KEYS.inbox_retention_days, String(normalized.inbox_retention_days)],
+    [NOTIFICATION_SETTING_KEYS.skip_declined_appointment_reminders, String(normalized.skip_declined_appointment_reminders)],
   ]
 
   await query(

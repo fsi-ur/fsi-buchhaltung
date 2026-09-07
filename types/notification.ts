@@ -27,6 +27,8 @@ export interface NotificationSettings {
   retention_days: number
   /** How long a message stays in the bell/inbox — usually much shorter than the history above. */
   inbox_retention_days: number
+  /** When true, a member who responded "no" to an appointment occurrence is left out of reminders for it. */
+  skip_declined_appointment_reminders: boolean
 }
 
 export interface NotificationInboxItem {
