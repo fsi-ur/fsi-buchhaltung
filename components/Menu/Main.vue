@@ -16,21 +16,21 @@
       'md:translate-x-0'
     ]"
   >
-    <ul 
-      class="flex flex-1 flex-col mt-2 mb-4 sm:mb-2"
+    <ul
+      class="flex flex-1 min-h-0 flex-col overflow-y-auto mt-1 mb-2"
       :class="pages.length > 6 ? 'justify-between' : 'justify-start gap-4'"
     >
       <li v-for="page in mainPages" :key="page.name">
         <button
           type="button"
-          class="group flex w-full flex-col items-center rounded-lg p-1 transition-colors cursor-pointer hover:bg-base-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-400 md:p-3"
+          class="group flex w-full flex-col items-center rounded-lg p-1 transition-colors cursor-pointer hover:bg-base-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-400 md:p-2"
           :aria-current="page.name === currentPage ? 'page' : undefined"
           :title="collapsedLabel(page.labelKey)"
           @click="handleClick(page.name)"
         >
           <span
             :class="[
-              'w-12 h-12 flex items-center justify-center rounded-full transition-colors',
+              'w-11 h-11 flex items-center justify-center rounded-full transition-colors',
               page.name === currentPage
                 ? 'bg-secondary-600 text-white'
                 : 'bg-base-800 text-base-400 group-hover:bg-base-700 group-hover:text-base-200'
@@ -41,7 +41,7 @@
 
           <span
             :class="[
-              'mt-2 text-sm font-medium text-center transition-colors',
+              'mt-1 text-sm font-medium text-center transition-colors',
               page.name === currentPage ? 'text-white' : 'text-base-300 group-hover:text-white',
               collapsed ? 'md:hidden' : '',
             ]"
@@ -52,7 +52,7 @@
       </li>
     </ul>
 
-    <div class="mt-auto flex flex-col gap-2">
+    <div class="mt-auto flex shrink-0 flex-col gap-2">
       <CommonNotificationBell v-if="user" :collapsed="collapsed" @navigate="emit('close')" />
 
       <button
