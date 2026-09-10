@@ -1,10 +1,14 @@
-import { wrapTextByWidth } from '~/server/utils/pdf'
+import { estimateTextWidth, wrapTextByWidth, type PdfColor } from '~/server/utils/pdf'
 import { createPdfDocumentLayout, PDF_LAYOUT, type PdfDocumentLayout } from '~/server/utils/pdfLayout'
-import type { FinanceAnalysisFilters } from '~/server/utils/financeAnalysis'
+import { PDF_COLORS } from '~/config/pdfColors'
+import type { FinanceAnalysisFilters } from '~/server/utils/financeAnalysis/filters'
+import { aggregateCashCountBreakdown, allocateBankEventRevenue } from '~/shared/financeAnalysisGrouping'
 import type { AssociationProfileRow } from '~/types/association'
 import type { BudgetCostCentreLine } from '~/types/budget'
 import type { CostCentreRow } from '~/types/costCentre'
 import type {
+  FinanceAnalysisBankStatementPosition,
+  FinanceAnalysisCostCentreSplit,
   FinanceAnalysisData,
   FinanceAnalysisInvoiceItem,
   FinanceAnalysisReceiptItem,
@@ -27,10 +31,12 @@ export interface FinanceAnalysisPdfOptions {
   exportGrouping: FinanceAnalysisExportGrouping
   exportSplitByMonth: boolean
   exportSplitByPaymentStatus: boolean
+  includeTableOfContents: boolean
   includeBalanceSheet: boolean
   includeOverview: boolean
   includeReceiptList: boolean
   includeCashCountList: boolean
+  includeBankStatementList: boolean
   includeInvoiceList: boolean
   association: AssociationProfileRow | null
   logo?: { mimeType: string, data: Buffer } | null
@@ -52,6 +58,28 @@ const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 
 const RECEIPT_STATUS_ORDER: ReceiptStatus[] = [ReceiptStatus.Draft, ReceiptStatus.Open, ReceiptStatus.Paid, ReceiptStatus.Cancelled]
 const INVOICE_STATUS_ORDER: InvoiceStatus[] = [InvoiceStatus.Draft, InvoiceStatus.Open, InvoiceStatus.Paid, InvoiceStatus.Cancelled]
+
+/** Cell for a signed figure: red when it takes money out, green when it brings money in. */
+function signedMoneyCell(value: number, bold = false): TableCell {
+  const rounded = roundCurrency(value)
+  return {
+    text: formatMoney(rounded),
+    color: rounded < 0 ? PDF_COLORS.negative : rounded > 0 ? PDF_COLORS.positive : undefined,
+    bold,
+  }
+}
+
+/**
+ * Variance on an expense line, where the sign reads the other way round: spending above the
+ * budget is the bad direction, so a positive difference is the red one.
+ */
+function expenseVarianceCell(value: number): TableCell {
+  const rounded = roundCurrency(value)
+  return {
+    text: formatMoney(rounded),
+    color: rounded > 0 ? PDF_COLORS.negative : rounded < 0 ? PDF_COLORS.positive : undefined,
+  }
+}
 
 const MONTH_NAMES_SHORT = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.']
 
@@ -322,6 +350,8 @@ function buildActualOwnAmountsByCostCentreId(analysis: FinanceAnalysisData) {
     })
   })
 
+  allocateBankEventRevenue(analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
+
   return amounts
 }
 
@@ -462,76 +492,74 @@ function sortOverviewAggregates(groups: Map<string, OverviewAggregate>, statusOr
     })
 }
 
-function buildCashCountOverviewAggregates(options: FinanceAnalysisPdfOptions): CashCountOverviewAggregate[] {
-  const groups = new Map<string, CashCountOverviewAggregate>()
+/** "SP - Sphäre / KST - Kostenstelle (40,00%)" for every share of an event's split. */
+function formatCostCentreSplits(splits: FinanceAnalysisCostCentreSplit[]) {
+  if (!splits.length) return '-'
 
-  const pushAggregate = (
-    groupLabel: string,
-    monthKey: string,
-    registerCount: number,
-    totalBeforeAmount: number,
-    totalAfterAmount: number,
-    totalDifference: number,
-  ) => {
-    const key = [groupLabel, monthKey].join('|')
-    const current = groups.get(key)
-    if (current) {
-      current.cashCountCount += 1
-      current.registerCount += registerCount
-      current.totalBeforeAmount += totalBeforeAmount
-      current.totalAfterAmount += totalAfterAmount
-      current.totalDifference += totalDifference
-      return
-    }
-
-    groups.set(key, {
-      groupLabel,
-      monthKey,
-      cashCountCount: 1,
-      registerCount,
-      totalBeforeAmount,
-      totalAfterAmount,
-      totalDifference,
+  return splits
+    .map((split) => {
+      const sphereLabel = [split.sphere_code, split.sphere_name].filter(Boolean).join(' - ')
+      const costCentreLabel = [split.code, split.name].filter(Boolean).join(' - ')
+      const label = sphereLabel ? `${sphereLabel} / ${costCentreLabel}` : costCentreLabel
+      return splits.length > 1 ? `${label} (${split.allocation_percentage.toFixed(2)}%)` : label
     })
+    .join(', ')
+}
+
+const BANK_POSITION_TYPE_LABELS: Record<FinanceAnalysisBankStatementPosition['position_type'], string> = {
+  receipt: 'Beleg',
+  invoice: 'Rechnung',
+  event: 'Veranstaltung',
+}
+
+interface BankStatementOverviewAggregate {
+  typeLabel: string
+  monthKey: string
+  count: number
+  inflow: number
+  outflow: number
+}
+
+/**
+ * Statement positions summarised by what they settle. Only event positions carry a cost centre,
+ * so the report groups by position type instead — the one axis every position actually has.
+ */
+function buildBankStatementOverviewAggregates(options: FinanceAnalysisPdfOptions): BankStatementOverviewAggregate[] {
+  const groups = new Map<string, BankStatementOverviewAggregate>()
+
+  for (const position of options.analysis.bankStatementPositions) {
+    const typeLabel = BANK_POSITION_TYPE_LABELS[position.position_type]
+    const monthKey = options.exportSplitByMonth ? position.position_date.slice(0, 7) : ''
+    const key = `${typeLabel}|${monthKey}`
+
+    const current = groups.get(key) ?? { typeLabel, monthKey, count: 0, inflow: 0, outflow: 0 }
+    current.count += 1
+    if (position.direction === 'in') current.inflow += position.amount
+    else current.outflow += position.amount
+    groups.set(key, current)
   }
-
-  options.analysis.cashCounts.forEach((cashCount) => {
-    const monthKey = options.exportSplitByMonth ? cashCount.counted_after_at.slice(0, 7) : ''
-
-    if (options.exportGrouping !== 'costCentres') {
-      pushAggregate('', monthKey, cashCount.register_count, cashCount.total_before_amount, cashCount.total_after_amount, cashCount.total_difference)
-      return
-    }
-
-    if (!cashCount.cost_centres.length) {
-      pushAggregate('-', monthKey, cashCount.register_count, 0, 0, cashCount.total_difference)
-      return
-    }
-
-    for (const costCentre of cashCount.cost_centres) {
-      const factor = Number(costCentre.allocation_percentage || 0) / 100
-      pushAggregate(
-        `${costCentre.sphere_code}/${costCentre.code} - ${costCentre.name}`,
-        monthKey,
-        cashCount.register_count,
-        roundCurrency(cashCount.total_before_amount * factor),
-        roundCurrency(cashCount.total_after_amount * factor),
-        roundCurrency(cashCount.total_difference * factor),
-      )
-    }
-  })
 
   return Array.from(groups.values())
     .map(group => ({
       ...group,
-      totalBeforeAmount: roundCurrency(group.totalBeforeAmount),
-      totalAfterAmount: roundCurrency(group.totalAfterAmount),
-      totalDifference: roundCurrency(group.totalDifference),
+      inflow: roundCurrency(group.inflow),
+      outflow: roundCurrency(group.outflow),
     }))
-    .sort((left, right) => {
-      if (left.groupLabel !== right.groupLabel) return left.groupLabel.localeCompare(right.groupLabel)
-      return left.monthKey.localeCompare(right.monthKey)
-    })
+    .sort((left, right) => (
+      left.typeLabel.localeCompare(right.typeLabel) || left.monthKey.localeCompare(right.monthKey)
+    ))
+}
+
+function buildCashCountOverviewAggregates(options: FinanceAnalysisPdfOptions): CashCountOverviewAggregate[] {
+  return aggregateCashCountBreakdown(
+    options.analysis.cashCountBreakdown,
+    options.exportGrouping,
+    options.exportSplitByMonth,
+    {
+      unassigned: '-',
+      formatGroup: (code, name) => [code, name].filter(Boolean).join(' - '),
+    },
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -591,13 +619,31 @@ interface TableColumn {
 interface TableCell {
   text: string
   subLines?: string[]
+  color?: PdfColor
+  bold?: boolean
 }
+
+/** Row background, matching how the app tints a list row. `band` is the plain accent emphasis. */
+type TableRowTone = 'warning' | 'success' | 'neutral'
 
 interface TableRowDef {
   cells: Array<string | TableCell>
   bold?: boolean
   band?: boolean
   spacerBefore?: boolean
+  tone?: TableRowTone
+}
+
+const ROW_TONE_FILLS: Record<TableRowTone, PdfColor> = {
+  warning: PDF_COLORS.warningWash,
+  success: PDF_COLORS.positiveWash,
+  neutral: PDF_COLORS.neutralWash,
+}
+
+interface TocEntry {
+  label: string
+  group: string
+  pageIndex: number
 }
 
 const CELL_PADDING = 4
@@ -612,8 +658,9 @@ function renderSectionTable(layout: PdfDocumentLayout, params: {
   rows: TableRowDef[]
   emptyText?: string
   headerless?: boolean
+  toc?: { entries: TocEntry[], group: string }
 }) {
-  const { title, metaLine, columns, rows, emptyText, headerless = false } = params
+  const { title, metaLine, columns, rows, emptyText, headerless = false, toc } = params
   const { contentLeft, contentRight } = PDF_LAYOUT
   const tableWidth = contentRight - contentLeft
 
@@ -641,26 +688,55 @@ function renderSectionTable(layout: PdfDocumentLayout, params: {
       : []))
     const headerHeight = labelLines.reduce((height, lines) => Math.max(height, lines.length * LINE_HEIGHT), LINE_HEIGHT) + 6
 
-    layout.page.lines.push(
-      { x1: contentLeft, y1: layout.y, x2: contentRight, y2: layout.y, width: 0.8 },
-      { x1: contentLeft, y1: layout.y - headerHeight, x2: contentRight, y2: layout.y - headerHeight, width: 0.8 },
-    )
+    layout.page.rects.push({
+      x: contentLeft,
+      y: layout.y - headerHeight,
+      width: tableWidth,
+      height: headerHeight,
+      fill: true,
+      color: PDF_COLORS.accentTint,
+    })
+    layout.page.lines.push({
+      x1: contentLeft,
+      y1: layout.y - headerHeight,
+      x2: contentRight,
+      y2: layout.y - headerHeight,
+      width: 1,
+      color: PDF_COLORS.accent,
+    })
     columns.forEach((column, index) => {
       const { x, align } = cellTextPosition(index)
       labelLines[index]!.forEach((line, lineIndex) => {
         if (!line) return
-        layout.page.texts.push({ x, y: layout.y - 11 - (lineIndex * LINE_HEIGHT), size: 9, text: line, font: 'F2', align })
+        layout.page.texts.push({
+          x,
+          y: layout.y - 11 - (lineIndex * LINE_HEIGHT),
+          size: 9,
+          text: line,
+          font: 'F2',
+          align,
+          color: PDF_COLORS.accent,
+        })
       })
     })
     layout.y -= headerHeight + 5
   }
 
   // Keep the section title, table header and at least one row together.
-  layout.ensureSpace((title ? 20 : 0) + (metaLine ? 14 : 0) + (headerless ? 0 : 22) + 30)
+  layout.ensureSpace((title ? 24 : 0) + (metaLine ? 16 : 0) + (headerless ? 0 : 22) + 30)
 
   if (title) {
-    layout.page.texts.push({ x: contentLeft, y: layout.y - 12, size: 12.5, text: title, font: 'F2' })
-    layout.y -= metaLine ? 17 : 20
+    toc?.entries.push({ label: title, group: toc.group, pageIndex: layout.pageIndex })
+    layout.page.texts.push({ x: contentLeft, y: layout.y - 12, size: 12.5, text: title, font: 'F2', color: PDF_COLORS.accent })
+    layout.page.rects.push({
+      x: contentLeft,
+      y: layout.y - 19,
+      width: 34,
+      height: 2,
+      fill: true,
+      color: PDF_COLORS.accent,
+    })
+    layout.y -= metaLine ? 22 : 24
   }
   if (metaLine) {
     layout.page.texts.push({ x: contentLeft, y: layout.y - 9, size: 8.5, text: metaLine, gray: 0.35 })
@@ -704,14 +780,14 @@ function renderSectionTable(layout: PdfDocumentLayout, params: {
 
     layout.ensureSpace(rowHeight)
 
-    if (row.band) {
+    if (row.band || row.tone) {
       layout.page.rects.push({
         x: contentLeft,
         y: layout.y - rowHeight,
         width: tableWidth,
         height: rowHeight,
         fill: true,
-        gray: 0.93,
+        color: row.tone ? ROW_TONE_FILLS[row.tone] : PDF_COLORS.accentWash,
       })
     }
 
@@ -726,8 +802,9 @@ function renderSectionTable(layout: PdfDocumentLayout, params: {
           y: firstBaseline - (lineIndex * LINE_HEIGHT),
           size: 9,
           text: line,
-          font: row.bold ? 'F2' : 'F1',
+          font: row.bold || cells[index]!.bold ? 'F2' : 'F1',
           align,
+          color: cells[index]!.color,
         })
       })
 
@@ -751,8 +828,9 @@ function renderSectionTable(layout: PdfDocumentLayout, params: {
       y1: layout.y - rowHeight,
       x2: contentRight,
       y2: layout.y - rowHeight,
-      width: isLast ? 0.8 : 0.5,
-      gray: isLast ? 0 : 0.82,
+      width: isLast ? 1 : 0.5,
+      gray: isLast ? undefined : 0.82,
+      color: isLast ? PDF_COLORS.accent : undefined,
     })
 
     layout.y -= rowHeight
@@ -760,6 +838,117 @@ function renderSectionTable(layout: PdfDocumentLayout, params: {
 
   layout.onContinuationPage(() => {})
   layout.y -= SECTION_GAP
+}
+
+// ---------------------------------------------------------------------------
+// Table of contents
+// ---------------------------------------------------------------------------
+
+const TOC_GROUP_HEIGHT = 26
+const TOC_ENTRY_HEIGHT = 19
+const TOC_TITLE_HEIGHT = 52
+
+interface TocItem {
+  kind: 'group' | 'entry'
+  label: string
+  pageIndex: number
+}
+
+/**
+ * Renders the contents listing into pages spliced in at `insertAtIndex`. Runs after the body so
+ * every section's page is known; the listed numbers account for the pages this insert adds.
+ */
+function renderTableOfContents(layout: PdfDocumentLayout, entries: TocEntry[], insertAtIndex: number) {
+  if (!entries.length) return
+
+  const items: TocItem[] = []
+  let lastGroup: string | null = null
+  for (const entry of entries) {
+    if (entry.group && entry.group !== lastGroup) {
+      items.push({ kind: 'group', label: entry.group, pageIndex: entry.pageIndex })
+      lastGroup = entry.group
+    }
+    items.push({ kind: 'entry', label: entry.label, pageIndex: entry.pageIndex })
+  }
+
+  const { contentLeft, contentRight, continuationTop, bottomLimit } = PDF_LAYOUT
+
+  const pages: TocItem[][] = []
+  let currentPage: TocItem[] = []
+  let remainingY = continuationTop - TOC_TITLE_HEIGHT
+  for (const item of items) {
+    const height = item.kind === 'group' ? TOC_GROUP_HEIGHT : TOC_ENTRY_HEIGHT
+    if (remainingY - height < bottomLimit && currentPage.length) {
+      pages.push(currentPage)
+      currentPage = []
+      remainingY = continuationTop
+    }
+    currentPage.push(item)
+    remainingY -= height
+  }
+  pages.push(currentPage)
+
+  const buffers = layout.insertPages(insertAtIndex, pages.length)
+  const pageNumber = (bodyPageIndex: number) => (
+    (bodyPageIndex >= insertAtIndex ? bodyPageIndex + pages.length : bodyPageIndex) + 1
+  )
+
+  pages.forEach((pageItems, pageIndex) => {
+    const buffer = buffers[pageIndex]!
+    let cursor = continuationTop
+
+    if (pageIndex === 0) {
+      buffer.texts.push({ x: contentLeft, y: cursor - 18, size: 16, text: 'Inhaltsverzeichnis', font: 'F2', color: PDF_COLORS.accent })
+      buffer.rects.push({
+        x: contentLeft,
+        y: cursor - 30,
+        width: contentRight - contentLeft,
+        height: 2,
+        fill: true,
+        color: PDF_COLORS.accent,
+      })
+      cursor -= TOC_TITLE_HEIGHT
+    }
+
+    for (const item of pageItems) {
+      if (item.kind === 'group') {
+        buffer.texts.push({
+          x: contentLeft,
+          y: cursor - 14,
+          size: 8.5,
+          text: item.label.toUpperCase(),
+          font: 'F2',
+          color: PDF_COLORS.neutral,
+        })
+        cursor -= TOC_GROUP_HEIGHT
+        continue
+      }
+
+      const baseline = cursor - 13
+      const targetPage = pageNumber(item.pageIndex) - 1
+      const numberText = String(targetPage + 1)
+      const labelX = contentLeft + 12
+
+      buffer.links.push({
+        x: contentLeft,
+        y: baseline - 4,
+        width: contentRight - contentLeft,
+        height: TOC_ENTRY_HEIGHT,
+        targetPage,
+      })
+
+      const leaderStart = labelX + estimateTextWidth(item.label, 10.5, false) + 6
+      const leaderEnd = contentRight - estimateTextWidth(numberText, 10.5, true) - 6
+
+      buffer.texts.push({ x: labelX, y: baseline, size: 10.5, text: item.label })
+      if (leaderEnd > leaderStart) {
+        buffer.lines.push({ x1: leaderStart, y1: baseline + 3, x2: leaderEnd, y2: baseline + 3, width: 0.5, gray: 0.8 })
+      }
+      buffer.texts.push({ x: contentRight, y: baseline, size: 10.5, text: numberText, font: 'F2', align: 'right', color: PDF_COLORS.accent })
+
+      cursor -= TOC_ENTRY_HEIGHT
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -792,8 +981,17 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
   // --- Header ---
   const hasLogo = layout.drawCenteredBrand(association)
-  layout.centeredText('Finanzanalyse', { y: hasLogo ? 722 : 738, size: 18, font: 'F2' })
-  layout.centeredText(`Zeitraum: ${formatDate(filters.startDate)} bis ${formatDate(filters.endDate)}`, { y: hasLogo ? 702 : 718, size: 13, gray: 0.25 })
+  const titleY = hasLogo ? 722 : 738
+  layout.centeredText('Finanzanalyse', { y: titleY, size: 18, font: 'F2', color: PDF_COLORS.accent })
+  layout.centeredText(`Zeitraum: ${formatDate(filters.startDate)} bis ${formatDate(filters.endDate)}`, { y: titleY - 20, size: 13, gray: 0.25 })
+  layout.page.rects.push({
+    x: PDF_LAYOUT.headingCenterX - 40,
+    y: titleY - 32,
+    width: 80,
+    height: 2,
+    fill: true,
+    color: PDF_COLORS.accent,
+  })
 
   layout.y = hasLogo ? 672 : 688
 
@@ -824,7 +1022,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
   metaRows.forEach(([label, value]) => {
     const valueLines = wrapTextByWidth(value, PDF_LAYOUT.contentRight - (contentLeft + 110), 10)
-    layout.page.texts.push({ x: contentLeft, y: layout.y, size: 10, text: label, font: 'F2' })
+    layout.page.texts.push({ x: contentLeft, y: layout.y, size: 10, text: label, font: 'F2', color: PDF_COLORS.neutral })
     valueLines.forEach((line, index) => {
       if (!line) return
       layout.page.texts.push({ x: contentLeft + 110, y: layout.y - (index * 13), size: 10, text: line })
@@ -833,9 +1031,14 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
   })
   layout.y -= 12
 
+  const tocEntries: TocEntry[] = []
+  const toc = (group: string) => (options.includeTableOfContents ? { entries: tocEntries, group } : undefined)
+
   // Every part after the overview page starts on a fresh page; the first rendered
   // part stays on page 1 below the document header when the overview is skipped.
-  let hasSectionContent = false
+  // With a contents listing the body always starts on its own page, so the listing
+  // can be spliced in as page 2 without splitting a section.
+  let hasSectionContent = options.includeTableOfContents
   const startSectionOnNewPage = () => {
     if (!hasSectionContent) {
       hasSectionContent = true
@@ -848,17 +1051,20 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
   // --- Key figures ---
   const totalEntries = summary.receipt_count + summary.cash_count_count + summary.invoice_count
 
+  if (options.includeOverview) startSectionOnNewPage()
+
   if (options.includeOverview && comparisonAnalysis) {
     const comparison = comparisonAnalysis.summary
     const comparisonEntries = comparison.receipt_count + comparison.cash_count_count + comparison.invoice_count
     const currencyRow = (label: string, current: number, previous: number, bold = false, band = false): TableRowDef => ({
-      cells: [label, formatMoney(current), formatMoney(previous), formatMoney(roundCurrency(current - previous))],
+      cells: [label, formatMoney(current), formatMoney(previous), signedMoneyCell(current - previous)],
       bold,
       band,
     })
 
     renderSectionTable(layout, {
       title: 'Auswertung',
+      toc: toc('Überblick'),
       columns: [
         { label: 'Kennzahl', width: 175 },
         { label: 'Aktuell', width: 103, align: 'right' },
@@ -869,7 +1075,15 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         currencyRow('Belege gesamt', summary.receipt_total, comparison.receipt_total),
         currencyRow('Kassenerlös', summary.cash_count_total_difference, comparison.cash_count_total_difference),
         currencyRow('Rechnungen gesamt', summary.invoice_total, comparison.invoice_total),
-        currencyRow('Saldo', summary.net_result, comparison.net_result, true, true),
+        {
+          cells: [
+            'Saldo',
+            signedMoneyCell(summary.net_result),
+            signedMoneyCell(comparison.net_result),
+            signedMoneyCell(summary.net_result - comparison.net_result),
+          ],
+          bold: true,
+        },
         {
           cells: [
             'Geprüfte Vorgänge',
@@ -883,6 +1097,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
   } else if (options.includeOverview) {
     renderSectionTable(layout, {
       title: 'Auswertung',
+      toc: toc('Überblick'),
       columns: [
         { label: 'Kennzahl', width: 265 },
         { label: 'Anzahl', width: 90, align: 'right' },
@@ -892,7 +1107,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         { cells: ['Belege gesamt', formatCount(summary.receipt_count), formatMoney(summary.receipt_total)] },
         { cells: ['Kassenerlös', formatCount(summary.cash_count_count), formatMoney(summary.cash_count_total_difference)] },
         { cells: ['Rechnungen gesamt', formatCount(summary.invoice_count), formatMoney(summary.invoice_total)] },
-        { cells: ['Saldo', '', formatMoney(summary.net_result)], bold: true, band: true },
+        { cells: ['Saldo', '', signedMoneyCell(summary.net_result)], bold: true },
         { cells: ['Geprüfte Vorgänge', formatCount(totalEntries), ''] },
       ],
     })
@@ -906,11 +1121,14 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     { status: ReceiptStatus.Cancelled, count: summary.receipt_cancelled_count, total: summary.receipt_cancelled_total },
   ]
     .filter(row => orderedStatuses.includes(row.status))
-    .map(row => ({ cells: [RECEIPT_STATUS_LABELS[row.status], formatCount(row.count), formatMoney(row.total)] } satisfies TableRowDef))
+    .map(row => ({
+      cells: [RECEIPT_STATUS_LABELS[row.status], formatCount(row.count), formatMoney(row.total)],
+    } satisfies TableRowDef))
 
   if (options.includeOverview) {
     renderSectionTable(layout, {
       title: 'Belegüberblick',
+      toc: toc('Überblick'),
       columns: [
         { label: 'Belegstatus', width: 265 },
         { label: 'Anzahl', width: 90, align: 'right' },
@@ -923,6 +1141,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     // --- Cash overview ---
     renderSectionTable(layout, {
       title: 'Kassenüberblick',
+      toc: toc('Überblick'),
       headerless: true,
       columns: [
         { label: '', width: 355 },
@@ -945,6 +1164,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
     renderSectionTable(layout, {
       title: 'Rechnungsüberblick',
+      toc: toc('Überblick'),
       columns: [
         { label: 'Rechnungsstatus', width: 265 },
         { label: 'Anzahl', width: 90, align: 'right' },
@@ -983,7 +1203,11 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     const totalIncome = roundCurrency(totals.income)
 
     const rows: TableRowDef[] = [
-      { cells: ['Gesamt', '', formatMoney(totalExpense), formatMoney(totalIncome), formatMoney(roundCurrency(totalIncome - totalExpense))], bold: true, band: true },
+      {
+        cells: ['Gesamt', '', formatMoney(totalExpense), formatMoney(totalIncome), formatMoney(roundCurrency(totalIncome - totalExpense))],
+        bold: true,
+        band: true,
+      },
     ]
 
     visibleRows.forEach((row) => {
@@ -1017,6 +1241,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
     renderSectionTable(layout, {
       title: 'Rechnungsabschluss',
+      toc: toc('Abschluss'),
       columns: [
         { label: 'Kostenstelle', width: 165 },
         { label: 'Kategorie', width: 95 },
@@ -1060,19 +1285,19 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
       const budgetSaldo = roundCurrency(budget.income - budget.expense)
       return [
         {
-          cells: [label, 'Ist', formatMoney(roundCurrency(actual.expense)), formatMoney(roundCurrency(actual.income)), formatMoney(actualSaldo)],
+          cells: [label, 'Ist', formatMoney(roundCurrency(actual.expense)), formatMoney(roundCurrency(actual.income)), signedMoneyCell(actualSaldo)],
           bold,
           band,
           spacerBefore,
         },
-        { cells: ['', 'Haushaltsplan', formatMoney(roundCurrency(budget.expense)), formatMoney(roundCurrency(budget.income)), formatMoney(budgetSaldo)] },
+        { cells: ['', 'Haushaltsplan', formatMoney(roundCurrency(budget.expense)), formatMoney(roundCurrency(budget.income)), signedMoneyCell(budgetSaldo)] },
         {
           cells: [
             '',
             'Differenz',
-            formatMoney(roundCurrency(actual.expense - budget.expense)),
-            formatMoney(roundCurrency(actual.income - budget.income)),
-            formatMoney(roundCurrency(actualSaldo - budgetSaldo)),
+            expenseVarianceCell(actual.expense - budget.expense),
+            signedMoneyCell(actual.income - budget.income),
+            signedMoneyCell(actualSaldo - budgetSaldo),
           ],
         },
       ]
@@ -1100,6 +1325,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
     renderSectionTable(layout, {
       title: 'Haushaltsplanvergleich',
+      toc: toc('Abschluss'),
       metaLine: options.comparisonBudgetLabel ? `Vergleichshaushalt: ${options.comparisonBudgetLabel}` : undefined,
       columns: [
         { label: 'Kostenstelle', width: 155 },
@@ -1115,7 +1341,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
   // --- Grouped overviews ---
   const hasReceiptOverview = options.exportGrouping !== 'none' || options.exportSplitByMonth || options.exportSplitByPaymentStatus
-  const hasCashCountOverview = options.exportGrouping === 'costCentres' || options.exportSplitByMonth
+  const hasCashCountOverview = options.exportGrouping !== 'none' || options.exportSplitByMonth
   const groupColumnLabel = options.exportGrouping === 'costCentres' ? 'Kostenstellen' : 'Sphären'
 
   const overviewColumns = (statusLabel: string, sumLabel: string) => {
@@ -1143,6 +1369,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Belegübersicht',
+      toc: toc('Übersichten'),
       metaLine: `${aggregates.length} Einträge`,
       columns: overviewColumns('Zahlstatus', 'Summe'),
       rows: aggregates.map(aggregate => overviewRow(aggregate, RECEIPT_STATUS_LABELS)),
@@ -1153,6 +1380,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Rechnungsübersicht',
+      toc: toc('Übersichten'),
       metaLine: `${invoiceAggregates.length} Einträge`,
       columns: overviewColumns('Zahlstatus', 'Summe'),
       rows: invoiceAggregates.map(aggregate => overviewRow(aggregate, INVOICE_STATUS_LABELS)),
@@ -1162,10 +1390,13 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
   if (hasCashCountOverview) {
     const aggregates = buildCashCountOverviewAggregates(options)
-    const hideBalances = options.exportGrouping === 'costCentres'
+    // Allocated shares are not meaningful as an opening/closing register balance, so the
+    // before/after columns only survive an ungrouped sheet.
+    const hideBalances = options.exportGrouping !== 'none'
+    const groupColumnLabel = options.exportGrouping === 'spheres' ? 'Sphäre' : 'Kostenstelle'
 
     const columns: TableColumn[] = []
-    if (options.exportGrouping === 'costCentres') columns.push({ label: 'Kostenstelle', width: 165 })
+    if (options.exportGrouping !== 'none') columns.push({ label: groupColumnLabel, width: 165 })
     if (options.exportSplitByMonth) columns.push({ label: 'Monat', width: 70 })
     columns.push({ label: 'Anzahl', width: 55, align: 'right' })
     columns.push({ label: 'Kassen', width: 55, align: 'right' })
@@ -1178,11 +1409,12 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Kassenzählungsübersicht',
+      toc: toc('Übersichten'),
       metaLine: `${aggregates.length} Einträge`,
       columns,
       rows: aggregates.map((aggregate) => {
         const cells: Array<string | TableCell> = []
-        if (options.exportGrouping === 'costCentres') cells.push(aggregate.groupLabel)
+        if (options.exportGrouping !== 'none') cells.push(aggregate.groupLabel)
         if (options.exportSplitByMonth) cells.push(formatMonthKey(aggregate.monthKey))
         cells.push(formatCount(aggregate.cashCountCount))
         cells.push(formatCount(aggregate.registerCount))
@@ -1197,6 +1429,39 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     })
   }
 
+  if (hasCashCountOverview) {
+    const aggregates = buildBankStatementOverviewAggregates(options)
+
+    const columns: TableColumn[] = [{ label: 'Art', width: 120 }]
+    if (options.exportSplitByMonth) columns.push({ label: 'Monat', width: 70 })
+    columns.push(
+      { label: 'Anzahl', width: 55, align: 'right' },
+      { label: 'Eingang', width: 85, align: 'right' },
+      { label: 'Ausgang', width: 85, align: 'right' },
+      { label: 'Saldo', width: 90, align: 'right' },
+    )
+
+    startSectionOnNewPage()
+    renderSectionTable(layout, {
+      title: 'Kontoauszugsübersicht',
+      toc: toc('Übersichten'),
+      metaLine: `${aggregates.length} Einträge · Nach Art der Position`,
+      columns,
+      rows: aggregates.map((aggregate) => {
+        const cells: Array<string | TableCell> = [aggregate.typeLabel]
+        if (options.exportSplitByMonth) cells.push(formatMonthKey(aggregate.monthKey))
+        cells.push(
+          formatCount(aggregate.count),
+          formatMoney(aggregate.inflow),
+          formatMoney(aggregate.outflow),
+          formatMoney(roundCurrency(aggregate.inflow - aggregate.outflow)),
+        )
+        return { cells }
+      }),
+      emptyText: 'Keine Kontoauszugspositionen im gewählten Zeitraum.',
+    })
+  }
+
   // --- Liquidity ledger ---
   if (options.includeBalanceSheet) {
     const liquidityRows = analysis.liquidityRows ?? []
@@ -1205,6 +1470,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Liquiditätsübersicht',
+      toc: toc('Übersichten'),
       metaLine: `${dataCount} Einträge · Chronologisches Kassenbuch mit laufenden Salden`,
       columns: [
         { label: 'Datum', width: 54 },
@@ -1221,17 +1487,26 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
           subLines.push(`Soll ${formatMoney(row.expected_amount ?? 0)} · Ist ${formatMoney(row.measured_amount ?? 0)} · Differenz ${formatMoney(row.discrepancy_amount)}`)
         }
 
+        const isBoundaryRow = row.type === 'opening' || row.type === 'closing'
+        // Same tinting as the on-screen ledger: a checked balance is green, a deviating one amber.
+        const isCheckpoint = row.discrepancy_amount !== null
+        const tone: TableRowTone | undefined = isBoundaryRow
+          ? 'neutral'
+          : row.has_discrepancy
+            ? 'warning'
+            : isCheckpoint ? 'success' : undefined
+
         return {
           cells: [
             formatDate(row.date),
             { text: liquidityRowLabel(row), subLines },
-            isSpecialRow ? '' : formatMoney(row.delta_amount),
+            isSpecialRow ? '' : signedMoneyCell(row.delta_amount, true),
             formatMoney(row.bank_balance),
             formatMoney(row.cash_balance),
             formatMoney(row.total_balance),
           ],
-          bold: row.type === 'opening' || row.type === 'closing',
-          band: row.type === 'opening' || row.type === 'closing',
+          bold: isBoundaryRow,
+          tone,
         }
       }),
       emptyText: 'Keine Liquiditätsvorgänge im gewählten Zeitraum.',
@@ -1243,6 +1518,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Belege im Zeitraum',
+      toc: toc('Detaillisten'),
       metaLine: `${analysis.receipts.length} Einträge · Datum: ${receiptDateFieldLabel}`,
       columns: [
         { label: 'Datum', width: 62 },
@@ -1268,19 +1544,22 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Kassenzählungen im Zeitraum',
+      toc: toc('Detaillisten'),
       metaLine: `${analysis.cashCounts.length} Einträge`,
       columns: [
         { label: 'Gezählt am', width: 85 },
-        { label: 'Veranstaltung', width: 155 },
-        { label: 'Kassen', width: 45, align: 'right' },
-        { label: 'Vorher', width: 66, align: 'right' },
-        { label: 'Nachher', width: 66, align: 'right' },
-        { label: 'Differenz', width: 68, align: 'right' },
+        { label: 'Veranstaltung', width: 110 },
+        { label: 'Sphäre / Kostenstelle', width: 120 },
+        { label: 'Kassen', width: 40, align: 'right' },
+        { label: 'Vorher', width: 60, align: 'right' },
+        { label: 'Nachher', width: 60, align: 'right' },
+        { label: 'Differenz', width: 60, align: 'right' },
       ],
       rows: analysis.cashCounts.map(cashCount => ({
         cells: [
           formatDateTime(cashCount.counted_after_at),
           cashCount.event_name,
+          formatCostCentreSplits(cashCount.cost_centres),
           formatCount(cashCount.register_count),
           formatMoney(cashCount.total_before_amount),
           formatMoney(cashCount.total_after_amount),
@@ -1291,10 +1570,41 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
     })
   }
 
+  if (options.includeBankStatementList) {
+    const positions = analysis.bankStatementPositions
+    startSectionOnNewPage()
+    renderSectionTable(layout, {
+      title: 'Kontoauszugspositionen im Zeitraum',
+      toc: toc('Detaillisten'),
+      metaLine: `${positions.length} Positionen aus ${analysis.summary.bank_statement_count} Kontoauszügen`,
+      columns: [
+        { label: 'Datum', width: 62 },
+        { label: 'Auszug', width: 60 },
+        { label: 'Art', width: 70 },
+        { label: 'Referenz', width: 90 },
+        { label: 'Beteiligte', width: 128 },
+        { label: 'Betrag', width: 90, align: 'right' },
+      ],
+      rows: positions.map(position => ({
+        cells: [
+          formatDate(position.position_date),
+          position.statement_number || '-',
+          BANK_POSITION_TYPE_LABELS[position.position_type],
+          position.reference || '-',
+          position.counterparty || '-',
+          // Signed so a statement reads like an account: outgoing money is negative.
+          formatMoney(position.direction === 'out' ? -position.amount : position.amount),
+        ],
+      })),
+      emptyText: 'Keine Kontoauszugspositionen im gewählten Zeitraum.',
+    })
+  }
+
   if (options.includeInvoiceList) {
     startSectionOnNewPage()
     renderSectionTable(layout, {
       title: 'Rechnungen im Zeitraum',
+      toc: toc('Detaillisten'),
       metaLine: `${analysis.invoices.length} Einträge · Datum: ${invoiceDateFieldLabel}`,
       columns: [
         { label: 'Datum', width: 62 },
@@ -1315,6 +1625,9 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
       emptyText: 'Keine Rechnungen im gewählten Zeitraum.',
     })
   }
+
+  // The body always begins on page 2 when a listing was requested, so it slots in right after the cover.
+  if (options.includeTableOfContents) renderTableOfContents(layout, tocEntries, 1)
 
   const footerLabel = [
     association?.short_name || association?.name,

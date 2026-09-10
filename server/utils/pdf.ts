@@ -46,6 +46,15 @@ export interface PdfImage {
   objectName: string
 }
 
+export interface PdfLink {
+  x: number
+  y: number
+  width: number
+  height: number
+  /** 0-based index into the document's pages. */
+  targetPage: number
+}
+
 export interface PdfImageObject {
   width: number
   height: number
@@ -681,8 +690,10 @@ function paethPredictor(left: number, up: number, upLeft: number) {
 export function buildPdfDocument(params: {
   pages: string[]
   imageObject?: PdfImageObject | null
+  /** Internal jump targets per page, parallel to `pages`. */
+  links?: PdfLink[][]
 }) {
-  const { imageObject = null } = params
+  const { imageObject = null, links = [] } = params
   const pages = params.pages.length ? params.pages : ['']
 
   const firstPageObjectId = 3
@@ -705,9 +716,18 @@ export function buildPdfDocument(params: {
     `2 0 obj << /Type /Pages /Kids [${kids}] /Count ${pages.length} >> endobj`,
   ]
 
+  // Annotation objects trail the rest of the file, so their ids stay contiguous with everything
+  // already emitted — the xref table is written assuming position N holds object N + 1.
+  let nextObjectId = (softMaskObjectId ?? imageObjectId ?? fontBoldItalicId) + 1
+  const annotationIds = pages.map((_, index) => (links[index] ?? []).map(() => nextObjectId++))
+
   pages.forEach((content, index) => {
     const stream = Buffer.from(content, 'binary')
-    objects.push(`${pageObjectId(index)} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.25 842] /Contents ${contentObjectId(index)} 0 R /Resources ${resources} >> endobj`)
+    const pageAnnotationIds = annotationIds[index] ?? []
+    const annotsPart = pageAnnotationIds.length
+      ? ` /Annots [${pageAnnotationIds.map(id => `${id} 0 R`).join(' ')}]`
+      : ''
+    objects.push(`${pageObjectId(index)} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.25 842] /Contents ${contentObjectId(index)} 0 R /Resources ${resources}${annotsPart} >> endobj`)
     objects.push(`${contentObjectId(index)} 0 obj << /Length ${stream.length} >> stream\n${stream.toString('binary')}\nendstream endobj`)
   })
 
@@ -724,6 +744,15 @@ export function buildPdfDocument(params: {
   if (imageObject?.softMaskObject && softMaskObjectId) {
     objects.push(`${softMaskObjectId} 0 obj ${imageObject.softMaskObject} endobj`)
   }
+
+  pages.forEach((_, index) => {
+    (links[index] ?? []).forEach((link, linkIndex) => {
+      const target = Math.min(Math.max(link.targetPage, 0), pages.length - 1)
+      const rect = [link.x, link.y, link.x + link.width, link.y + link.height].join(' ')
+      // Zoom 0 keeps whatever magnification the reader is already using.
+      objects.push(`${annotationIds[index]![linkIndex]} 0 obj << /Type /Annot /Subtype /Link /Rect [${rect}] /Border [0 0 0] /Dest [${pageObjectId(target)} 0 R /XYZ 0 842 0] >> endobj`)
+    })
+  })
 
   let pdf = '%PDF-1.4\n'
   const offsets: number[] = [0]

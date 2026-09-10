@@ -22,10 +22,12 @@ export interface FinanceAnalysisPdfExportPayload {
   exportGrouping: FinanceAnalysisExportGrouping
   exportSplitByMonth: boolean
   exportSplitByPaymentStatus: boolean
+  includeTableOfContents: boolean
   includeBalanceSheet: boolean
   includeOverview: boolean
   includeReceiptList: boolean
   includeCashCountList: boolean
+  includeBankStatementList: boolean
   includeInvoiceList: boolean
 }
 

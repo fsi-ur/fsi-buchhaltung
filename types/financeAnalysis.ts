@@ -33,21 +33,21 @@ export interface FinanceAnalysisInvoiceBreakdownItem {
   total_amount: number
 }
 
+export interface FinanceAnalysisCostCentreSplit {
+  sphere_id: number
+  sphere_code: string
+  sphere_name: string
+  cost_centre_id: number
+  code: string
+  name: string
+  allocation_percentage: number
+}
+
 export interface FinanceAnalysisCashCountItem {
   id: number
-  source_type?: 'bankStatementEvent'
-  bank_statement_id?: number
   event_id: number
   event_name: string
-  cost_centres: {
-    sphere_id: number
-    sphere_code: string
-    sphere_name: string
-    cost_centre_id: number
-    code: string
-    name: string
-    allocation_percentage: number
-  }[]
+  cost_centres: FinanceAnalysisCostCentreSplit[]
   counted_before_at: string
   counted_after_at: string
   counted_by_first_name: string
@@ -57,6 +57,40 @@ export interface FinanceAnalysisCashCountItem {
   total_before_amount: number
   total_after_amount: number
   total_difference: number
+}
+
+export interface FinanceAnalysisCashCountBreakdownItem {
+  group_type: 'costCentre' | 'sphere'
+  group_id: number | null
+  group_code: string
+  group_name: string
+  month_key: string
+  cash_count_count: number
+  register_count: number
+  total_before_amount: number
+  total_after_amount: number
+  total_difference: number
+}
+
+export type FinanceAnalysisBankPositionType = 'receipt' | 'invoice' | 'event'
+
+export interface FinanceAnalysisBankStatementPosition {
+  id: number
+  bank_statement_id: number
+  statement_number: string
+  statement_date: string
+  checked_by_name: string
+  position_type: FinanceAnalysisBankPositionType
+  position_date: string
+  amount: number
+  direction: 'in' | 'out'
+  reference: string
+  counterparty: string
+  receipt_id: number | null
+  invoice_id: number | null
+  event_id: number | null
+  cost_centres: FinanceAnalysisCostCentreSplit[]
+  notes: string | null
 }
 
 export interface FinanceAnalysisInvoiceItem {
@@ -120,6 +154,12 @@ export interface FinanceAnalysisSummary {
   cash_count_count: number
   cash_count_register_total: number
   cash_count_total_difference: number
+  event_bank_revenue_total: number
+  event_bank_revenue_count: number
+  bank_statement_count: number
+  bank_position_count: number
+  bank_inflow_total: number
+  bank_outflow_total: number
   invoice_count: number
   invoice_total: number
   net_result: number
@@ -147,6 +187,8 @@ export interface FinanceAnalysisData {
   receiptBreakdown: FinanceAnalysisReceiptBreakdownItem[]
   invoiceBreakdown: FinanceAnalysisInvoiceBreakdownItem[]
   cashCounts: FinanceAnalysisCashCountItem[]
+  cashCountBreakdown: FinanceAnalysisCashCountBreakdownItem[]
+  bankStatementPositions: FinanceAnalysisBankStatementPosition[]
   invoices: FinanceAnalysisInvoiceItem[]
   liquidityRows: FinanceLiquidityRow[]
 }

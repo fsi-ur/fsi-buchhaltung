@@ -12,6 +12,7 @@ import {
   type PdfImageObject,
   type PdfColor,
   type PdfLine,
+  type PdfLink,
   type PdfRect,
   type PdfText,
 } from '~/server/utils/pdf'
@@ -33,6 +34,7 @@ export interface PdfPageBuffer {
   lines: PdfLine[]
   rects: PdfRect[]
   images: PdfImage[]
+  links: PdfLink[]
 }
 
 function compactAddressLine(parts: Array<string | null | undefined>) {
@@ -50,7 +52,7 @@ export function createPdfDocumentLayout(params: {
   const imageObject: PdfImageObject | null = params.logo ? buildImageObject(params.logo) : null
 
   const pageBuffers: PdfPageBuffer[] = []
-  let page: PdfPageBuffer = { texts: [], lines: [], rects: [], images: [] }
+  let page: PdfPageBuffer = { texts: [], lines: [], rects: [], images: [], links: [] }
   pageBuffers.push(page)
   let y = 0
   let continuationHeader: (() => void) | null = null
@@ -66,6 +68,16 @@ export function createPdfDocumentLayout(params: {
     set y(value: number) {
       y = value
     },
+    /** Index of the page currently being written to, so callers can record where a section landed. */
+    get pageIndex() {
+      return pageBuffers.length - 1
+    },
+
+    insertPages(atIndex: number, count: number) {
+      const inserted: PdfPageBuffer[] = Array.from({ length: count }, () => ({ texts: [], lines: [], rects: [], images: [], links: [] }))
+      pageBuffers.splice(atIndex, 0, ...inserted)
+      return inserted
+    },
 
     /** Drawn at the top of every continuation page (usually the repeated table header). */
     onContinuationPage(handler: () => void) {
@@ -73,7 +85,7 @@ export function createPdfDocumentLayout(params: {
     },
 
     startContinuationPage() {
-      page = { texts: [], lines: [], rects: [], images: [] }
+      page = { texts: [], lines: [], rects: [], images: [], links: [] }
       pageBuffers.push(page)
       y = PDF_LAYOUT.continuationTop
       continuationHeader?.()
@@ -177,7 +189,7 @@ export function createPdfDocumentLayout(params: {
         ...drawText(buffer.texts),
       ].join('\n'))
 
-      return buildPdfDocument({ pages, imageObject })
+      return buildPdfDocument({ pages, imageObject, links: pageBuffers.map(buffer => buffer.links) })
     },
   }
 

@@ -4,11 +4,11 @@ import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { loadBudgetDetail } from '~/server/utils/budgets'
 import {
-  loadFinanceAnalysis,
   parseBooleanFlag,
   parseFinanceAnalysisFilters,
   parsePositiveInteger,
-} from '~/server/utils/financeAnalysis'
+} from '~/server/utils/financeAnalysis/filters'
+import { loadFinanceAnalysis } from '~/server/utils/financeAnalysis/load'
 import { buildFinanceAnalysisPdf, type FinanceAnalysisExportGrouping } from '~/server/utils/financeAnalysisPdf'
 import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~/server/utils/invoices'
 import type { BudgetDetail } from '~/types/budget'
@@ -54,9 +54,11 @@ export default defineEventHandler(async (event) => {
   const includeComparison = parseBooleanFlag(body.includeComparison)
   const annualClosing = parseBooleanFlag(body.annualClosing)
   const includeBalanceSheet = parseBooleanFlag(body.includeBalanceSheet)
+  const includeTableOfContents = flagOrDefault(body.includeTableOfContents, true)
   const includeOverview = flagOrDefault(body.includeOverview, true)
   const includeReceiptList = flagOrDefault(body.includeReceiptList, true)
   const includeCashCountList = flagOrDefault(body.includeCashCountList, true)
+  const includeBankStatementList = flagOrDefault(body.includeBankStatementList, false)
   const includeInvoiceList = flagOrDefault(body.includeInvoiceList, true)
   const exportGrouping = parseExportGrouping(body.exportGrouping)
   const exportSplitByMonth = parseBooleanFlag(body.exportSplitByMonth)
@@ -116,10 +118,12 @@ export default defineEventHandler(async (event) => {
       exportGrouping,
       exportSplitByMonth,
       exportSplitByPaymentStatus,
+      includeTableOfContents,
       includeBalanceSheet,
       includeOverview,
       includeReceiptList,
       includeCashCountList,
+      includeBankStatementList,
       includeInvoiceList,
       association,
       logo,

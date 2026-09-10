@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
-import { loadFinanceAnalysis, parseFinanceAnalysisFilters } from '~/server/utils/financeAnalysis'
+import { parseFinanceAnalysisFilters } from '~/server/utils/financeAnalysis/filters'
+import { loadFinanceAnalysis } from '~/server/utils/financeAnalysis/load'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
 
 interface FinanceAnalysisSuccess {
