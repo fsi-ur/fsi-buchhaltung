@@ -15,4 +15,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-wiki.mjs',
   'migrate-audit-log.mjs',
   'migrate-appointments.mjs',
+  'migrate-association-documents.mjs',
 ]

@@ -296,6 +296,8 @@
       </div>
     </section>
 
+    <slot name="beforeActions" />
+
     <CommonFormActions
       :disabled="Boolean(props.disabled)"
       :save-disabled="saveDisabled"

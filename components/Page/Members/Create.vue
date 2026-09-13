@@ -16,7 +16,17 @@
           :show-account-creation="!isEditMode"
           @submit="submit"
           @cancel="cancel"
-        />
+        >
+          <template #beforeActions>
+            <PageMembersWelcomeMailPanel
+              v-if="canEdit"
+              v-model="sendWelcomeMail"
+              :member-id="memberId"
+              :member-status="form.status"
+              :disabled="isSaving"
+            />
+          </template>
+        </MembersForm>
       </div>
     </template>
   </Page>
@@ -317,6 +327,8 @@ const form = ref<SaveMemberBody>({
   subdivision_ids: [],
 })
 
+const sendWelcomeMail = ref(true)
+
 onMounted(async () => {
   await loadSupportData()
 
@@ -493,7 +505,7 @@ async function persistMember(showStatusActionsModal: boolean) {
     } else {
       response = await $fetch<MemberSaveResponse>('/api/members/create', {
         method: 'POST',
-        body: form.value,
+        body: { ...form.value, send_welcome_mail: sendWelcomeMail.value },
       })
 
       if (!response.ok) throw new Error(response.error || t('member.saved.failedCreate'))

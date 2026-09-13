@@ -1,6 +1,7 @@
 import { localWallClockNow, shiftWallClock } from '~/server/utils/notifications/time'
 import type { CustomNotificationDraft } from '~/types/notification'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
+import { normalizeAttachmentSelection } from '~/server/utils/attachments'
 
 const VALID_CHANNELS: NotificationChannelKey[] = ['in_app', 'email', 'push']
 
@@ -37,6 +38,9 @@ export function validateCustomNotification(input: Partial<CustomNotificationDraf
 
   const channels = (input.channels ?? []).filter(channel => VALID_CHANNELS.includes(channel))
   if (!channels.length) return 'Bitte mindestens einen Kanal auswählen.'
+
+  const attachments = normalizeAttachmentSelection(input.attachments, 'Nachricht')
+  if (!attachments.ok) return attachments.error
 
   // `scheduledFor` and `bounds` are plain "YYYY-MM-DD HH:mm:ss" wall-clock strings in the
   // association's local time (see enqueue.ts) — compared lexically rather than via `new Date()` /

@@ -32,6 +32,8 @@
       </div>
     </template>
 
+    <PageNotificationsMailStatusNotice v-if="tab === 'outbox'" class="mb-3" />
+
     <div v-if="tab === 'inbox'" class="space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex gap-1 rounded-lg bg-base-100 p-1">
@@ -77,7 +79,8 @@
         <li
           v-for="item in filteredInbox"
           :key="item.deliveryId"
-          class="group relative overflow-hidden rounded-xl border border-l-4 transition"
+          :data-delivery-id="item.deliveryId"
+          class="group relative scroll-mt-4 overflow-hidden rounded-xl border border-l-4 transition"
           :class="item.readAt
             ? 'border-base-200 border-l-base-200 bg-white hover:border-base-300'
             : 'border-cyan-300 border-l-cyan-500 bg-cyan-100/70 hover:border-cyan-400 hover:border-l-cyan-600'"
@@ -126,6 +129,26 @@
                 :class="expanded.includes(item.deliveryId) ? 'block' : 'line-clamp-6'"
                 v-html="renderNotificationInlineHtml(item.body)"
               ></span>
+
+              <span v-if="item.attachments.length" class="mt-2 flex flex-wrap gap-1.5">
+                <a
+                  v-for="attachment in item.attachments"
+                  :key="attachment.key"
+                  :href="`/api/files/${attachment.fileId}`"
+                  target="_blank"
+                  rel="noopener"
+                  class="inline-flex max-w-full items-center gap-1 rounded-md border border-base-200 bg-white px-2 py-0.5 text-[11px] font-medium text-base-700 hover:border-base-300 hover:text-link-600"
+                  :title="attachment.fileName || attachment.title"
+                  @click.stop
+                >
+                  <Icon
+                    :name="attachment.kind === 'document' ? 'material-symbols:folder-open-rounded' : 'material-symbols:attach-file-rounded'"
+                    class="h-3.5 w-3.5 shrink-0 text-base-400"
+                    aria-hidden="true"
+                  />
+                  <span class="truncate">{{ attachment.title }}</span>
+                </a>
+              </span>
 
               <span class="mt-2 flex flex-wrap items-center gap-2">
                 <span class="rounded-md bg-base-100 px-2 py-0.5 text-[11px] font-medium text-base-600">
@@ -208,6 +231,22 @@
           {{ detail.subject || typeLabel(detail.typeKey) }}
         </p>
         <div class="notification-body-html mt-1 text-sm text-base-600" v-html="renderNotificationBodyHtml(detail.body)"></div>
+
+        <div v-if="detail.attachments.length" class="mt-2 flex flex-wrap gap-1.5 border-t border-base-100 pt-2">
+          <span
+            v-for="attachment in detail.attachments"
+            :key="attachment.key"
+            class="inline-flex items-center gap-1.5 rounded-md border border-base-200 bg-base-50 px-2 py-1 text-[11px] text-base-600"
+            :title="attachment.fileName || attachment.title"
+          >
+            <Icon
+              :name="attachment.kind === 'document' ? 'material-symbols:library-books-outline-rounded' : 'material-symbols:attach-file-rounded'"
+              class="h-3.5 w-3.5 shrink-0"
+              aria-hidden="true"
+            />
+            {{ attachment.title }}
+          </span>
+        </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -335,6 +374,20 @@ const canSend = computed(() => hasPermission(['notifications.send']))
 const canDuplicate = computed(() => canSend.value && detail.value?.typeKey === 'custom.message')
 
 const expanded = ref<number[]>([])
+
+function openDelivery(deliveryId: number) {
+  if (!deliveryId) return
+
+  tab.value = 'inbox'
+  search.value = ''
+  unreadOnly.value = false
+  if (!expanded.value.includes(deliveryId)) expanded.value = [...expanded.value, deliveryId]
+
+  nextTick(() => {
+    const entry = document.querySelector(`[data-delivery-id="${deliveryId}"]`)
+    entry?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  })
+}
 
 /** Roughly the six lines the card shows before clamping — long enough to justify an expander. */
 function isLongBody(body: string) {
@@ -502,6 +555,10 @@ function duplicateDetail() {
     userIds: collect('users', 'userIds'),
     allActiveMembers: rules.some(entry => entry.kind === 'allActiveMembers'),
     channels: detail.value.channels || undefined,
+    attachments: {
+      documentIds: detail.value.attachments.filter(entry => entry.documentId !== null).map(entry => entry.documentId!),
+      fileIds: detail.value.attachments.filter(entry => entry.fileId !== null && entry.kind === 'file').map(entry => entry.fileId!),
+    },
   }
 
   detailOpen.value = false
@@ -518,8 +575,11 @@ watch(tab, (value) => {
   if (value === 'outbox') loadOutbox()
 })
 
-onMounted(() => {
-  fetchInbox({ limit: 100 })
+onMounted(async () => {
+  await fetchInbox({ limit: 100 })
   if (tab.value === 'outbox') loadOutbox()
+  openDelivery(Number(pageMeta.value?.deliveryId ?? 0))
 })
+
+watch(pageMeta, meta => openDelivery(Number(meta?.deliveryId ?? 0)))
 </script>

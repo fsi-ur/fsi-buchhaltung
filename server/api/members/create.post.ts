@@ -6,6 +6,7 @@ import { createUserAccount, DuplicateUsernameError } from '~/server/utils/userAc
 import { ensureSubjectId, validateMemberPayload } from '~/server/utils/members'
 import { getSubdivisionLabels, normalizeRelationIds, syncSubdivisionAssignments, validateSubdivisionSelection } from '~/server/utils/subdivisions'
 import { normalizePositionAssignments, syncPositionAssignments } from '~/server/utils/positions'
+import { scheduleMemberWelcome } from '~/server/utils/memberWelcome'
 
 interface CreateMemberSuccess {
   ok: true
@@ -113,6 +114,11 @@ export default defineEventHandler(async (event): Promise<CreateMemberResponse> =
           userId: current.user.id,
           conn,
         })
+      }
+
+      if (body.send_welcome_mail) {
+        const welcome = await scheduleMemberWelcome({ memberId, createdByUserId: current.user.id }, conn)
+        if (!welcome.ok) console.error(`members: welcome mail for member ${memberId} could not be queued: ${welcome.error}`)
       }
 
       return { ok: true, id: memberId }

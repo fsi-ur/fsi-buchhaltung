@@ -260,41 +260,20 @@
           </div>
 
           <div v-show="activeTab === 'attachments'" class="space-y-3">
-            <input
-              v-if="!readOnly"
-              ref="fileInputRef"
-              type="file"
-              class="input cursor-pointer file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-base-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-base-700 hover:file:bg-base-200"
-              accept="application/pdf,image/png,image/jpeg"
-              @change="uploadAttachment"
+            <p v-if="articleId === null" class="text-sm text-base-500">{{ t('wiki.attachments.saveArticleFirst') }}</p>
+
+            <CommonAttachmentPicker
+              v-else
+              :model-value="attachmentSelection"
+              scope="wiki_article"
+              :entity-id="articleId"
+              :known-files="attachments"
+              :read-only="readOnly"
+              :disabled="attachmentsSaving"
+              @update:model-value="saveAttachments"
             />
 
-            <p v-if="!attachments.length" class="text-sm text-base-500">{{ t('wiki.attachments.empty') }}</p>
-
-            <ul v-else class="space-y-2">
-              <li
-                v-for="attachment in attachments"
-                :key="attachment.attachmentId"
-                class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base-200 p-3 text-sm"
-              >
-                <a
-                  :href="`/api/files/${attachment.fileId}`"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="min-w-0 truncate text-accent-700 hover:underline"
-                >{{ attachment.name }}</a>
-                <button
-                  v-if="!readOnly"
-                  type="button"
-                  class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-danger-700 transition-colors hover:bg-danger-50"
-                  :title="t('wiki.attachments.remove')"
-                  :aria-label="t('wiki.attachments.remove')"
-                  @click="removeAttachment(attachment.attachmentId)"
-                >
-                  <Icon name="material-symbols:delete-outline-rounded" class="text-base" aria-hidden="true" />
-                </button>
-              </li>
-            </ul>
+            <p class="text-xs text-base-400">{{ t('wiki.attachments.help') }}</p>
           </div>
 
           <div v-show="activeTab === 'access'">
@@ -408,11 +387,12 @@ import type { TabOverviewItem } from '~/composables/useTabOverviewLayout'
 import type { WikiArticleDetailResult } from '~/server/utils/wiki/detail'
 import type { WikiTreeResponse } from '~/server/api/wiki/tree.get'
 import type { CreateWikiArticleResponse } from '~/server/api/wiki/articles/create.post'
-import type { UploadWikiAttachmentResponse } from '~/server/api/wiki/articles/[id]/attachments.post'
+import type { SaveWikiAttachmentsResponse } from '~/server/api/wiki/articles/[id]/attachments.put'
 import type { WikiSubjectOptionsResponse } from '~/server/api/wiki/access/subject-options.get'
 import type { WikiTagsResponse } from '~/server/api/wiki/tags/index.get'
 import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
 import type { WikiAttachment, WikiChecklistView, WikiTag, WikiTreeArticle, WikiTreeSpace } from '~/types/wiki'
+import type { AttachmentSelection } from '~/types/attachment'
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -437,12 +417,13 @@ const errors = ref<string[]>([])
 const activeTab = ref(EDIT_TABS.includes(String(pageMeta.value?.tab)) ? String(pageMeta.value?.tab) : 'content')
 const confirmArchive = ref(false)
 const attachments = ref<WikiAttachment[]>([])
+const attachmentSelection = ref<AttachmentSelection>({ documentIds: [], fileIds: [] })
+const attachmentsSaving = ref(false)
 const checklists = ref<WikiChecklistView[]>([])
 const spaces = ref<WikiTreeSpace[]>([])
 const status = ref<string>('draft')
 const requiresReview = ref(false)
 const accessLevel = ref<'read' | 'write' | 'admin'>('read')
-const fileInputRef = ref<HTMLInputElement | null>(null)
 const revisionListRef = ref<{ reload: () => void } | null>(null)
 const openFieldMenu = ref<string | null>(null)
 
@@ -521,7 +502,7 @@ const HISTORY_TABLES_BY_TAB: Record<string, string[]> = {
     'wiki_checklist_items>wiki_checklists:article_id',
     'wiki_checklist_runs>wiki_checklists:article_id',
   ],
-  attachments: ['file_attachments:entity_id;entity_type=wiki_article'],
+  attachments: ['file_attachments:entity_id;entity_type=wiki_article', 'entity_documents:entity_id;entity_type=wiki_article'],
   access: ['wiki_access_grants:scope_id;scope_type=article'],
   history: ['wiki_article_revisions'],
 }
@@ -658,6 +639,10 @@ async function loadArticle() {
   owner.positionId = article.owner.position_id
   owner.subdivisionId = article.owner.subdivision_id
   attachments.value = article.attachments
+  attachmentSelection.value = {
+    documentIds: [...article.attachmentSelection.documentIds],
+    fileIds: [...article.attachmentSelection.fileIds],
+  }
   checklists.value = article.checklists
   status.value = article.status
   requiresReview.value = article.requiresReview
@@ -867,38 +852,33 @@ async function persistOwner() {
   return true
 }
 
-async function uploadAttachment(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || articleId.value === null) return
+async function saveAttachments(next: AttachmentSelection) {
+  if (articleId.value === null) return
 
-  const body = new FormData()
-  body.append('file', file)
+  const previous = attachmentSelection.value
+  attachmentSelection.value = next
+  attachmentsSaving.value = true
 
-  const res = await $fetch<UploadWikiAttachmentResponse>(`/api/wiki/articles/${articleId.value}/attachments`, {
-    method: 'POST',
-    body,
-  })
+  try {
+    const res = await $fetch<SaveWikiAttachmentsResponse>(`/api/wiki/articles/${articleId.value}/attachments`, {
+      method: 'PUT',
+      body: { attachments: next },
+    })
 
-  input.value = ''
+    if (!res.ok) {
+      attachmentSelection.value = previous
+      toast.error(res.error)
+      return
+    }
 
-  if (!res.ok) {
-    toast.error(res.error)
-    return
+    attachments.value = res.attachments
+    toast.success(t('wiki.attachments.savedToast'))
+  } catch {
+    attachmentSelection.value = previous
+    toast.error(t('wiki.errors.saveFailed'))
+  } finally {
+    attachmentsSaving.value = false
   }
-
-  attachments.value = res.attachments
-  toast.success(t('wiki.attachments.uploadedToast'))
-}
-
-async function removeAttachment(attachmentId: number) {
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/attachments/${attachmentId}`, { method: 'DELETE' })
-  if (!res.ok) {
-    toast.error(res.error ?? t('wiki.errors.saveFailed'))
-    return
-  }
-  attachments.value = attachments.value.filter(entry => entry.attachmentId !== attachmentId)
-  toast.success(t('wiki.attachments.removedToast'))
 }
 
 function cancel() {

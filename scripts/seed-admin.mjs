@@ -75,6 +75,8 @@ const ALL_PERMISSION_KEYS = [
   'notifications.send',
   'notifications.view',
   'settings.notifications.manage',
+  'documents.view',
+  'settings.documents.manage',
   'wiki.view',
   'wiki.edit',
   'wiki.review',

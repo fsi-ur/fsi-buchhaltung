@@ -5,6 +5,8 @@ import type { RecipientRule, DbConn } from '~/server/utils/notifications/types'
 import { getNotificationSettings, isTypeEnabled } from '~/server/utils/notifications/settings'
 import { localWallClockNow } from '~/server/utils/notifications/time'
 import { requestImmediateDispatch } from '~/server/utils/notifications/dispatchTrigger'
+import { saveNotificationAttachments } from '~/server/utils/notifications/attachments'
+import type { AttachmentSelection } from '~/types/attachment'
 
 export interface EnqueueNotificationArgs {
   type: NotificationTypeKey
@@ -16,6 +18,8 @@ export interface EnqueueNotificationArgs {
   channels?: NotificationChannelKey[]
   subjectOverride?: string | null
   bodyOverride?: string | null
+  attachments?: AttachmentSelection
+  queueWhileDisabled?: boolean
 }
 
 export type EnqueueNotificationResult = { ok: true, id: number } | { ok: false, error: string }
@@ -42,10 +46,10 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
   if (!definition) return { ok: false, error: `Unbekannter Benachrichtigungstyp: ${args.type}` }
   if (!args.payload || typeof args.payload !== 'object') return { ok: false, error: 'Ungültige Nutzdaten' }
 
-  const settings = await getNotificationSettings(conn)
-  if (!settings.notifications_enabled) return { ok: true, id: 0 }
   // Switched off association-wide: don't even create the row, so the outbox is not littered with
   // notifications that would reach nobody.
+  const settings = await getNotificationSettings(conn)
+  if (!settings.notifications_enabled && !args.queueWhileDisabled) return { ok: true, id: 0 }
   if (!isTypeEnabled(settings, args.type)) return { ok: true, id: 0 }
 
   // A missing scheduledFor means "as soon as the dispatcher runs", i.e. the current local wall
@@ -79,10 +83,15 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
       ],
       conn,
     )
+    const id = Number(result.insertId)
+    if (args.attachments && (args.attachments.documentIds.length || args.attachments.fileIds.length)) {
+      await saveNotificationAttachments(id, args.attachments, args.createdByUserId ?? null, conn)
+    }
+
     // Due right away? Don't make it wait for the next periodic dispatch pass.
     if (scheduledFor <= localWallClockNow()) requestImmediateDispatch()
 
-    return { ok: true, id: Number(result.insertId) }
+    return { ok: true, id }
   } catch (err: any) {
     if (err?.code === 'ER_DUP_ENTRY') return { ok: true, id: 0 }
     return { ok: false, error: `Benachrichtigung konnte nicht eingeplant werden: ${err}` }

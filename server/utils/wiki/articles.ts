@@ -1,3 +1,4 @@
+import { loadAttachmentItems, loadAttachmentSelection } from '~/server/utils/attachments'
 import type mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import {
@@ -220,32 +221,14 @@ export async function loadTags(articleId: number, conn?: mariadb.PoolConnection)
   )
 }
 
-export async function loadAttachments(articleId: number, conn?: mariadb.PoolConnection): Promise<WikiAttachment[]> {
-  const rows = await query<Array<{
-    attachment_id: number
-    file_id: number
-    original_name: string
-    mime_type: string
-    file_size: number
-    uploaded_at: string | null
-  }>>(
-    `SELECT fa.id AS attachment_id, f.id AS file_id, f.original_name, f.mime_type, f.file_size, f.uploaded_at
-     FROM file_attachments fa
-     JOIN files f ON f.id = fa.file_id
-     WHERE fa.entity_type = 'wiki_article' AND fa.entity_id = ? AND fa.detached_at IS NULL
-     ORDER BY fa.id`,
-    [articleId],
-    conn,
-  )
+export const WIKI_ARTICLE_ENTITY_TYPE = 'wiki_article'
 
-  return rows.map(row => ({
-    attachmentId: Number(row.attachment_id),
-    fileId: Number(row.file_id),
-    name: row.original_name,
-    mimeType: row.mime_type,
-    size: Number(row.file_size),
-    uploadedAt: row.uploaded_at ? String(row.uploaded_at) : null,
-  }))
+export async function loadAttachmentSelectionForArticle(articleId: number, conn?: mariadb.PoolConnection) {
+  return loadAttachmentSelection(WIKI_ARTICLE_ENTITY_TYPE, articleId, conn)
+}
+
+export async function loadAttachments(articleId: number, conn?: mariadb.PoolConnection): Promise<WikiAttachment[]> {
+  return loadAttachmentItems(await loadAttachmentSelectionForArticle(articleId, conn), conn)
 }
 
 const HEADING_TAG = /<h([1-4])\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/g

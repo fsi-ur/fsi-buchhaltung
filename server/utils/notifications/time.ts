@@ -1,3 +1,5 @@
+import { NOTIFICATION_TYPE_MAP, SCHEDULE_ANCHOR_VARIABLES, type NotificationTypeKey } from '~/config/notificationTypes'
+
 /**
  * Every DATETIME the notification system reasons about — `notifications.scheduled_for`, plus the
  * shift/event/task timestamps the reminder sweep counts back from — is a timezone-naive wall-clock
@@ -50,4 +52,20 @@ export function shiftWallClock(value: string, minutes: number): string {
   const base = new Date(`${value.replace(' ', 'T')}Z`)
   const shifted = new Date(base.getTime() + minutes * 60000)
   return shifted.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+
+export function reminderMomentHasPassed(
+  typeKey: NotificationTypeKey,
+  payload: Record<string, any> | null,
+  now: string,
+): boolean {
+  const anchor = NOTIFICATION_TYPE_MAP[typeKey]?.schedule?.anchor
+  if (!anchor) return false
+
+  const raw = payload?.[SCHEDULE_ANCHOR_VARIABLES[anchor]]
+  const match = String(raw ?? '').match(/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2})(:\d{2})?/)
+  if (!match) return false
+
+  return `${match[1]} ${match[2]}${match[3] || ':00'}` < now
 }

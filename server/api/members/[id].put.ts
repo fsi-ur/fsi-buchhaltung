@@ -7,6 +7,7 @@ import { ensureSubjectId, validateMemberPayload, applyMemberStatusActions } from
 import { getSubdivisionLabels, normalizeRelationIds, syncSubdivisionAssignments, validateSubdivisionSelection } from '~/server/utils/subdivisions'
 import { normalizePositionAssignments, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
 import { clearPendingChangeForField } from '~/server/utils/memberSelfEdit'
+import { retargetPendingMemberWelcome } from '~/server/utils/memberWelcome'
 import { SELF_EDIT_ELIGIBLE_FIELDS } from '~/config/memberSelfEdit'
 
 interface UpdateMemberSuccess {
@@ -172,6 +173,8 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         userId: current.user.id,
         conn,
       })
+
+     await retargetPendingMemberWelcome(memberId, conn)
 
       return { ok: true, id: memberId, status_actions: statusActions }
     })

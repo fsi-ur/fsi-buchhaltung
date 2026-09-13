@@ -18,5 +18,6 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
   { key: 'permissions', labelKey: 'settings.tabs.permissions', permission: ['permissions.manage', 'settings.viewAs'] },
   { key: 'app', labelKey: 'settings.tabs.app', permission: 'settings.app.access' },
   { key: 'notifications', labelKey: 'settings.tabs.notifications', permission: 'settings.notifications.manage' },
+  { key: 'documents', labelKey: 'settings.tabs.documents', permission: ['settings.documents.manage', 'documents.view'] },
   { key: 'audit', labelKey: 'settings.tabs.audit', permission: 'audit.view' },
 ]

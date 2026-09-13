@@ -6,9 +6,11 @@ import { resolveRecipients } from '~/server/utils/notifications/recipients'
 import { getEffectiveChannels } from '~/server/utils/notifications/preferences'
 import { renderNotification } from '~/server/utils/notifications/render'
 import { sweepReminders } from '~/server/utils/notifications/reminders'
-import { localWallClockNowDate, shiftWallClock } from '~/server/utils/notifications/time'
+import { localWallClockNowDate, reminderMomentHasPassed, shiftWallClock } from '~/server/utils/notifications/time'
 import { CHANNELS } from '~/server/utils/notifications/channels'
-import { NOTIFICATION_TYPE_MAP, SELF_ACTION_EXEMPT_TYPES, type NotificationTypeKey } from '~/config/notificationTypes'
+import { loadMailAttachments } from '~/server/utils/attachments'
+import { resolveNotificationAttachments } from '~/server/utils/notifications/attachments'
+import { NOTIFICATION_TYPE_MAP, SCHEDULE_ANCHOR_VARIABLES, SELF_ACTION_EXEMPT_TYPES, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { RecipientRule, DbConn } from '~/server/utils/notifications/types'
 import type { NotificationSettings } from '~/types/notification'
@@ -127,6 +129,12 @@ async function processNotification(row: NotificationRow, settings: NotificationS
       }
     }
 
+    let attachments: Awaited<ReturnType<typeof loadMailAttachments>> = []
+    if (recipients.length) {
+      const selection = await resolveNotificationAttachments(row.id, row.type_key, settings, conn)
+      if (selection.documentIds.length || selection.fileIds.length) attachments = await loadMailAttachments(selection, conn)
+    }
+
     let anyFailed = false
 
     for (const recipient of recipients) {
@@ -171,7 +179,7 @@ async function processNotification(row: NotificationRow, settings: NotificationS
         const deliveryId = await insertDelivery(conn, row.id, recipient, channelKey, address, rendered, 'pending', null, unsubscribeToken)
 
         try {
-          await channel.send({ recipient, rendered, deliveryId, settings, unsubscribeToken })
+          await channel.send({ recipient, rendered, deliveryId, settings, unsubscribeToken, attachments })
           await query(`UPDATE notification_deliveries SET status = 'sent', sent_at = ? WHERE id = ?`, [toMysqlDatetime(now), deliveryId], conn)
         } catch (err: any) {
           anyFailed = true
@@ -220,10 +228,11 @@ async function insertDelivery(
 }
 
 async function retryFailedDeliveries(settings: NotificationSettings, now: Date) {
-  const rows = await query<Array<{ id: number, notification_id: number, member_id: number | null, user_id: number | null, channel: NotificationChannelKey, address: string | null, subject: string, body: string, attempts: number }>>(
-    `SELECT id, notification_id, member_id, user_id, channel, address, subject, body, attempts
-     FROM notification_deliveries
-     WHERE status = 'failed' AND attempts < 5 AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+  const rows = await query<Array<{ id: number, notification_id: number, type_key: NotificationTypeKey, member_id: number | null, user_id: number | null, channel: NotificationChannelKey, address: string | null, subject: string, body: string, attempts: number, payload: string | null }>>(
+    `SELECT nd.id, nd.notification_id, n.type_key, nd.member_id, nd.user_id, nd.channel, nd.address, nd.subject, nd.body, nd.attempts, n.payload
+     FROM notification_deliveries nd
+     JOIN notifications n ON n.id = nd.notification_id
+     WHERE nd.status = 'failed' AND nd.attempts < 5 AND (nd.next_attempt_at IS NULL OR nd.next_attempt_at <= ?)
      LIMIT 50`,
     [toMysqlDatetime(now)],
   )
@@ -232,8 +241,24 @@ async function retryFailedDeliveries(settings: NotificationSettings, now: Date) 
     const channel = CHANNELS[delivery.channel]
     if (!channel || !delivery.address) continue
 
+    if (reminderMomentHasPassed(delivery.type_key, delivery.payload ? JSON.parse(delivery.payload) : null, toMysqlDatetime(now))) {
+      await query(
+        `UPDATE notification_deliveries SET status = 'skipped', error = ? WHERE id = ?`,
+        ['Der Zeitpunkt, an den erinnert werden sollte, ist bereits vergangen.', delivery.id],
+      )
+      continue
+    }
+
+    if (!channel.isConfigured(settings)) continue
+
     try {
+      const selection = delivery.channel === 'email'
+        ? await resolveNotificationAttachments(delivery.notification_id, delivery.type_key, settings)
+        : { documentIds: [], fileIds: [] }
+      const attachments = selection.documentIds.length || selection.fileIds.length ? await loadMailAttachments(selection) : []
+
       await channel.send({
+        attachments,
         recipient: { memberId: delivery.member_id, userId: delivery.user_id, email: delivery.address, displayName: '', firstName: null, locale: 'de' },
         rendered: { subject: delivery.subject, body: delivery.body, link: null },
         deliveryId: delivery.id,

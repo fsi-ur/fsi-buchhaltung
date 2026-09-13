@@ -1,6 +1,7 @@
 import type mariadb from 'mariadb'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
+import type { MailAttachment } from '~/server/utils/attachments'
 
 export type RecipientRule =
   | { kind: 'members', memberIds: number[] }
@@ -40,6 +41,7 @@ export interface NotificationChannel {
     deliveryId: number
     settings: NotificationSettings
     unsubscribeToken?: string | null
+    attachments?: MailAttachment[]
   }): Promise<void>
 }
 

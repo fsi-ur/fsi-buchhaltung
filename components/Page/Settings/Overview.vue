@@ -29,6 +29,7 @@ import SettingsUsers from './Users.vue'
 import SettingsApp from './App.vue'
 import SettingsNotifications from './Notifications.vue'
 import SettingsAppointmentTypes from './AppointmentTypes.vue'
+import SettingsDocuments from './Documents.vue'
 import SettingsAuditLog from './AuditLog.vue'
 import { useAuth } from '~/composables/useAuth'
 import { usePage } from '~/composables/usePage'
@@ -38,7 +39,7 @@ defineEmits<{
   (e: 'openMenu'): void
 }>()
 
-type SettingsTab = 'general' | 'association' | 'spheres' | 'costCentres' | 'subdivisions' | 'positions' | 'appointmentTypes' | 'users' | 'permissions' | 'app' | 'notifications' | 'audit'
+type SettingsTab = 'general' | 'association' | 'spheres' | 'costCentres' | 'subdivisions' | 'positions' | 'appointmentTypes' | 'users' | 'permissions' | 'app' | 'notifications' | 'documents' | 'audit'
 
 const currentTab = useState<SettingsTab>('settings-overview-current-tab', () => 'general')
 const { t } = useI18n()
@@ -73,6 +74,8 @@ const activeComponent = computed(() => {
       return SettingsApp
     case 'notifications':
       return SettingsNotifications
+    case 'documents':
+      return SettingsDocuments
     case 'audit':
       return SettingsAuditLog
     default:

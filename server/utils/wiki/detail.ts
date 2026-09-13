@@ -1,3 +1,5 @@
+import { loadAttachmentItems } from '~/server/utils/attachments'
+import type { AttachmentSelection } from '~/types/attachment'
 import type { H3Event } from 'h3'
 import { query } from '~/server/utils/db'
 import type { User } from '~/types/user'
@@ -10,6 +12,7 @@ import {
   flattenTree,
   isStale,
   loadAttachments,
+  loadAttachmentSelectionForArticle,
   loadOwner,
   loadSpaceRows,
   loadTags,
@@ -44,6 +47,7 @@ export interface WikiArticleDetailPayload {
   next: WikiArticleLink | null
   tags: Awaited<ReturnType<typeof loadTags>>
   attachments: Awaited<ReturnType<typeof loadAttachments>>
+  attachmentSelection: AttachmentSelection
   owner: Awaited<ReturnType<typeof loadOwner>>
   links: WikiLinkResolution
   checklists: WikiChecklistView[]
@@ -113,15 +117,17 @@ export async function loadArticleDetail(
   const prev = prevNode ? toLink(prevNode, space.slug) : null
   const next = nextNode ? toLink(nextNode, space.slug) : null
 
-  const [tags, attachments, owner, checklists] = await Promise.all([
+  const [tags, attachmentSelection, owner, checklists] = await Promise.all([
     loadTags(articleId),
-    loadAttachments(articleId),
+    loadAttachmentSelectionForArticle(articleId),
     loadOwner(
       article.owner_position_id === null ? null : Number(article.owner_position_id),
       article.owner_subdivision_id === null ? null : Number(article.owner_subdivision_id),
     ),
     loadArticleChecklists(articleId, subjects.userId, includeDrafts),
   ])
+
+  const attachments = await loadAttachmentItems(attachmentSelection)
 
   // Readers only ever see the published render; the draft lives in `draftMd` for the editor
   const contentHtml = await ensureRenderedHtml(article)
@@ -174,6 +180,7 @@ export async function loadArticleDetail(
       next,
       tags,
       attachments,
+      attachmentSelection,
       owner,
       links,
       checklists,

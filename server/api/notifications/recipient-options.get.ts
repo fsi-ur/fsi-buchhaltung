@@ -9,7 +9,6 @@ interface RecipientOptionsSuccess {
   members: Array<{ id: number, name: string, hasAccount: boolean }>
   subdivisions: Array<{ id: number, name: string }>
   users: Array<{ id: number, username: string }>
-  /** Channels switched off association-wide — the composer must not offer them as a choice. */
   channelsEnabled: Record<NotificationChannelKey, boolean>
 }
 interface RecipientOptionsError { ok: false, error: string }

@@ -43,6 +43,7 @@ const EVENT_REF: AuditReferenceDefinition = { table: 'events', labelColumns: ['n
 const RECEIPT_REF: AuditReferenceDefinition = { table: 'receipts', labelColumns: ['receipt_number'] }
 const INVOICE_REF: AuditReferenceDefinition = { table: 'invoices', labelColumns: ['invoice_number'] }
 const SUBJECT_REF: AuditReferenceDefinition = { table: 'subjects', labelColumns: ['name'] }
+const ASSOCIATION_DOCUMENT_REF: AuditReferenceDefinition = { table: 'association_documents', labelColumns: ['title'] }
 const WIKI_ARTICLE_REF: AuditReferenceDefinition = { table: 'wiki_articles', labelColumns: ['title'] }
 const WIKI_SPACE_REF: AuditReferenceDefinition = { table: 'wiki_spaces', labelColumns: ['title'] }
 const ASSOCIATION_PROFILE_REF: AuditReferenceDefinition = { table: 'association_profiles', labelColumns: ['name'] }
@@ -508,6 +509,21 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     parent: { table: 'notifications', foreignKey: 'notification_id' },
     redactedColumns: ['unsubscribe_token'],
     references: { member_id: MEMBER_REF, user_id: USER_REF },
+  },
+  entity_documents: {
+    table: 'entity_documents',
+    labelKey: 'audit.entities.entityDocument',
+    domain: 'settings',
+    viewPermissions: ['documents.view', 'settings.documents.manage'],
+    references: { document_id: ASSOCIATION_DOCUMENT_REF, created_by: USER_REF },
+  },
+  association_documents: {
+    table: 'association_documents',
+    labelKey: 'audit.entities.associationDocument',
+    domain: 'settings',
+    viewPermissions: ['documents.view', 'settings.documents.manage'],
+    references: { created_by: USER_REF },
+    describe: state => state.title ?? null,
   },
   notification_preferences: {
     table: 'notification_preferences',

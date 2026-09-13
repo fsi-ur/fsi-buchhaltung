@@ -4,6 +4,8 @@
       <div class="col-span-12 space-y-4 lg:col-span-7 xl:col-span-8">
         <CommonValidationSummary :errors="errors" :title="t('common.validationBlocked')" />
 
+        <PageNotificationsMailStatusNotice scheduled />
+
         <section class="space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6 sm:shadow-lg">
           <header class="flex items-center gap-2">
             <Icon name="material-symbols:group-rounded" class="h-5 w-5 text-secondary-700" aria-hidden="true" />
@@ -136,6 +138,25 @@
           </div>
         </section>
 
+        <section class="space-y-3 rounded-xl bg-white p-4 shadow-sm sm:p-6 sm:shadow-lg">
+          <header class="flex items-center gap-2">
+            <Icon name="material-symbols:attach-file-rounded" class="h-5 w-5 text-secondary-700" aria-hidden="true" />
+            <h3 class="font-semibold">{{ t('notifications.compose.attachments') }}</h3>
+            <span class="ml-auto text-xs text-base-500">
+              {{ attachmentCount || t('notifications.compose.attachmentsNone') }}
+            </span>
+          </header>
+
+          <p class="text-xs text-base-500">{{ t('notifications.compose.attachmentsHelp') }}</p>
+
+          <CommonAttachmentPicker v-model="form.attachments" scope="notification" :disabled="saving" />
+
+          <p v-if="attachmentCount && !form.channels.includes('email')" class="inline-flex items-start gap-1 text-xs text-warning-600">
+            <Icon name="material-symbols:error-outline-rounded" class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            {{ t('notifications.compose.attachmentsEmailOnly') }}
+          </p>
+        </section>
+
         <section class="space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6 sm:shadow-lg">
           <header class="flex items-center gap-2">
             <Icon name="material-symbols:send-rounded" class="h-5 w-5 text-secondary-700" aria-hidden="true" />
@@ -149,7 +170,7 @@
               class="flex items-start gap-3 rounded-xl border p-3 transition"
               :class="[
                 form.channels.includes(channel.key) ? 'border-secondary-500 bg-secondary-50' : 'border-base-200',
-                channel.key === 'in_app' || channelOffGlobally(channel.key) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-base-300',
+                channel.key === 'in_app' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-base-300',
               ]"
             >
               <input
@@ -157,7 +178,7 @@
                 type="checkbox"
                 :value="channel.key"
                 class="checkbox mt-0.5"
-                :disabled="channel.key === 'in_app' || channelOffGlobally(channel.key)"
+                :disabled="channel.key === 'in_app'"
               >
               <span class="min-w-0">
                 <span class="flex items-center gap-1.5 text-sm font-medium text-base-800">
@@ -165,7 +186,10 @@
                   {{ t(channel.labelKey) }}
                 </span>
                 <span class="block text-xs text-base-500">
-                  {{ channelOffGlobally(channel.key) ? t('settings.notifications.channelOffGlobally') : t(`notifications.compose.channelHelp.${channel.key}`) }}
+                  {{ t(`notifications.compose.channelHelp.${channel.key}`) }}
+                </span>
+                <span v-if="channelBlockedReason(channel.key)" class="mt-0.5 block text-xs text-warning-700">
+                  {{ channelBlockedReason(channel.key) }}
                 </span>
               </span>
             </label>
@@ -251,6 +275,10 @@
               <dd class="text-right font-medium text-base-700">{{ selectedChannelLabels }}</dd>
             </div>
             <div class="flex justify-between gap-2">
+              <dt class="text-base-500">{{ t('notifications.compose.attachments') }}</dt>
+              <dd class="text-right font-medium text-base-700">{{ attachmentSummary }}</dd>
+            </div>
+            <div class="flex justify-between gap-2">
               <dt class="text-base-500">{{ t('notifications.compose.timing') }}</dt>
               <dd class="text-right font-medium text-base-700">
                 {{ timing === 'now' ? t('notifications.compose.sendNow') : (scheduledForDisplay || t('notifications.compose.schedule')) }}
@@ -278,6 +306,7 @@ import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
 import type { SelectionListItem } from '~/components/Common/SelectionListField.vue'
 import type { GetNotificationRecipientOptionsResponse } from '~/server/api/notifications/recipient-options.get'
 import type { CreateNotificationResponse } from '~/server/api/notifications/create.post'
+import type { AttachmentSelection } from '~/types/attachment'
 import type { CustomNotificationDraft } from '~/types/notification'
 
 defineEmits<{
@@ -285,6 +314,7 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { documents, ensureLoaded, byId } = useAssociationDocuments()
 const toast = useToast()
 const { pageMeta } = usePage()
 const { goToReturnTarget } = useReturnTarget('NotificationList')
@@ -310,6 +340,20 @@ const form = reactive({
   userIds: [] as number[],
   allActiveMembers: false,
   channels: ['in_app'] as NotificationChannelKey[],
+  attachments: { documentIds: [], fileIds: [] } as AttachmentSelection,
+})
+
+const attachmentCount = computed(() => form.attachments.documentIds.length + form.attachments.fileIds.length)
+
+const attachmentSummary = computed(() => {
+  if (!attachmentCount.value) return t('notifications.compose.attachmentsNone')
+  return documentTitles.value.join(' · ')
+})
+
+const documentTitles = computed(() => {
+  const titles = form.attachments.documentIds.map(id => byId(id)?.title || String(id))
+  if (form.attachments.fileIds.length) titles.push(t('attachments.ownFilesCount', { count: form.attachments.fileIds.length }))
+  return titles
 })
 
 const { apply: applyFormat } = useTextFormatting(toRef(form, 'body'), bodyRef)
@@ -324,9 +368,7 @@ const timingOptions = computed(() => [
 const memberCount = computed(() => options.value?.members.length || 0)
 
 /** in_app can't be switched off association-wide, so only email/push are ever gated here. */
-function channelOffGlobally(channel: NotificationChannelKey) {
-  return channel !== 'in_app' && options.value?.channelsEnabled[channel] === false
-}
+const { ensureLoaded: ensureMailStatus, refresh: refreshMailStatus, channelBlockedReason } = useNotificationMailStatus()
 
 function filterOptions<T>(list: T[], query: string, label: (item: T) => string) {
   const q = query.trim().toLowerCase()
@@ -434,12 +476,22 @@ function onRemoveUser(id: string | number) {
   form.userIds = form.userIds.filter(u => u !== Number(id))
 }
 
+async function loadDocuments() {
+  await ensureLoaded()
+  dropUnavailableDocuments()
+}
+
+watch(documents, () => dropUnavailableDocuments())
+
+function dropUnavailableDocuments() {
+  const available = new Set(documents.value.map(document => document.id))
+  form.attachments = { ...form.attachments, documentIds: form.attachments.documentIds.filter(id => available.has(id)) }
+}
+
 async function loadOptions() {
   const res = await $fetch<GetNotificationRecipientOptionsResponse>('/api/notifications/recipient-options')
   if (res.ok) {
     options.value = res
-    // A duplicated draft may carry a channel that has since been switched off association-wide.
-    form.channels = form.channels.filter(channel => !channelOffGlobally(channel))
   } else {
     toast.error(res.error)
   }
@@ -482,6 +534,11 @@ async function submit() {
     })
 
     if (res.ok) {
+      if (!res.id) {
+        errors.value = [t('notifications.mailStatus.notQueued')]
+        return
+      }
+
       toast.success(t('actions.saved'))
       // The composed notification shows up in the outbox, so that is where leaving the editor goes —
       // also when the editor was opened without a return target of its own.
@@ -512,9 +569,15 @@ onMounted(() => {
     form.userIds = [...(prefill.userIds || [])]
     form.allActiveMembers = Boolean(prefill.allActiveMembers)
     if (prefill.channels?.length) form.channels = [...prefill.channels]
+    if (prefill.attachments) form.attachments = { documentIds: [...prefill.attachments.documentIds], fileIds: [...prefill.attachments.fileIds] }
   }
   loadOptions()
+  loadDocuments()
+  ensureMailStatus()
 })
 
-useAppRefresh().onRefresh(loadOptions)
+useAppRefresh().onRefresh(() => {
+  refreshMailStatus()
+  return loadOptions()
+})
 </script>

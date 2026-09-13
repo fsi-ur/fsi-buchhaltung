@@ -1,6 +1,11 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { requireAuth } from '~/server/utils/api/guards'
 import { query } from '~/server/utils/db'
+import { getNotificationSettings } from '~/server/utils/notifications/settings'
+import { NOTIFICATION_ENTITY_TYPE } from '~/server/utils/notifications/attachments'
+import { loadAttachmentItems, loadAttachmentSelections, mergeAttachmentSelections } from '~/server/utils/attachments'
+import type { NotificationTypeKey } from '~/config/notificationTypes'
+import type { AttachmentItem, AttachmentSelection } from '~/types/attachment'
 import type { NotificationInboxItem } from '~/types/notification'
 
 interface GetInboxSuccess {
@@ -57,6 +62,32 @@ export default defineEventHandler(async (event): Promise<GetNotificationInboxRes
     [...params, limit],
   )
 
+  const attachmentsByNotification = new Map<number, AttachmentItem[]>()
+  if (rows.length) {
+    const settings = await getNotificationSettings()
+    const ownSelections = await loadAttachmentSelections(NOTIFICATION_ENTITY_TYPE, [...new Set(rows.map(row => row.notification_id))])
+
+    const selections = new Map<number, AttachmentSelection>()
+    for (const row of rows) {
+      if (selections.has(row.notification_id)) continue
+      selections.set(row.notification_id, mergeAttachmentSelections(
+        ownSelections.get(row.notification_id),
+        settings.template_attachments[row.type_key as NotificationTypeKey],
+      ))
+    }
+
+    const items = await loadAttachmentItems(mergeAttachmentSelections(...selections.values()))
+    const byKey = new Map(items.map(item => [item.key, item]))
+
+    for (const [notificationId, selection] of selections) {
+      const resolved = [
+        ...selection.documentIds.map(id => byKey.get(`document:${id}`)),
+        ...selection.fileIds.map(id => byKey.get(`file:${id}`)),
+      ].filter((item): item is AttachmentItem => Boolean(item) && !item!.unavailable)
+      if (resolved.length) attachmentsByNotification.set(notificationId, resolved)
+    }
+  }
+
   const unreadCountRows = await query<Array<{ unreadCount: number }>>(
     `SELECT COUNT(*) AS unreadCount
      FROM notification_deliveries
@@ -78,6 +109,7 @@ export default defineEventHandler(async (event): Promise<GetNotificationInboxRes
       createdAt: row.created_at,
       sentAt: row.sent_at,
       readAt: row.read_at,
+      attachments: attachmentsByNotification.get(row.notification_id) ?? [],
     })),
     unreadCount: Number(unreadCount),
   }

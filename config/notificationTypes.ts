@@ -18,6 +18,9 @@ export type NotificationTypeKey =
   | 'appointment.changed'
   | 'appointment.cancelled'
   | 'appointment.reminder'
+  // members
+  | 'member.welcome_active'
+  | 'member.welcome_passive'
   // admin-composed
   | 'custom.message'
 
@@ -26,6 +29,13 @@ export interface NotificationTypeSchedule {
   defaultLeadMinutes: number[]
   /** Which timestamp the lead time counts back from. */
   anchor: 'shift.starts_at' | 'task.deadline' | 'event.starts_at' | 'appointment.starts_at'
+}
+
+export const SCHEDULE_ANCHOR_VARIABLES: Record<NotificationTypeSchedule['anchor'], string> = {
+  'shift.starts_at': 'shift_start',
+  'task.deadline': 'task_deadline',
+  'event.starts_at': 'event_start',
+  'appointment.starts_at': 'appointment_start',
 }
 
 export interface NotificationTypeDefinition {
@@ -229,6 +239,24 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     link: appointmentLink,
   },
   {
+    key: 'member.welcome_active',
+    categoryKey: 'notifications.categories.members',
+    labelKey: 'notifications.types.member.welcome_active.label',
+    descriptionKey: 'notifications.types.member.welcome_active.description',
+    userConfigurable: false,
+    audience: 'explicit',
+    variables: ['member_name', 'first_name', 'member_email', 'joined_at', 'subject_name', 'association_name'],
+  },
+  {
+    key: 'member.welcome_passive',
+    categoryKey: 'notifications.categories.members',
+    labelKey: 'notifications.types.member.welcome_passive.label',
+    descriptionKey: 'notifications.types.member.welcome_passive.description',
+    userConfigurable: false,
+    audience: 'explicit',
+    variables: ['member_name', 'first_name', 'member_email', 'joined_at', 'subject_name', 'association_name'],
+  },
+  {
     key: 'custom.message',
     categoryKey: 'notifications.categories.custom',
     labelKey: 'notifications.types.custom.message.label',
@@ -248,4 +276,15 @@ export const NOTIFICATION_TYPE_MAP: Record<NotificationTypeKey, NotificationType
  * a task, or taking yourself off one, needs no notification telling you what you just did. Everyone
  * else on the same shift still receives theirs.
  */
+/**
+ * The welcome mail per member status. Which one goes out is decided when it is scheduled, and
+ * re-decided if the status still changes before it is sent (see server/utils/memberWelcome.ts).
+ */
+export const MEMBER_WELCOME_TYPES = {
+  active: 'member.welcome_active',
+  passive: 'member.welcome_passive',
+} as const satisfies Record<string, NotificationTypeKey>
+
+export const MEMBER_WELCOME_TYPE_KEYS: NotificationTypeKey[] = Object.values(MEMBER_WELCOME_TYPES)
+
 export const SELF_ACTION_EXEMPT_TYPES: NotificationTypeKey[] = ['shift.assigned', 'shift.removed', 'task.assigned']

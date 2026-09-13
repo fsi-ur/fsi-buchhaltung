@@ -1,3 +1,6 @@
+import type { AttachmentItem, AttachmentSelection } from '~/types/attachment'
+
+export type { AttachmentItem, AttachmentSelection }
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationTypeKey } from '~/config/notificationTypes'
 
@@ -11,6 +14,13 @@ export interface NotificationTypeSetting {
   channels: Partial<Record<NotificationChannelKey, boolean>>
 }
 
+export interface MemberWelcomeSettings {
+  /** Days after `joined_at`; 0 means the joining day itself. */
+  delay_days: number
+  /** Local wall-clock time of day, "HH:mm". */
+  send_time: string
+}
+
 export interface NotificationSettings {
   notifications_enabled: boolean
   channels_enabled: Record<NotificationChannelKey, boolean>
@@ -19,6 +29,15 @@ export interface NotificationSettings {
   default_channels: Partial<Record<NotificationTypeKey, Partial<Record<NotificationChannelKey, boolean>>>>
   lead_times: Partial<Record<NotificationTypeKey, number[]>>
   templates: Partial<Record<NotificationTypeKey, { subject: string, body: string }>>
+  /**
+   * What every e-mail of this type carries: documents from the association library plus files
+   * uploaded for this template alone. Kept apart from `templates` so resetting a message text does
+   * not silently drop its attachments — and resolved at send time, so a mail scheduled weeks ago
+   * ships whatever the library holds when it actually goes out.
+   */
+  template_attachments: Partial<Record<NotificationTypeKey, AttachmentSelection>>
+  /** When the welcome mail goes out: `delay_days` after the member's `joined_at`, at `send_time`. */
+  member_welcome: MemberWelcomeSettings
   email_from_name: string
   email_subject_prefix: string
   email_footer: string
@@ -43,6 +62,8 @@ export interface NotificationInboxItem {
   /** When the delivery actually went out; null while it is still pending. */
   sentAt: string | null
   readAt: string | null
+  /** What the same notification carried by mail — the in-app copy offers them for download too. */
+  attachments: AttachmentItem[]
 }
 
 export interface NotificationOutboxDeliveryCounts {
@@ -73,6 +94,8 @@ export interface NotificationDelivery {
   sentAt: string | null
 }
 
+export type NotificationAttachmentInfo = AttachmentItem
+
 export interface NotificationOutboxDetail {
   id: number
   typeKey: NotificationTypeKey
@@ -85,6 +108,7 @@ export interface NotificationOutboxDetail {
   /** Explicit channel selection of a custom message; null means "follow the defaults". */
   channels: NotificationChannelKey[] | null
   deliveries: NotificationDelivery[]
+  attachments: NotificationAttachmentInfo[]
 }
 
 export interface NotificationPreferenceEntry {
@@ -105,4 +129,6 @@ export interface CustomNotificationDraft {
   allActiveMembers: boolean
   channels: NotificationChannelKey[]
   scheduledFor: string | null
+  /** Documents and one-off files attached to this one message. */
+  attachments: AttachmentSelection
 }

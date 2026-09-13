@@ -168,4 +168,5 @@ export interface SaveMemberBody {
   left_at?: string | null
   positions: MemberPositionAssignment[]
   subdivision_ids?: number[]
+  send_welcome_mail?: boolean
 }

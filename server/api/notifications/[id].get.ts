@@ -2,6 +2,8 @@ import { defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import { query } from '~/server/utils/db'
+import { getNotificationAttachments } from '~/server/utils/notifications/attachments'
+import { loadAttachmentItems } from '~/server/utils/attachments'
 import type { NotificationOutboxDetail } from '~/types/notification'
 
 interface GetDetailSuccess { ok: true, notification: NotificationOutboxDetail }
@@ -40,6 +42,8 @@ export default defineEventHandler(async (event): Promise<GetNotificationDetailRe
     [id],
   )
 
+  const attachments = await loadAttachmentItems(await getNotificationAttachments(id))
+
   return {
     ok: true,
     notification: {
@@ -62,6 +66,7 @@ export default defineEventHandler(async (event): Promise<GetNotificationDetailRe
         error: row.error,
         sentAt: row.sent_at,
       })),
+      attachments,
     },
   }
 })

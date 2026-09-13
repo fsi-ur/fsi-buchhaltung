@@ -926,3 +926,26 @@ CREATE TABLE IF NOT EXISTS appointment_responses (
   FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
   FOREIGN KEY (member_id) REFERENCES members(id)
 );
+
+CREATE TABLE IF NOT EXISTS association_documents (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(191) NOT NULL,
+  description VARCHAR(500) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by BIGINT UNSIGNED NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS entity_documents (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  entity_type VARCHAR(50) NOT NULL,
+  entity_id BIGINT UNSIGNED NOT NULL,
+  document_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by BIGINT UNSIGNED NULL,
+  UNIQUE KEY uq_entity_document (entity_type, entity_id, document_id),
+  KEY idx_entity_documents_document (document_id),
+  FOREIGN KEY (document_id) REFERENCES association_documents(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);

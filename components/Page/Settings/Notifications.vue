@@ -329,7 +329,30 @@
             <p class="mt-1 text-xs text-base-400">{{ t('notifications.compose.formatHelp') }}</p>
           </div>
 
-          <div class="flex justify-end">
+          <div class="space-y-1.5 border-t border-base-100 pt-2">
+            <p class="text-xs text-base-400">{{ t('settings.notifications.templateAttachmentsHelp') }}</p>
+
+            <CommonAttachmentPicker
+              :model-value="templateAttachments(typeKey)"
+              :label="t('settings.notifications.templateAttachments')"
+              scope="notification_template"
+              @update:model-value="setTemplateAttachments(typeKey, $event)"
+            />
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-xs font-medium text-link-600 hover:underline cursor-pointer"
+              :disabled="testMailPending === typeKey"
+              :class="{ 'cursor-not-allowed opacity-50': testMailPending === typeKey }"
+              :title="t('settings.notifications.testMailHelp')"
+              @click="sendTestMail(typeKey)"
+            >
+              <Icon name="material-symbols:outgoing-mail" class="h-4 w-4" aria-hidden="true" />
+              {{ testMailPending === typeKey ? t('settings.notifications.testMailSending') : t('settings.notifications.testMail') }}
+            </button>
+
             <button
               type="button"
               class="text-xs font-medium text-base-500 hover:text-base-700 hover:underline cursor-pointer"
@@ -340,6 +363,37 @@
               {{ t('settings.notifications.templateReset') }}
             </button>
           </div>
+        </div>
+      </div>
+    </CommonCard>
+
+    <CommonCard
+      :class="dimWhenDisabled"
+      :title="t('settings.notifications.memberWelcome')"
+      :description="t('settings.notifications.memberWelcomeHelp')"
+    >
+      <p v-if="welcomeTypesOff" class="-mt-1 inline-flex items-start gap-1 text-xs text-warning-600">
+        <Icon name="material-symbols:error-outline-rounded" class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        {{ t('settings.notifications.memberWelcomeDisabled') }}
+      </p>
+
+      <div class="flex flex-wrap gap-6">
+        <div class="field">
+          <label for="welcome-delay-days">{{ t('settings.notifications.memberWelcomeDelayDays') }}</label>
+          <input
+            id="welcome-delay-days"
+            v-model.number="settings.member_welcome.delay_days"
+            type="number"
+            min="0"
+            max="365"
+            class="input w-32"
+          >
+          <p class="max-w-md text-xs text-base-500">{{ t('settings.notifications.memberWelcomeDelayDaysHelp') }}</p>
+        </div>
+        <div class="field">
+          <label for="welcome-send-time">{{ t('settings.notifications.memberWelcomeSendTime') }}</label>
+          <input id="welcome-send-time" v-model="settings.member_welcome.send_time" type="time" class="input w-32">
+          <p class="max-w-xs text-xs text-base-500">{{ t('settings.notifications.memberWelcomeSendTimeHelp') }}</p>
         </div>
       </div>
     </CommonCard>
@@ -419,15 +473,17 @@ import { useNotificationDisplay } from '~/composables/useNotificationDisplay'
 import { useTextFormatting } from '~/composables/useTextFormatting'
 import { useVariableInsert } from '~/composables/useVariableInsert'
 import { NOTIFICATION_CHANNELS, type NotificationChannelKey } from '~/config/notificationChannels'
-import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_MAP, EMAIL_FOOTER_VARIABLES, type NotificationTypeKey } from '~/config/notificationTypes'
+import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_MAP, EMAIL_FOOTER_VARIABLES, MEMBER_WELCOME_TYPE_KEYS, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationSettings } from '~/types/notification'
+import type { AttachmentSelection } from '~/types/attachment'
 import type { GetNotificationSettingsResponse } from '~/server/api/settings/notifications.get'
 import type { SaveNotificationSettingsResponse } from '~/server/api/settings/notifications.save.post'
+import type { SendTestNotificationResponse } from '~/server/api/settings/notifications.test-notification.post'
 import { applyFormatAction, type FormatActionKey } from '~/utils/notificationFormatting'
 
 const { t } = useI18n()
 const toast = useToast()
-const { typeIcon, typeColorClass, typeLabel, typeDescription, channelIcon, formatLeadMinutes, variableDescription } = useNotificationDisplay()
+const { typeIcon, typeColorClass, typeLabel, typeDescription, channelIcon, channelLabel, formatLeadMinutes, variableDescription } = useNotificationDisplay()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -436,6 +492,7 @@ const pushConfigured = ref(false)
 const settings = ref<NotificationSettings | null>(null)
 const savedSnapshot = ref('')
 const openTemplates = ref<NotificationTypeKey[]>([])
+const testMailPending = ref<NotificationTypeKey | null>(null)
 
 const scheduledTypeKeys = NOTIFICATION_TYPES.filter(type => type.schedule).map(type => type.key)
 const templateTypeKeys = NOTIFICATION_TYPES.map(type => type.key)
@@ -483,7 +540,18 @@ function canonicalizeSettings(input: NotificationSettings): NotificationSettings
     if (subject || body) templates[key] = { subject, body }
   }
 
-  return { ...input, type_settings: typeSettings, default_channels: defaultChannels, templates }
+  const templateAttachments: NotificationSettings['template_attachments'] = {}
+  for (const key of Object.keys(input.template_attachments).sort() as NotificationTypeKey[]) {
+    const selection = input.template_attachments[key]
+    if (selection?.documentIds.length || selection?.fileIds.length) {
+      templateAttachments[key] = {
+        documentIds: [...selection.documentIds].sort((a, b) => a - b),
+        fileIds: [...selection.fileIds].sort((a, b) => a - b),
+      }
+    }
+  }
+
+  return { ...input, type_settings: typeSettings, default_channels: defaultChannels, templates, template_attachments: templateAttachments }
 }
 
 function snapshot(input: NotificationSettings): string {
@@ -495,6 +563,7 @@ const dirty = computed(() => settings.value !== null && snapshot(settings.value)
 const dimWhenDisabled = computed(() => (settings.value?.notifications_enabled ? '' : 'opacity-60'))
 
 function channelWarning(channel: NotificationChannelKey) {
+  if (channelOffGlobally(channel)) return ''
   if (channel === 'email' && !smtpConfigured.value) return t('settings.notifications.smtpNotConfigured')
   if (channel === 'push' && !pushConfigured.value) return t('settings.notifications.pushNotConfigured')
   return ''
@@ -598,6 +667,51 @@ function updateTemplate(typeKey: NotificationTypeKey, field: 'subject' | 'body',
   settings.value.templates[typeKey] = { ...current, [field]: value }
 }
 
+function templateAttachments(typeKey: NotificationTypeKey): AttachmentSelection {
+  return settings.value?.template_attachments[typeKey] ?? { documentIds: [], fileIds: [] }
+}
+
+function setTemplateAttachments(typeKey: NotificationTypeKey, selection: AttachmentSelection) {
+  if (!settings.value) return
+  settings.value.template_attachments = { ...settings.value.template_attachments, [typeKey]: selection }
+}
+
+async function sendTestMail(typeKey: NotificationTypeKey) {
+  if (testMailPending.value) return
+  testMailPending.value = typeKey
+  try {
+    const res = await $fetch<SendTestNotificationResponse>('/api/settings/notifications.test-notification', {
+      method: 'POST',
+      body: {
+        typeKey,
+        subject: settings.value?.templates[typeKey]?.subject || '',
+        body: settings.value?.templates[typeKey]?.body || '',
+        attachments: templateAttachments(typeKey),
+      },
+    })
+
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+
+    const sent = res.results.filter(entry => entry.status === 'sent')
+    if (sent.length) {
+      const channels = sent.map(entry => channelLabel(entry.channel)).join(', ')
+      toast.success(res.attachmentCount
+        ? t('settings.notifications.testMailSentWithAttachments', { count: res.attachmentCount, channels })
+        : t('settings.notifications.testMailSent', { channels }))
+    }
+    for (const entry of res.results.filter(item => item.status === 'failed')) {
+      toast.error(t('settings.notifications.testMailChannelFailed', { channel: channelLabel(entry.channel), error: entry.error || '' }))
+    }
+  } catch {
+    toast.error(t('settings.notifications.saveFailed'))
+  } finally {
+    testMailPending.value = null
+  }
+}
+
 function resetTemplate(typeKey: NotificationTypeKey) {
   if (!settings.value) return
   settings.value.templates[typeKey] = { subject: '', body: '' }
@@ -638,6 +752,8 @@ const { insert: insertFooterVariable } = useVariableInsert(emailFooter, footerRe
 // are safe to offer here; see server/utils/notifications/dispatch.ts.
 const footerVariables = EMAIL_FOOTER_VARIABLES
 
+const welcomeTypesOff = computed(() => MEMBER_WELCOME_TYPE_KEYS.every(key => settings.value?.type_settings[key]?.enabled === false))
+
 async function load() {
   loading.value = true
   try {
@@ -674,7 +790,9 @@ async function save() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+})
 
 useAppRefresh().onRefresh(() => {
   if (!dirty.value) return load()

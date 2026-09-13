@@ -93,16 +93,13 @@
 
           <ul v-else class="divide-y divide-base-100">
             <li v-for="item in items" :key="item.deliveryId" class="group relative">
-              <component
-                :is="item.linkPage ? 'button' : 'div'"
-                :type="item.linkPage ? 'button' : undefined"
-                class="flex w-full items-start gap-3 border-l-4 px-4 py-3 text-left transition"
+              <button
+                type="button"
+                class="flex w-full cursor-pointer items-start gap-3 border-l-4 px-4 py-3 text-left transition"
                 :class="[
-                  item.readAt ? 'border-transparent' : 'border-secondary-500 bg-secondary-100/70',
-                  item.linkPage ? 'cursor-pointer' : '',
-                  item.linkPage ? (item.readAt ? 'hover:bg-base-50' : 'hover:bg-secondary-100') : '',
+                  item.readAt ? 'border-transparent hover:bg-base-50' : 'border-secondary-500 bg-secondary-100/70 hover:bg-secondary-100',
                 ]"
-                @click="item.linkPage ? openItem(item) : undefined"
+                @click="openItem(item)"
               >
                 <span
                   class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -127,8 +124,15 @@
                   <span class="mt-0.5 line-clamp-2 text-xs break-words text-base-500" v-html="renderNotificationInlineHtml(item.body)"></span>
                   <span class="mt-1 flex items-center gap-2">
                     <span class="truncate text-[11px] text-base-400">{{ typeLabel(item.typeKey) }}</span>
+                    <span
+                      v-if="item.attachments.length"
+                      class="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-base-400"
+                      :title="t('notifications.attachmentCount', { count: item.attachments.length })"
+                    >
+                      <Icon name="material-symbols:attach-file-rounded" class="h-3.5 w-3.5" aria-hidden="true" />
+                      {{ item.attachments.length }}
+                    </span>
                     <Icon
-                      v-if="item.linkPage"
                       name="material-symbols:chevron-right-rounded"
                       class="h-4 w-4 shrink-0 text-base-300"
                       aria-hidden="true"
@@ -137,7 +141,7 @@
                 </span>
 
                 <span v-if="!item.readAt" class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-secondary-600" aria-hidden="true" />
-              </component>
+              </button>
 
               <button
                 v-if="!item.readAt"
@@ -242,10 +246,11 @@ function toggleOpen() {
 function openItem(item: NotificationInboxItem) {
   if (!item.readAt) markRead([item.deliveryId])
   open.value = false
-  if (item.linkPage) {
-    setPage(item.linkPage as any, item.linkMeta || undefined)
-    emit('navigate')
-  }
+
+  if (item.linkPage) setPage(item.linkPage as any, item.linkMeta || undefined)
+  else setPage('NotificationList' as any, { tab: 'inbox', deliveryId: item.deliveryId, section: 'inbox' })
+
+  emit('navigate')
 }
 
 function openList() {

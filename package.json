@@ -32,6 +32,7 @@
     "setup:migrate:audit-log": "node --env-file=.env scripts/migrate-audit-log.mjs",
     "setup:migrate:wiki": "node --env-file=.env scripts/migrate-wiki.mjs",
     "setup:migrate:appointments": "node --env-file=.env scripts/migrate-appointments.mjs",
+    "setup:migrate:association-documents": "node --env-file=.env scripts/migrate-association-documents.mjs",
     "setup:seed:wiki-content": "node --env-file=.env scripts/migrate-wiki.mjs --seed-content",
     "setup:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "setup:audit": "node --env-file=.env scripts/ensure-audit-infrastructure.mjs",

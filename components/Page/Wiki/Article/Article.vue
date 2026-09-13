@@ -225,15 +225,19 @@
 
               <CommonCard v-if="article.attachments.length" icon="material-symbols:attach-file-rounded" :title="t('wiki.article.attachments')">
                 <ul class="-mx-2 text-sm">
-                  <li v-for="attachment in article.attachments" :key="attachment.attachmentId">
+                  <li v-for="attachment in article.attachments.filter(entry => entry.fileId && !entry.unavailable)" :key="attachment.key">
                     <a
                       :href="`/api/files/${attachment.fileId}`"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="wiki-link-row"
                     >
-                      <Icon name="material-symbols:draft-outline-rounded" class="shrink-0 text-base text-base-400" aria-hidden="true" />
-                      <span class="min-w-0 flex-1 truncate font-medium">{{ attachment.name }}</span>
+                      <Icon
+                        :name="attachment.kind === 'document' ? 'material-symbols:library-books-outline-rounded' : 'material-symbols:draft-outline-rounded'"
+                        class="shrink-0 text-base text-base-400"
+                        aria-hidden="true"
+                      />
+                      <span class="min-w-0 flex-1 truncate font-medium">{{ attachment.title }}</span>
                       <Icon name="material-symbols:download-rounded" class="wiki-link-chevron" aria-hidden="true" />
                     </a>
                   </li>

@@ -1,3 +1,4 @@
+import type { AttachmentItem, AttachmentSelection } from '~/types/attachment'
 import type { PermissionKey } from '~/config/permissions'
 
 export type WikiAccessLevel = 'read' | 'write' | 'admin'
@@ -354,14 +355,7 @@ export interface WikiArticleLink {
   title: string
 }
 
-export interface WikiAttachment {
-  attachmentId: number
-  fileId: number
-  name: string
-  mimeType: string
-  size: number
-  uploadedAt: string | null
-}
+export type WikiAttachment = AttachmentItem
 
 /** Everything the reader view of one article needs. */
 export interface WikiArticleDetail {
@@ -385,6 +379,7 @@ export interface WikiArticleDetail {
   next: WikiArticleLink | null
   tags: WikiTag[]
   attachments: WikiAttachment[]
+  attachmentSelection: AttachmentSelection
   owner: WikiOwner
   accessLevel: WikiAccessLevel
   hasDraft: boolean

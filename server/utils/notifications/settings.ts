@@ -2,6 +2,7 @@ import { query } from '~/server/utils/db'
 import { NOTIFICATION_TYPE_MAP, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
+import { normalizeAttachmentSelection } from '~/server/utils/attachments'
 import type { DbConn } from '~/server/utils/notifications/types'
 
 const NOTIFICATION_SETTING_KEYS = {
@@ -11,6 +12,8 @@ const NOTIFICATION_SETTING_KEYS = {
   default_channels: 'notifications_default_channels',
   lead_times: 'notifications_lead_times',
   templates: 'notifications_templates',
+  template_attachments: 'notifications_template_attachments',
+  member_welcome: 'notifications_member_welcome',
   email_from_name: 'notifications_email_from_name',
   email_subject_prefix: 'notifications_email_subject_prefix',
   email_footer: 'notifications_email_footer',
@@ -36,6 +39,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     'event.reminder': [10080, 1440],
   },
   templates: {},
+  template_attachments: {},
+  member_welcome: { delay_days: 0, send_time: '09:00' },
   email_from_name: '',
   email_subject_prefix: '',
   email_footer: '',
@@ -148,9 +153,44 @@ export function normalizeTemplates(input: unknown): { ok: true, value: Partial<R
   return { ok: true, value: result }
 }
 
+export function normalizeTemplateAttachments(input: unknown): { ok: true, value: NotificationSettings['template_attachments'] } | { ok: false, error: string } {
+  if (!input || typeof input !== 'object') return { ok: true, value: {} }
+  const result: NotificationSettings['template_attachments'] = {}
+  for (const [typeKey, raw] of Object.entries(input as Record<string, unknown>)) {
+    if (!NOTIFICATION_TYPE_MAP[typeKey as NotificationTypeKey]) continue
+    const selection = normalizeAttachmentSelection(raw, typeKey)
+    if (!selection.ok) return selection
+    if (selection.value.documentIds.length || selection.value.fileIds.length) {
+      result[typeKey as NotificationTypeKey] = selection.value
+    }
+  }
+  return { ok: true, value: result }
+}
+
+export function normalizeMemberWelcome(input: unknown): { ok: true, value: NotificationSettings['member_welcome'] } | { ok: false, error: string } {
+  const fallback = DEFAULT_NOTIFICATION_SETTINGS.member_welcome
+  if (!input || typeof input !== 'object') return { ok: true, value: { ...fallback } }
+  const raw = input as Record<string, unknown>
+
+  const delayDays = raw.delay_days === undefined || raw.delay_days === null || raw.delay_days === '' ? fallback.delay_days : Number(raw.delay_days)
+  if (!Number.isInteger(delayDays) || delayDays < 0 || delayDays > 365) {
+    return { ok: false, error: 'Der Versatz der Willkommensmail muss zwischen 0 und 365 Tagen liegen.' }
+  }
+
+  const sendTime = String(raw.send_time ?? fallback.send_time).trim()
+  const match = sendTime.match(/^(\d{2}):(\d{2})$/)
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) {
+    return { ok: false, error: 'Ungültige Uhrzeit für die Willkommensmail.' }
+  }
+
+  return { ok: true, value: { delay_days: delayDays, send_time: sendTime } }
+}
+
 export function normalizeNotificationSettings(input: Partial<NotificationSettings> | null | undefined): NotificationSettings {
   const leadTimes = normalizeLeadTimes(input?.lead_times)
   const templates = normalizeTemplates(input?.templates)
+  const templateAttachments = normalizeTemplateAttachments(input?.template_attachments)
+  const memberWelcome = normalizeMemberWelcome(input?.member_welcome)
   const retentionDays = Number(input?.retention_days)
   const inboxRetentionDays = Number(input?.inbox_retention_days)
   const quietHours = input?.quiet_hours && typeof input.quiet_hours === 'object' ? input.quiet_hours : DEFAULT_NOTIFICATION_SETTINGS.quiet_hours
@@ -167,6 +207,8 @@ export function normalizeNotificationSettings(input: Partial<NotificationSetting
     default_channels: normalizeDefaultChannels(input?.default_channels),
     lead_times: leadTimes.ok ? leadTimes.value : DEFAULT_NOTIFICATION_SETTINGS.lead_times,
     templates: templates.ok ? templates.value : DEFAULT_NOTIFICATION_SETTINGS.templates,
+    template_attachments: templateAttachments.ok ? templateAttachments.value : DEFAULT_NOTIFICATION_SETTINGS.template_attachments,
+    member_welcome: memberWelcome.ok ? memberWelcome.value : { ...DEFAULT_NOTIFICATION_SETTINGS.member_welcome },
     email_from_name: String(input?.email_from_name ?? DEFAULT_NOTIFICATION_SETTINGS.email_from_name).trim(),
     email_subject_prefix: String(input?.email_subject_prefix ?? DEFAULT_NOTIFICATION_SETTINGS.email_subject_prefix).trim(),
     email_footer: String(input?.email_footer ?? DEFAULT_NOTIFICATION_SETTINGS.email_footer),
@@ -188,6 +230,10 @@ export function validateNotificationSettings(input: Partial<NotificationSettings
   if (!leadTimes.ok) return leadTimes.error
   const templates = normalizeTemplates(input?.templates)
   if (!templates.ok) return templates.error
+  const templateAttachments = normalizeTemplateAttachments(input?.template_attachments)
+  if (!templateAttachments.ok) return templateAttachments.error
+  const memberWelcome = normalizeMemberWelcome(input?.member_welcome)
+  if (!memberWelcome.ok) return memberWelcome.error
   return null
 }
 
@@ -212,6 +258,8 @@ export async function getNotificationSettings(conn?: DbConn): Promise<Notificati
     default_channels: parseJson(values.get(NOTIFICATION_SETTING_KEYS.default_channels), DEFAULT_NOTIFICATION_SETTINGS.default_channels),
     lead_times: parseJson(values.get(NOTIFICATION_SETTING_KEYS.lead_times), DEFAULT_NOTIFICATION_SETTINGS.lead_times),
     templates: parseJson(values.get(NOTIFICATION_SETTING_KEYS.templates), DEFAULT_NOTIFICATION_SETTINGS.templates),
+    template_attachments: parseJson(values.get(NOTIFICATION_SETTING_KEYS.template_attachments), DEFAULT_NOTIFICATION_SETTINGS.template_attachments),
+    member_welcome: parseJson(values.get(NOTIFICATION_SETTING_KEYS.member_welcome), DEFAULT_NOTIFICATION_SETTINGS.member_welcome),
     email_from_name: values.get(NOTIFICATION_SETTING_KEYS.email_from_name),
     email_subject_prefix: values.get(NOTIFICATION_SETTING_KEYS.email_subject_prefix),
     email_footer: values.get(NOTIFICATION_SETTING_KEYS.email_footer),
@@ -237,6 +285,8 @@ export async function saveNotificationSettings(settings: Partial<NotificationSet
     [NOTIFICATION_SETTING_KEYS.default_channels, JSON.stringify(normalized.default_channels)],
     [NOTIFICATION_SETTING_KEYS.lead_times, JSON.stringify(normalized.lead_times)],
     [NOTIFICATION_SETTING_KEYS.templates, JSON.stringify(normalized.templates)],
+    [NOTIFICATION_SETTING_KEYS.template_attachments, JSON.stringify(normalized.template_attachments)],
+    [NOTIFICATION_SETTING_KEYS.member_welcome, JSON.stringify(normalized.member_welcome)],
     [NOTIFICATION_SETTING_KEYS.email_from_name, normalized.email_from_name],
     [NOTIFICATION_SETTING_KEYS.email_subject_prefix, normalized.email_subject_prefix],
     [NOTIFICATION_SETTING_KEYS.email_footer, normalized.email_footer],

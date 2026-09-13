@@ -11,10 +11,18 @@ function getTransporter(): Transporter | null {
     transporter = null
     return transporter
   }
+  const port = Number(process.env.SMTP_PORT || 587)
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465
+
+  if (secure !== (port === 465)) {
+    console.warn(`notifications email: SMTP_SECURE=${secure} with port ${port} — port 465 needs true, 587/25 need false`)
+  }
+
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
+    port,
+    secure,
+    requireTLS: !secure,
     auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } : undefined,
   })
   return transporter
@@ -24,7 +32,7 @@ export const emailChannel: NotificationChannel = {
   key: 'email',
   isConfigured: settings => Boolean(process.env.SMTP_HOST) && settings.channels_enabled.email,
   addressFor: recipient => recipient.email,
-  async send({ recipient, rendered, settings, unsubscribeToken }) {
+  async send({ recipient, rendered, settings, unsubscribeToken, attachments }) {
     const client = getTransporter()
     if (!client) throw new Error('SMTP is not configured')
     if (!recipient.email) throw new Error('Recipient has no e-mail address')
@@ -47,6 +55,13 @@ export const emailChannel: NotificationChannel = {
       subject: rendered.subject,
       text: body,
       html: bodyHtml,
+      attachments: attachments?.length
+        ? attachments.map(attachment => ({
+            filename: attachment.filename,
+            content: attachment.content,
+            contentType: attachment.contentType,
+          }))
+        : undefined,
     })
   },
 }

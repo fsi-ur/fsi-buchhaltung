@@ -28,6 +28,8 @@ const TYPE_ICONS: Record<NotificationTypeKey, string> = {
   'appointment.changed': 'material-symbols:edit-calendar-rounded',
   'appointment.cancelled': 'material-symbols:event-busy-rounded',
   'appointment.reminder': 'material-symbols:alarm-rounded',
+  'member.welcome_active': 'material-symbols:waving-hand-rounded',
+  'member.welcome_passive': 'material-symbols:waving-hand-outline',
   'custom.message': 'material-symbols:campaign-rounded',
 }
 
@@ -37,6 +39,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'notifications.categories.tasks': 'bg-warning-100 text-warning-700',
   'notifications.categories.events': 'bg-accent-100 text-accent-700',
   'notifications.categories.appointments': 'bg-secondary-100 text-secondary-700',
+  'notifications.categories.members': 'bg-success-100 text-success-700',
   'notifications.categories.custom': 'bg-base-200 text-base-700',
 }
 
