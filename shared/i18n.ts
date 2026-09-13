@@ -1503,7 +1503,7 @@ export const messages = {
       none: 'Keine Kontoauszüge vorhanden',
       statementNumber: 'Kontoauszugsnummer',
       checkedBy: 'Erstellt von',
-      statementDate: 'Erstellt am',
+      statementDate: 'Datum Kontoauszug',
       positions: 'Positionen',
       positionType: 'Art',
       types: {
@@ -4638,7 +4638,7 @@ export const messages = {
       none: 'No bank statements found',
       statementNumber: 'Statement number',
       checkedBy: 'Created by',
-      statementDate: 'Created on',
+      statementDate: 'Statement date',
       positions: 'Positions',
       positionType: 'Type',
       types: {
