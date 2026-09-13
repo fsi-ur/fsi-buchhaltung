@@ -88,6 +88,17 @@ function buildDay(date: Date, currentMonth: number, today: string): CalendarDay 
   }
 }
 
+export function isoWeekNumber(date: Date): number {
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  const dayNum = weekdayIndexOf(day)
+  day.setUTCDate(day.getUTCDate() - dayNum + 3)
+
+  const firstThursday = new Date(Date.UTC(day.getUTCFullYear(), 0, 4))
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - weekdayIndexOf(firstThursday) + 3)
+
+  return 1 + Math.round((day.getTime() - firstThursday.getTime()) / (7 * 86400000))
+}
+
 export function buildMonthMatrix(anchor: Date): CalendarDay[][] {
   const today = todayKey()
   const first = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1))
@@ -162,6 +173,21 @@ export function entryDayKeys(entry: CalendarEntry): string[] {
   }
 
   return keys
+}
+
+export interface EntryDaySegment {
+  isFirstDay: boolean
+  isLastDay: boolean
+  isMultiDay: boolean
+}
+
+export function entryDaySegment(entry: CalendarEntry, dayKey: string): EntryDaySegment {
+  const keys = entryDayKeys(entry)
+  return {
+    isFirstDay: keys[0] === dayKey,
+    isLastDay: keys[keys.length - 1] === dayKey,
+    isMultiDay: keys.length > 1,
+  }
 }
 
 export function groupEntriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {

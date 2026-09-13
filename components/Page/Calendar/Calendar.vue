@@ -149,6 +149,7 @@
               @open="openEntry"
               @create="createAppointment"
               @expand-day="expandDay"
+              @open-week="openWeek"
             />
 
             <PageCalendarWeekGrid
@@ -408,6 +409,11 @@ function closeDetail() {
 function expandDay(dayKey: string) {
   expandedDayKey.value = dayKey
   showDayModal.value = true
+}
+
+function openWeek(dayKey: string) {
+  anchor.value = parseDayKey(dayKey)
+  view.value = 'week'
 }
 
 function createAppointment(dayKey?: string) {

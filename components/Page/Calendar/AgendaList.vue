@@ -48,7 +48,7 @@
 
               <span class="min-w-0 flex-1">
                 <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-base-500">
-                  <span class="font-medium tabular-nums text-base-600">{{ entryTimeLabel(entry) }}</span>
+                  <span class="font-medium tabular-nums text-base-600">{{ entryTimeLabel(entry, day.key) }}</span>
                   <span v-if="entry.typeName" class="text-base-400">· {{ entry.typeName }}</span>
                   <span v-if="entry.isCancelled" class="font-semibold text-danger-600">· {{ t('calendar.cancelled') }}</span>
                 </span>
@@ -97,7 +97,7 @@
 
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
-import { groupEntriesByDay, todayKey } from '~/composables/useCalendarView'
+import { entryDaySegment, groupEntriesByDay, todayKey } from '~/composables/useCalendarView'
 import type { AppointmentResponseValue, CalendarEntry } from '~/types/appointment'
 
 const props = defineProps<{
@@ -140,10 +140,19 @@ function shiftDayKey(key: string, days: number) {
  * `formatTime` would convert them to Europe/Berlin a second time. A plain slice reads the
  * hour/minute exactly as stored.
  */
-function entryTimeLabel(entry: CalendarEntry) {
+function entryTimeLabel(entry: CalendarEntry, dayKey: string) {
   if (entry.allDay) return t('calendar.allDay')
+
   const start = entry.startsAt.slice(11, 16)
   const end = entry.endsAt.slice(11, 16)
+
+  const { isFirstDay, isLastDay, isMultiDay } = entryDaySegment(entry, dayKey)
+  if (isMultiDay) {
+    if (isFirstDay) return t('calendar.from', { time: start })
+    if (isLastDay) return t('calendar.until', { time: end })
+    return t('calendar.allDay')
+  }
+
   return end && end !== start ? `${start} – ${end}` : start
 }
 

@@ -122,13 +122,13 @@
               @click="$emit('open', positioned.entry)"
             >
               <span v-if="positioned.height < TWO_LINE_HEIGHT" class="flex items-baseline gap-1 overflow-hidden">
-                <span class="shrink-0 tabular-nums opacity-75">{{ entryTime(positioned.entry.startsAt) }}</span>
+                <span v-if="chipTimeLabel(positioned)" class="shrink-0 tabular-nums opacity-75">{{ chipTimeLabel(positioned) }}</span>
                 <span class="truncate font-medium">{{ positioned.entry.title }}</span>
               </span>
               <template v-else>
                 <span class="block truncate font-medium">{{ positioned.entry.title }}</span>
-                <span class="block truncate tabular-nums opacity-75">
-                  {{ entryTime(positioned.entry.startsAt) }} – {{ entryTime(positioned.entry.endsAt) }}
+                <span v-if="chipTimeLabel(positioned)" class="block truncate tabular-nums opacity-75">
+                  {{ chipTimeLabel(positioned) }}
                 </span>
                 <span
                   v-if="positioned.entry.location && positioned.height >= THREE_LINE_HEIGHT"
@@ -147,7 +147,7 @@
 
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
-import { buildWeekDays, groupEntriesByDay, nowInBerlin, todayKey, weekdayIndexOf, WEEKDAY_KEYS } from '~/composables/useCalendarView'
+import { buildWeekDays, entryDaySegment, groupEntriesByDay, nowInBerlin, todayKey, weekdayIndexOf, WEEKDAY_KEYS } from '~/composables/useCalendarView'
 import type { CalendarEntry } from '~/types/appointment'
 
 const props = defineProps<{
@@ -231,7 +231,7 @@ function positionedEntries(dayKey: string) {
     }))
     .sort((a, b) => a.start - b.start || a.end - b.end)
 
-  const results: { entry: CalendarEntry, top: number, height: number, left: string, width: string }[] = []
+  const results: { entry: CalendarEntry, dayKey: string, top: number, height: number, left: string, width: string }[] = []
 
   let clusterEnd = -Infinity
   let clusterItems: typeof timed = []
@@ -262,6 +262,7 @@ function positionedEntries(dayKey: string) {
       // otherwise touch edge-to-edge with nothing to tell them apart.
       results.push({
         entry: item.entry,
+        dayKey,
         top: (item.start / 60) * HOUR_HEIGHT,
         height: Math.max(MIN_ENTRY_HEIGHT, ((item.end - item.start) / 60) * HOUR_HEIGHT),
         left: `calc(${(column / lanes) * 100}% + ${column > 0 ? 1 : 0}px)`,
@@ -280,6 +281,15 @@ function positionedEntries(dayKey: string) {
   flushCluster()
 
   return results
+}
+
+function chipTimeLabel(positioned: { entry: CalendarEntry, dayKey: string }): string | null {
+  const { entry, dayKey } = positioned
+  const { isFirstDay, isLastDay, isMultiDay } = entryDaySegment(entry, dayKey)
+  if (!isMultiDay) return `${entryTime(entry.startsAt)} – ${entryTime(entry.endsAt)}`
+  if (isFirstDay) return t('calendar.from', { time: entryTime(entry.startsAt) })
+  if (isLastDay) return t('calendar.until', { time: entryTime(entry.endsAt) })
+  return null
 }
 
 /** The chip is truncated by design, so the tooltip carries the parts that get cut off. */
