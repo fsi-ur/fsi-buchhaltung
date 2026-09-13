@@ -9,57 +9,61 @@
     role="navigation"
     :aria-label="t('common.mainNavigation')"
     :class="[
-      'fixed top-0 left-0 h-full bg-base-900 text-base-300 flex flex-col p-4 shadow-lg z-40 transition-[width,transform] duration-200',
-      collapsed ? 'md:w-18' : 'md:w-40',
+      'fixed top-0 left-0 h-full bg-base-900 text-base-300 flex flex-col gap-4 p-4 shadow-lg z-40 transition-[width,transform] duration-200',
+      collapsed ? 'md:w-20' : 'md:w-40',
       'w-40',
       open ? 'translate-x-0' : '-translate-x-full',
       'md:translate-x-0'
     ]"
   >
-    <ul
-      class="flex flex-1 min-h-0 flex-col overflow-y-auto mt-1 mb-2"
-      :class="pages.length > 6 ? 'justify-between' : 'justify-start gap-4'"
-    >
+    <ul class="-mx-4 flex w-[calc(100%+2rem)] flex-1 min-h-0 flex-col justify-between overflow-y-auto px-4">
       <li v-for="page in mainPages" :key="page.name">
         <button
           type="button"
-          class="group flex w-full flex-col items-center rounded-lg p-1 transition-colors cursor-pointer hover:bg-base-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-400 md:p-2"
+          class="group flex w-full flex-col items-center cursor-pointer focus-visible:outline-none"
           :aria-current="page.name === currentPage ? 'page' : undefined"
           :title="collapsedLabel(page.labelKey)"
           @click="handleClick(page.name)"
         >
           <span
             :class="[
-              'w-11 h-11 flex items-center justify-center rounded-full transition-colors',
-              page.name === currentPage
-                ? 'bg-secondary-600 text-white'
-                : 'bg-base-800 text-base-400 group-hover:bg-base-700 group-hover:text-base-200'
+              'flex w-full flex-col items-center rounded-lg p-2 transition-colors group-hover:bg-base-800 group-focus-visible:ring-2 group-focus-visible:ring-secondary-400',
+              collapsed ? 'md:w-auto' : '',
             ]"
           >
-            <Icon :name="page.icon" size="30" class="shrink-0" aria-hidden="true" />
-          </span>
+            <span
+              :class="[
+                'w-11 h-11 flex items-center justify-center rounded-full transition-colors',
+                page.name === currentPage
+                  ? 'bg-secondary-600 text-white'
+                  : 'bg-base-800 text-base-400 group-hover:bg-base-700 group-hover:text-base-200'
+              ]"
+            >
+              <Icon :name="page.icon" size="30" class="shrink-0" aria-hidden="true" />
+            </span>
 
-          <span
-            :class="[
-              'mt-1 text-sm font-medium text-center transition-colors',
-              page.name === currentPage ? 'text-white' : 'text-base-300 group-hover:text-white',
-              collapsed ? 'md:hidden' : '',
-            ]"
-          >
-            {{ t(page.labelKey) }}
+            <span
+              :class="[
+                'mt-1 text-sm font-medium text-center transition-colors',
+                page.name === currentPage ? 'text-white' : 'text-base-300 group-hover:text-white',
+                collapsed ? 'md:hidden' : '',
+              ]"
+            >
+              {{ t(page.labelKey) }}
+            </span>
           </span>
         </button>
       </li>
     </ul>
 
-    <div class="mt-auto flex shrink-0 flex-col gap-2">
+    <div class="flex shrink-0 flex-col gap-2">
       <CommonNotificationBell v-if="user" :collapsed="collapsed" @navigate="emit('close')" />
 
       <button
         v-if="user"
         type="button"
         :class="[
-          'flex mb-4 sm:mb-0 items-center justify-center gap-2 rounded-lg bg-base-800 px-3 py-2 text-sm font-medium text-base-300 transition hover:bg-base-700 disabled:cursor-wait disabled:opacity-60 cursor-pointer',
+          'flex w-full items-center justify-center gap-2 rounded-lg bg-base-800 px-3 py-2 text-sm font-medium text-base-300 transition hover:bg-base-700 disabled:cursor-wait disabled:opacity-60 cursor-pointer',
           isRefreshing ? 'animate-pulse' : '',
         ]"
         :disabled="isRefreshing"
@@ -77,7 +81,7 @@
 
       <button
         type="button"
-        class="hidden md:flex items-center justify-center gap-2 rounded-lg bg-base-800 px-3 py-2 text-sm font-medium text-base-300 transition hover:bg-base-700 cursor-pointer"
+        class="hidden md:flex w-full items-center justify-center gap-2 rounded-lg bg-base-800 px-3 py-2 text-sm font-medium text-base-300 transition hover:bg-base-700 cursor-pointer"
         :title="collapsed ? t('common.expandMenu') : t('common.collapseMenu')"
         @click="$emit('toggle-collapse')"
       >
