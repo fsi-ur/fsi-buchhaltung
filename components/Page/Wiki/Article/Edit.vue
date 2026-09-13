@@ -678,6 +678,8 @@ async function reload() {
   revisionListRef.value?.reload()
 }
 
+useAppRefresh().onRefresh(async () => { await Promise.all([loadSpaces(), loadTags(), loadOwnerOptions()]) })
+
 function scheduleAutosave() {
   if (suppressAutosave || isCreate.value || readOnly.value) return
   dirty.value = true

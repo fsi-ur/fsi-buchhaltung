@@ -202,4 +202,6 @@ async function remove() {
 }
 
 load()
+
+useAppRefresh().onRefresh(load)
 </script>

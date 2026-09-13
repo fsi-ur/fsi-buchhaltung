@@ -344,4 +344,6 @@ onMounted(async () => {
     showCustom.value = selectedCustomPermissions.value.length > 0
   }
 })
+
+useAppRefresh().onRefresh(async () => { await Promise.all([loadDefinitions(), loadOptions()]) })
 </script>

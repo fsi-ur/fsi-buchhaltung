@@ -204,4 +204,6 @@ async function load() {
 }
 
 load()
+
+useAppRefresh().onRefresh(load)
 </script>

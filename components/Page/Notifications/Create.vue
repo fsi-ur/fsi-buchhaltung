@@ -515,4 +515,6 @@ onMounted(() => {
   }
   loadOptions()
 })
+
+useAppRefresh().onRefresh(loadOptions)
 </script>

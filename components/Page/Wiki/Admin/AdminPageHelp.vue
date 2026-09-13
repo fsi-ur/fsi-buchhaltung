@@ -290,4 +290,6 @@ async function removeEntry() {
 }
 
 load()
+
+useAppRefresh().onRefresh(load)
 </script>

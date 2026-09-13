@@ -520,4 +520,6 @@ async function load() {
 loadArticles()
 loadAudienceOptions()
 load()
+
+useAppRefresh().onRefresh(async () => { await Promise.all([loadArticles(), loadAudienceOptions(), load()]) })
 </script>

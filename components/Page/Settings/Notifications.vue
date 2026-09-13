@@ -675,4 +675,8 @@ async function save() {
 }
 
 onMounted(load)
+
+useAppRefresh().onRefresh(() => {
+  if (!dirty.value) return load()
+})
 </script>

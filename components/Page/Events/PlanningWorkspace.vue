@@ -574,7 +574,15 @@ watch(eventId, (id) => {
   }
 })
 
-useAppRefresh().onRefresh(loadOptions)
+useAppRefresh().onRefresh(async () => {
+  await loadOptions()
+  if (!eventId.value) return
+
+  const loads: Promise<void>[] = []
+  if (canViewAll.value) loads.push(loadEventChecklists(eventId.value))
+  if (canViewAll.value || hasPermission('events.shifts.signup')) loads.push(loadShiftSlots(eventId.value))
+  await Promise.all(loads)
+})
 
 async function loadOptions() {
   const res = await $fetch<GetEventOptionsResponse>('/api/events/options')

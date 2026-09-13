@@ -401,4 +401,6 @@ onMounted(async () => {
     domainQuery.value = domainLabel.value
   }
 })
+
+useAppRefresh().onRefresh(load)
 </script>

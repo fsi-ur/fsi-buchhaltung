@@ -191,4 +191,5 @@ async function copyUrl() {
 }
 
 onMounted(load)
+useAppRefresh().onRefresh(load)
 </script>

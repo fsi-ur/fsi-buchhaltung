@@ -290,6 +290,8 @@ onMounted(() => {
   revealSection()
 })
 
+useAppRefresh().onRefresh(load)
+
 onBeforeUnmount(() => {
   if (highlightTimeout) clearTimeout(highlightTimeout)
 })

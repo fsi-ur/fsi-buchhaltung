@@ -538,4 +538,6 @@ watch(
 watch(pathId, () => { loadPath() }, { immediate: true })
 
 loadTree()
+
+useAppRefresh().onRefresh(async () => { await Promise.all([loadTree(), loadArticle(), loadPath()]) })
 </script>
