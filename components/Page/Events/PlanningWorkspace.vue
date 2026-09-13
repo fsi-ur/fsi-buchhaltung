@@ -2,7 +2,7 @@
   <Page no-help @open-menu="$emit('openMenu')">
     <template #cards>
       <div class="col-span-12 min-w-0">
-        <div class="-mb-6 space-y-6">
+        <div class="space-y-6">
           <section class="-mx-6 overflow-hidden bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
             <div class="border-b border-base-200 bg-base-900 px-5 py-5 text-white">
               <div class="flex flex-wrap items-start justify-between gap-4">
