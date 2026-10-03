@@ -49,6 +49,23 @@ export async function hasCashRegisterPriceSnapshots(): Promise<boolean> {
   return snapshotSupport
 }
 
+let standSupport = false
+
+export async function hasCashRegisterStands(): Promise<boolean> {
+  if (standSupport) return true
+
+  const rows = await cashRegisterQuery<Array<{ n: number }>>(
+    `SELECT COUNT(*) AS n
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND ((TABLE_NAME IN ('orders', 'donations') AND COLUMN_NAME = 'stand_id')
+          OR (TABLE_NAME = 'stands' AND COLUMN_NAME = 'name'))`,
+  )
+
+  standSupport = Number(rows[0]?.n ?? 0) === 3
+  return standSupport
+}
+
 export async function cashRegisterQuery<T = any>(sql: string, params?: unknown[]): Promise<T> {
   if (!isCashRegisterConnected()) {
     throw new Error('Cash register connection is not configured')

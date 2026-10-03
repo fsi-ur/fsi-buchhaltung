@@ -1,6 +1,6 @@
 <template>
   <section class="space-y-6">
-    <div v-if="loading" class="-mx-6 bg-white p-8 text-center text-sm text-base-400 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
+    <div v-if="loading && !overview" class="-mx-6 bg-white p-8 text-center text-sm text-base-400 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
       {{ t('event.cashRegister.loading') }}
     </div>
 
@@ -15,7 +15,31 @@
     </div>
 
     <template v-else-if="overview">
-      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div
+        v-if="hasStands"
+        class="-mx-6 flex flex-wrap items-center gap-3 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
+      >
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
+          <Icon name="material-symbols:storefront-rounded" class="text-base" />
+        </span>
+        <span class="text-sm font-semibold text-base-700">{{ t('event.cashRegister.standFilter') }}</span>
+        <div class="w-full sm:w-64">
+          <CommonSearchSelect
+            v-model="standQuery"
+            :options="standOptions"
+            :placeholder="t('event.cashRegister.allStands')"
+            :empty-text="t('event.cashRegister.noMatchingStands')"
+            :selected-label="selectedStandLabel"
+            @select="onStandSelect"
+            @clear-selection="standFilter = 'all'"
+          />
+        </div>
+        <p v-if="standFilterActive" class="text-xs text-base-400">
+          {{ t('event.cashRegister.paymentsNotStandBound') }}
+        </p>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2" :class="standFilterActive ? 'xl:grid-cols-4' : 'xl:grid-cols-5'">
         <div
           v-for="tile in statTiles"
           :key="tile.label"
@@ -30,6 +54,53 @@
           <p class="mt-3 text-2xl font-semibold text-base-900">{{ tile.value }}</p>
           <p class="mt-1 text-xs text-base-400">{{ tile.meta }}</p>
         </div>
+      </div>
+
+      <div v-if="hasStands" class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
+            <Icon name="material-symbols:storefront-rounded" class="text-base" />
+          </span>
+          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.standComparisonTitle') }}</h2>
+        </div>
+
+        <div class="hidden grid-cols-[minmax(0,1fr)_6rem_6rem_7rem_7rem] gap-4 border-b border-base-200 pb-2 text-xs font-semibold uppercase tracking-wide text-base-400 md:grid">
+          <span>{{ t('event.cashRegister.stand') }}</span>
+          <span class="text-right">{{ t('event.cashRegister.orders') }}</span>
+          <span class="text-right">{{ t('event.cashRegister.quantity') }}</span>
+          <span class="text-right">{{ t('event.cashRegister.revenue') }}</span>
+          <span class="text-right">{{ t('event.cashRegister.donations') }}</span>
+        </div>
+
+        <ul>
+          <li v-for="row in standRows" :key="row.key">
+            <button
+              type="button"
+              class="w-full cursor-pointer border-b border-base-100 px-1 py-2 text-left transition-colors hover:bg-base-50"
+              :class="row.filterValue === standFilter ? 'bg-accent-50' : ''"
+              @click="standFilter = row.filterValue"
+            >
+              <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-[minmax(0,1fr)_6rem_6rem_7rem_7rem]">
+                <span class="col-span-2 truncate font-medium text-base-800 md:col-span-1">{{ row.label }}</span>
+                <span class="text-base-500 md:text-right">
+                  <span class="md:hidden">{{ t('event.cashRegister.orders') }}: </span>{{ row.orders }}
+                </span>
+                <span class="text-right text-base-500">
+                  <span class="md:hidden">{{ t('event.cashRegister.quantity') }}: </span>{{ row.quantity }}
+                </span>
+                <span class="font-medium text-base-800 md:text-right">
+                  <span class="font-normal text-base-500 md:hidden">{{ t('event.cashRegister.revenue') }}: </span>{{ row.revenueLabel }}
+                </span>
+                <span class="text-right text-base-700">
+                  <span class="text-base-500 md:hidden">{{ t('event.cashRegister.donations') }}: </span>{{ row.donationsLabel }}
+                </span>
+              </div>
+              <div class="mt-1 h-2 rounded-full bg-base-100">
+                <div class="h-2 rounded-full bg-accent-400" :style="{ width: `${row.barPercent}%` }"></div>
+              </div>
+            </button>
+          </li>
+        </ul>
       </div>
 
       <div class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
@@ -153,6 +224,8 @@
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { CashRegisterOverview, EventCashRegisterResponse } from '~/server/api/events/[id]/cash-register.get'
+import type { CashRegisterStandFilterValue, CashRegisterStandStat } from '~/server/utils/cashRegisterStands'
+import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
 
 const props = defineProps<{
   eventId: number
@@ -167,6 +240,54 @@ const linked = ref(false)
 const overview = ref<CashRegisterOverview | null>(null)
 
 const MAX_BAR_HEIGHT = 160
+
+const standFilter = ref<CashRegisterStandFilterValue>('all')
+const standQuery = ref('')
+
+const standStats = computed<CashRegisterStandStat[]>(() => overview.value?.stands ?? [])
+const hasStands = computed(() => standStats.value.some(stand => stand.id != null))
+const standFilterActive = computed(() => hasStands.value && overview.value?.standFilter !== 'all')
+
+function standFilterValue(stand: CashRegisterStandStat): CashRegisterStandFilterValue {
+  return stand.id == null ? 'none' : stand.id
+}
+
+function standLabel(stand: CashRegisterStandStat) {
+  if (stand.id == null) return t('event.cashRegister.noStand')
+  return stand.name ?? `#${stand.id}`
+}
+
+const standOptions = computed<SearchSelectOption[]>(() => [
+  { key: 'all', label: t('event.cashRegister.allStands'), value: 'all' },
+  ...standStats.value.map(stand => ({
+    key: String(standFilterValue(stand)),
+    label: standLabel(stand),
+    value: standFilterValue(stand),
+  })),
+])
+
+const selectedStandLabel = computed(() =>
+  standOptions.value.find(option => option.value === standFilter.value)?.label ?? '')
+
+function onStandSelect(value: unknown) {
+  standFilter.value = value as CashRegisterStandFilterValue
+  standQuery.value = ''
+}
+
+const standRows = computed(() => {
+  const max = standStats.value.reduce((highest, stand) => Math.max(highest, stand.revenue), 0)
+
+  return standStats.value.map(stand => ({
+    key: String(standFilterValue(stand)),
+    filterValue: standFilterValue(stand),
+    label: standLabel(stand),
+    orders: stand.orders,
+    quantity: stand.quantity,
+    revenueLabel: formatCurrency(stand.revenue),
+    donationsLabel: formatCurrency(stand.donations),
+    barPercent: max > 0 ? Math.max(stand.revenue > 0 ? 1 : 0, stand.revenue / max * 100) : 0,
+  }))
+})
 
 const maxHourlyRevenue = computed(() =>
   (overview.value?.hourly ?? []).reduce((max, entry) => Math.max(max, entry.revenue), 0),
@@ -190,6 +311,35 @@ const fachschaftPaymentsMeta = computed(() => {
 
 const statTiles = computed(() => {
   if (!overview.value) return []
+
+  if (standFilterActive.value) {
+    return [
+      {
+        label: t('event.cashRegister.totalRevenue'),
+        value: formatCurrency(overview.value.regular.totalRevenue),
+        meta: t('event.cashRegister.itemsSoldMeta', { count: overview.value.regular.totalQuantity }),
+        icon: 'material-symbols:euro-rounded',
+      },
+      {
+        label: t('event.cashRegister.donations'),
+        value: formatCurrency(overview.value.donations.total),
+        meta: t('event.cashRegister.donationsMeta', { count: overview.value.donations.count }),
+        icon: 'material-symbols:favorite-rounded',
+      },
+      {
+        label: t('event.cashRegister.givenOutWorth'),
+        value: formatCurrency(overview.value.fachschaft.totalWorth),
+        meta: t('event.cashRegister.givenOutMeta', { count: overview.value.fachschaft.totalQuantity }),
+        icon: 'material-symbols:volunteer-activism-rounded',
+      },
+      {
+        label: t('event.cashRegister.standRevenue'),
+        value: formatCurrency(overview.value.regular.totalRevenue + overview.value.donations.total),
+        meta: t('event.cashRegister.standRevenueMeta'),
+        icon: 'material-symbols:account-balance-wallet',
+      },
+    ]
+  }
 
   const totalIncome = overview.value.regular.totalRevenue
     + overview.value.payments.revenue
@@ -256,7 +406,9 @@ async function loadOverview() {
   error.value = ''
 
   try {
-    const res = await $fetch<EventCashRegisterResponse>(`/api/events/${props.eventId}/cash-register`)
+    const res = await $fetch<EventCashRegisterResponse>(`/api/events/${props.eventId}/cash-register`, {
+      query: { standId: String(standFilter.value) },
+    })
 
     if (!res.ok) {
       error.value = res.error || t('event.cashRegister.loadFailed')
@@ -271,6 +423,10 @@ async function loadOverview() {
 
     linked.value = true
     overview.value = res.overview
+
+    if (standFilter.value !== 'all' && !standOptions.value.some(option => option.value === standFilter.value)) {
+      standFilter.value = 'all'
+    }
   } catch {
     error.value = t('event.cashRegister.loadFailed')
   } finally {
@@ -278,7 +434,12 @@ async function loadOverview() {
   }
 }
 
-watch(() => props.eventId, loadOverview)
+watch(() => props.eventId, () => {
+  overview.value = null
+  if (standFilter.value === 'all') loadOverview()
+  else standFilter.value = 'all'
+})
+watch(standFilter, loadOverview)
 onMounted(loadOverview)
 useAppRefresh().onRefresh(loadOverview)
 </script>

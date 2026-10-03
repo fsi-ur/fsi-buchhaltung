@@ -1,6 +1,18 @@
-import { defineEventHandler, getRouterParam } from 'h3'
+import { defineEventHandler, getQuery, getRouterParam } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
-import { cashRegisterQuery, hasCashRegisterPriceSnapshots, isCashRegisterConnected } from '~/server/utils/cashRegisterDb'
+import {
+  cashRegisterQuery,
+  hasCashRegisterPriceSnapshots,
+  hasCashRegisterStands,
+  isCashRegisterConnected,
+} from '~/server/utils/cashRegisterDb'
+import {
+  buildCashRegisterStandStats,
+  noCashRegisterStandFilter,
+  parseCashRegisterStandFilter,
+  type CashRegisterStandFilterValue,
+  type CashRegisterStandStat,
+} from '~/server/utils/cashRegisterStands'
 
 export interface CashRegisterOverviewItem {
   id: number
@@ -40,6 +52,8 @@ export interface CashRegisterOverview {
     total: number
   }
   hourly: CashRegisterHourlyEntry[]
+  standFilter: CashRegisterStandFilterValue
+  stands: CashRegisterStandStat[]
 }
 
 export type EventCashRegisterResponse =
@@ -83,6 +97,11 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     return { ok: false, error: 'Invalid event id' }
   }
 
+  const requestedStand = parseCashRegisterStandFilter(getQuery(event).standId)
+  if (!requestedStand) {
+    return { ok: false, error: 'Invalid stand id' }
+  }
+
   if (!isCashRegisterConnected()) {
     return { ok: true, connected: false }
   }
@@ -116,6 +135,9 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
   const itemJoin = snapshots ? 'LEFT JOIN items i ON oi.item_id = i.id' : 'JOIN items i ON oi.item_id = i.id'
   const groupBy = snapshots ? 'oi.item_id' : 'i.id'
 
+  const standsSupported = await hasCashRegisterStands()
+  const stand = standsSupported ? requestedStand : noCashRegisterStandFilter()
+
   const regularRows = await cashRegisterQuery<Array<{ id: number, name: string, quantity: unknown, amount: unknown }>>(`
     SELECT
       ${idExpr} AS id,
@@ -126,10 +148,10 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     JOIN order_items oi ON o.id = oi.order_id
     ${itemJoin}
     WHERE o.fachschaft = 0
-      AND o.event_id = ?
+      AND o.event_id = ?${stand.orders}
     GROUP BY ${groupBy}
     ORDER BY name ASC
-  `, [cashRegisterEventId])
+  `, [cashRegisterEventId, ...stand.params])
 
   const fachschaftRows = await cashRegisterQuery<Array<{ id: number, name: string, quantity: unknown, amount: unknown }>>(`
     SELECT
@@ -141,10 +163,10 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     JOIN order_items oi ON o.id = oi.order_id
     ${itemJoin}
     WHERE o.fachschaft = 1
-      AND o.event_id = ?
+      AND o.event_id = ?${stand.orders}
     GROUP BY ${groupBy}
     ORDER BY name ASC
-  `, [cashRegisterEventId])
+  `, [cashRegisterEventId, ...stand.params])
 
   const paymentRows = await cashRegisterQuery<Array<{ count: unknown, total: unknown }>>(
     snapshots
@@ -175,8 +197,8 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
   const donationRows = await cashRegisterQuery<Array<{ count: unknown, total: unknown }>>(`
     SELECT COUNT(*) AS count, IFNULL(SUM(amount), 0) AS total
     FROM donations
-    WHERE event_id = ?
-  `, [cashRegisterEventId])
+    WHERE event_id = ?${stand.donations}
+  `, [cashRegisterEventId, ...stand.params])
 
   const hourlyRows = await cashRegisterQuery<Array<{ hour_start: string, revenue: unknown, quantity: unknown }>>(`
     SELECT
@@ -187,10 +209,39 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     JOIN order_items oi ON o.id = oi.order_id
     ${snapshots ? '' : 'JOIN items i ON oi.item_id = i.id'}
     WHERE o.fachschaft = 0
-      AND o.event_id = ?
+      AND o.event_id = ?${stand.orders}
     GROUP BY hour_start
     ORDER BY hour_start ASC
-  `, [cashRegisterEventId])
+  `, [cashRegisterEventId, ...stand.params])
+
+  let stands: CashRegisterStandStat[] = []
+  if (standsSupported) {
+    const standSalesRows = await cashRegisterQuery<Array<{ id: unknown, orders: unknown, quantity: unknown, revenue: unknown }>>(`
+      SELECT
+        o.stand_id AS id,
+        COUNT(DISTINCT o.id) AS orders,
+        SUM(oi.quantity) AS quantity,
+        SUM(oi.quantity * ${valueExpr}) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      ${snapshots ? '' : 'JOIN items i ON oi.item_id = i.id'}
+      WHERE o.fachschaft = 0
+        AND o.event_id = ?
+      GROUP BY o.stand_id
+    `, [cashRegisterEventId])
+
+    const standDonationRows = await cashRegisterQuery<Array<{ id: unknown, total: unknown }>>(`
+      SELECT stand_id AS id, SUM(amount) AS total
+      FROM donations
+      WHERE event_id = ?
+      GROUP BY stand_id
+    `, [cashRegisterEventId])
+
+    const standNameRows = await cashRegisterQuery<Array<{ id: unknown, name: unknown }>>(`SELECT id, name FROM stands`, [])
+    const standNames = new Map(standNameRows.map(row => [Number(row.id), String(row.name)]))
+
+    stands = buildCashRegisterStandStats(standSalesRows, standDonationRows, standNames)
+  }
 
   const toItem = (row: { id: number, name: string, quantity: unknown, amount: unknown }): CashRegisterOverviewItem => ({
     id: Number(row.id),
@@ -240,6 +291,8 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
         total: Number(donationRows[0]?.total ?? 0),
       },
       hourly: fillHourlyGaps(hourlyRows),
+      standFilter: stand.value,
+      stands,
     },
   }
 })
