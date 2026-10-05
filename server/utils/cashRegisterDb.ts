@@ -66,6 +66,45 @@ export async function hasCashRegisterStands(): Promise<boolean> {
   return standSupport
 }
 
+// Vouchers come in two parts. The order line columns (line_kind & co.) decide
+// how revenue is valued and live in the already granted order_items table. The
+// voucher tables are only needed for the vouchers block — and the connection
+// user only sees tables it was granted, so they stay hidden until the
+// kassensystem's setup:connection-db-user is re-run. Only positive results are
+// cached, so a later migration or grant is picked up without a restart.
+let voucherLineSupport = false
+let voucherTableSupport = false
+
+export async function hasCashRegisterVoucherLines(): Promise<boolean> {
+  if (voucherLineSupport) return true
+
+  const rows = await cashRegisterQuery<Array<{ n: number }>>(
+    `SELECT COUNT(*) AS n
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'order_items'
+        AND COLUMN_NAME IN ('line_kind', 'voucher_id', 'voucher_covers_deposit')`,
+  )
+
+  voucherLineSupport = Number(rows[0]?.n ?? 0) === 3
+  return voucherLineSupport
+}
+
+export async function hasCashRegisterVoucherTables(): Promise<boolean> {
+  if (voucherTableSupport) return true
+
+  const rows = await cashRegisterQuery<Array<{ n: number }>>(
+    `SELECT COUNT(*) AS n
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND ((TABLE_NAME = 'vouchers' AND COLUMN_NAME = 'batch_id')
+          OR (TABLE_NAME = 'voucher_batches' AND COLUMN_NAME = 'kind'))`,
+  )
+
+  voucherTableSupport = Number(rows[0]?.n ?? 0) === 2
+  return voucherTableSupport
+}
+
 export async function cashRegisterQuery<T = any>(sql: string, params?: unknown[]): Promise<T> {
   if (!isCashRegisterConnected()) {
     throw new Error('Cash register connection is not configured')

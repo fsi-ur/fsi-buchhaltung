@@ -4,8 +4,17 @@ import {
   cashRegisterQuery,
   hasCashRegisterPriceSnapshots,
   hasCashRegisterStands,
+  hasCashRegisterVoucherLines,
+  hasCashRegisterVoucherTables,
   isCashRegisterConnected,
 } from '~/server/utils/cashRegisterDb'
+import {
+  buildCashRegisterVoucherStats,
+  cashRegisterCashValueExpr,
+  cashRegisterItemLineFilter,
+  cashRegisterQuantityExpr,
+  type CashRegisterVoucherStats,
+} from '~/server/utils/cashRegisterVouchers'
 import {
   buildCashRegisterStandStats,
   noCashRegisterStandFilter,
@@ -30,7 +39,10 @@ export interface CashRegisterHourlyEntry {
 export interface CashRegisterOverview {
   regular: {
     items: CashRegisterOverviewItem[]
+    /** Cash taken for sales: item lines, voucher sales and deposits paid on redeemed items. */
     totalRevenue: number
+    /** Sum of `items` (normal item lines only). */
+    itemsRevenue: number
     totalQuantity: number
   }
   fachschaft: {
@@ -54,6 +66,8 @@ export interface CashRegisterOverview {
   hourly: CashRegisterHourlyEntry[]
   standFilter: CashRegisterStandFilterValue
   stands: CashRegisterStandStat[]
+  /** Absent against a kassensystem without vouchers. */
+  vouchers?: CashRegisterVoucherStats
 }
 
 export type EventCashRegisterResponse =
@@ -135,6 +149,14 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
   const itemJoin = snapshots ? 'LEFT JOIN items i ON oi.item_id = i.id' : 'JOIN items i ON oi.item_id = i.id'
   const groupBy = snapshots ? 'oi.item_id' : 'i.id'
 
+  // With vouchers, item statistics only cover normal item lines and revenue
+  // is the cash paid (see cashRegisterVouchers.ts); without them every
+  // expression stays as before.
+  const voucherLines = snapshots && await hasCashRegisterVoucherLines()
+  const cashExpr = cashRegisterCashValueExpr(voucherLines, valueExpr)
+  const itemLineFilter = cashRegisterItemLineFilter(voucherLines)
+  const quantityExpr = cashRegisterQuantityExpr(voucherLines)
+
   const standsSupported = await hasCashRegisterStands()
   const stand = standsSupported ? requestedStand : noCashRegisterStandFilter()
 
@@ -147,7 +169,7 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     FROM orders o
     JOIN order_items oi ON o.id = oi.order_id
     ${itemJoin}
-    WHERE o.fachschaft = 0
+    WHERE o.fachschaft = 0${itemLineFilter}
       AND o.event_id = ?${stand.orders}
     GROUP BY ${groupBy}
     ORDER BY name ASC
@@ -162,7 +184,7 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     FROM orders o
     JOIN order_items oi ON o.id = oi.order_id
     ${itemJoin}
-    WHERE o.fachschaft = 1
+    WHERE o.fachschaft = 1${itemLineFilter}
       AND o.event_id = ?${stand.orders}
     GROUP BY ${groupBy}
     ORDER BY name ASC
@@ -203,8 +225,8 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
   const hourlyRows = await cashRegisterQuery<Array<{ hour_start: string, revenue: unknown, quantity: unknown }>>(`
     SELECT
       DATE_FORMAT(o.created_at, '%Y-%m-%d %H:00:00') AS hour_start,
-      SUM(oi.quantity * ${valueExpr}) AS revenue,
-      SUM(oi.quantity) AS quantity
+      SUM(oi.quantity * ${cashExpr}) AS revenue,
+      SUM(${quantityExpr}) AS quantity
     FROM orders o
     JOIN order_items oi ON o.id = oi.order_id
     ${snapshots ? '' : 'JOIN items i ON oi.item_id = i.id'}
@@ -220,8 +242,8 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
       SELECT
         o.stand_id AS id,
         COUNT(DISTINCT o.id) AS orders,
-        SUM(oi.quantity) AS quantity,
-        SUM(oi.quantity * ${valueExpr}) AS revenue
+        SUM(${quantityExpr}) AS quantity,
+        SUM(oi.quantity * ${cashExpr}) AS revenue
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
       ${snapshots ? '' : 'JOIN items i ON oi.item_id = i.id'}
@@ -241,6 +263,50 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     const standNames = new Map(standNameRows.map(row => [Number(row.id), String(row.name)]))
 
     stands = buildCashRegisterStandStats(standSalesRows, standDonationRows, standNames)
+  }
+
+  let cashRevenue: number | null = null
+  let vouchers: CashRegisterVoucherStats | undefined
+  if (voucherLines) {
+    const revenueRows = await cashRegisterQuery<Array<{ revenue: unknown }>>(`
+      SELECT IFNULL(SUM(oi.quantity * ${cashExpr}), 0) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.fachschaft = 0
+        AND o.event_id = ?${stand.orders}
+    `, [cashRegisterEventId, ...stand.params])
+    cashRevenue = Number(revenueRows[0]?.revenue ?? 0)
+  }
+
+  if (voucherLines && await hasCashRegisterVoucherTables()) {
+    const voucherSaleRows = await cashRegisterQuery<Array<{ batch_id: unknown, name: unknown, kind: unknown, count: unknown, revenue: unknown }>>(`
+      SELECT b.id AS batch_id, COALESCE(MAX(b.name), MAX(oi.item_name)) AS name, MAX(b.kind) AS kind,
+        COUNT(*) AS count, SUM(oi.quantity * oi.unit_price) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN vouchers v ON v.id = oi.voucher_id
+      LEFT JOIN voucher_batches b ON b.id = v.batch_id
+      WHERE oi.line_kind = 'voucher_sale'
+        AND o.event_id = ?${stand.orders}
+      GROUP BY b.id
+    `, [cashRegisterEventId, ...stand.params])
+
+    const redemptionRows = await cashRegisterQuery<Array<{ id: unknown, name: unknown, kind: unknown, quantity: unknown, worth: unknown, deposits: unknown }>>(`
+      SELECT oi.item_id AS id, COALESCE(MAX(i.name), MAX(oi.item_name)) AS name, b.kind,
+        SUM(oi.quantity) AS quantity,
+        SUM(oi.quantity * oi.unit_price) AS worth,
+        SUM(IF(oi.voucher_covers_deposit = 1, 0, oi.quantity * oi.unit_deposit)) AS deposits
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN items i ON i.id = oi.item_id
+      LEFT JOIN vouchers v ON v.id = oi.voucher_id
+      LEFT JOIN voucher_batches b ON b.id = v.batch_id
+      WHERE oi.line_kind = 'voucher_redemption'
+        AND o.event_id = ?${stand.orders}
+      GROUP BY oi.item_id, b.kind
+    `, [cashRegisterEventId, ...stand.params])
+
+    vouchers = buildCashRegisterVoucherStats(voucherSaleRows, redemptionRows)
   }
 
   const toItem = (row: { id: number, name: string, quantity: unknown, amount: unknown }): CashRegisterOverviewItem => ({
@@ -272,7 +338,8 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     overview: {
       regular: {
         items: regularItems,
-        totalRevenue: regularItems.reduce((sum, item) => sum + item.amount, 0),
+        totalRevenue: cashRevenue ?? regularItems.reduce((sum, item) => sum + item.amount, 0),
+        itemsRevenue: regularItems.reduce((sum, item) => sum + item.amount, 0),
         totalQuantity: regularItems.reduce((sum, item) => sum + item.quantity, 0),
       },
       fachschaft: {
@@ -293,6 +360,7 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
       hourly: fillHourlyGaps(hourlyRows),
       standFilter: stand.value,
       stands,
+      vouchers,
     },
   }
 })

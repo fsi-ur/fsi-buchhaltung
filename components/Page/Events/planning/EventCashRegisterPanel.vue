@@ -171,7 +171,7 @@
               <tr>
                 <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
                 <td class="pt-2 text-right font-semibold text-base-700">{{ overview.regular.totalQuantity }}</td>
-                <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(overview.regular.totalRevenue) }}</td>
+                <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(overview.regular.itemsRevenue ?? overview.regular.totalRevenue) }}</td>
               </tr>
             </tfoot>
           </table>
@@ -216,6 +216,89 @@
           </table>
         </div>
       </div>
+
+      <div v-if="vouchers" class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
+            <Icon name="material-symbols:confirmation-number-outline-rounded" class="text-base" />
+          </span>
+          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.vouchersTitle') }}</h2>
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-2">
+          <div>
+            <h3 class="mb-2 text-sm font-semibold text-base-700">{{ t('event.cashRegister.vouchersSoldTitle') }}</h3>
+            <div v-if="vouchers.sold.byBatch.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-4 text-center text-sm text-base-400">
+              {{ t('event.cashRegister.vouchersNoneSold') }}
+            </div>
+            <table v-else class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
+                  <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.vouchersBatch') }}</th>
+                  <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.quantity') }}</th>
+                  <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.revenue') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="batch in vouchers.sold.byBatch" :key="batch.batchId ?? batch.name" class="border-b border-base-100">
+                  <td class="max-w-0 truncate py-2 pr-3 text-base-700">{{ batch.name }}</td>
+                  <td class="py-2 text-right text-base-500">{{ batch.count }}</td>
+                  <td class="py-2 text-right font-medium text-base-800">{{ formatCurrency(batch.revenue) }}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
+                  <td class="pt-2 text-right font-semibold text-base-700">{{ vouchers.sold.count }}</td>
+                  <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(vouchers.sold.revenue) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <p class="mt-3 text-xs text-base-400">{{ t('event.cashRegister.vouchersSoldNotice') }}</p>
+          </div>
+
+          <div>
+            <h3 class="mb-2 text-sm font-semibold text-base-700">{{ t('event.cashRegister.vouchersRedeemedTitle') }}</h3>
+            <div v-if="vouchers.redeemed.items.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-4 text-center text-sm text-base-400">
+              {{ t('event.cashRegister.vouchersNoneRedeemed') }}
+            </div>
+            <template v-else>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
+                    <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.item') }}</th>
+                    <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.quantity') }}</th>
+                    <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.worth') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in vouchers.redeemed.items" :key="item.id ?? item.name" class="border-b border-base-100">
+                    <td class="max-w-0 truncate py-2 pr-3 text-base-700">{{ item.name }}</td>
+                    <td class="py-2 text-right text-base-500">{{ item.quantity }}</td>
+                    <td class="py-2 text-right font-medium text-base-800">{{ formatCurrency(item.worth) }}</td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
+                    <td class="pt-2 text-right font-semibold text-base-700">{{ vouchers.redeemed.totalQuantity }}</td>
+                    <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(vouchers.redeemed.totalWorth) }}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <dl class="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+                <dt class="text-base-500">{{ t('event.cashRegister.vouchersPaidWorth') }}</dt>
+                <dd class="text-right text-base-700">{{ formatCurrency(vouchers.redeemed.paidWorth) }}</dd>
+                <dt class="text-base-500">{{ t('event.cashRegister.vouchersFreeWorth') }}</dt>
+                <dd class="text-right text-base-700">{{ formatCurrency(vouchers.redeemed.freeWorth) }}</dd>
+                <dt class="text-base-500">{{ t('event.cashRegister.vouchersDeposits') }}</dt>
+                <dd class="text-right text-base-700">{{ formatCurrency(vouchers.redeemed.depositsCollected) }}</dd>
+              </dl>
+            </template>
+            <p class="mt-3 text-xs text-base-400">{{ t('event.cashRegister.vouchersRedeemedNotice') }}</p>
+          </div>
+        </div>
+      </div>
     </template>
   </section>
 </template>
@@ -245,6 +328,11 @@ const standFilter = ref<CashRegisterStandFilterValue>('all')
 const standQuery = ref('')
 
 const standStats = computed<CashRegisterStandStat[]>(() => overview.value?.stands ?? [])
+// Only shown once the event has voucher sales or redemptions.
+const vouchers = computed(() => {
+  const stats = overview.value?.vouchers
+  return stats && (stats.sold.count > 0 || stats.redeemed.totalQuantity > 0) ? stats : null
+})
 const hasStands = computed(() => standStats.value.some(stand => stand.id != null))
 const standFilterActive = computed(() => hasStands.value && overview.value?.standFilter !== 'all')
 
