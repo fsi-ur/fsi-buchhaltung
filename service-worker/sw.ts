@@ -41,12 +41,17 @@ self.addEventListener('notificationclick', (event) => {
   const rawUrl = (event.notification.data as { url?: string } | undefined)?.url || ''
   const url = new URL(rawUrl, self.registration.scope).href
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ('focus' in client) return client.focus().then(() => client.navigate?.(url))
+  event.waitUntil((async () => {
+    const clientList = await self.clients.matchAll({ type: 'window' })
+    const client = clientList.find(c => 'focus' in c)
+    if (client) {
+      try {
+        const focused = await client.focus()
+        if (await focused.navigate(url)) return
+      } catch {
+        // fall through to a fresh window
       }
-      if (self.clients.openWindow) return self.clients.openWindow(url)
-    }),
-  )
+    }
+    await self.clients.openWindow?.(url)
+  })())
 })

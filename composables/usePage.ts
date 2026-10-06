@@ -45,6 +45,21 @@ if (import.meta.client) {
     currentPage.value = state.page
     pageMeta.value = state.meta
   }
+
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash.slice(1) === buildHash(currentPage.value, pageMeta.value)) return
+    const state = parseDeepLinkHash()
+    if (!state || state.page === 'Login') return
+
+    // On the login screen the target waits until the user has signed in
+    if (currentPage.value === 'Login') {
+      pendingLoginTarget.value = state
+      return
+    }
+    currentPage.value = state.page
+    pageMeta.value = state.meta
+    nextTick(() => window.scrollTo(0, 0))
+  })
 }
 
 export const usePage = () => {

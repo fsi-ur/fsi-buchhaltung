@@ -228,8 +228,8 @@ async function insertDelivery(
 }
 
 async function retryFailedDeliveries(settings: NotificationSettings, now: Date) {
-  const rows = await query<Array<{ id: number, notification_id: number, type_key: NotificationTypeKey, member_id: number | null, user_id: number | null, channel: NotificationChannelKey, address: string | null, subject: string, body: string, attempts: number, payload: string | null }>>(
-    `SELECT nd.id, nd.notification_id, n.type_key, nd.member_id, nd.user_id, nd.channel, nd.address, nd.subject, nd.body, nd.attempts, n.payload
+  const rows = await query<Array<{ id: number, notification_id: number, type_key: NotificationTypeKey, member_id: number | null, user_id: number | null, channel: NotificationChannelKey, address: string | null, subject: string, body: string, attempts: number, payload: string | null, link_page: string | null, link_meta: string | null }>>(
+    `SELECT nd.id, nd.notification_id, n.type_key, nd.member_id, nd.user_id, nd.channel, nd.address, nd.subject, nd.body, nd.attempts, n.payload, n.link_page, n.link_meta
      FROM notification_deliveries nd
      JOIN notifications n ON n.id = nd.notification_id
      WHERE nd.status = 'failed' AND nd.attempts < 5 AND (nd.next_attempt_at IS NULL OR nd.next_attempt_at <= ?)
@@ -260,7 +260,11 @@ async function retryFailedDeliveries(settings: NotificationSettings, now: Date) 
       await channel.send({
         attachments,
         recipient: { memberId: delivery.member_id, userId: delivery.user_id, email: delivery.address, displayName: '', firstName: null, locale: 'de' },
-        rendered: { subject: delivery.subject, body: delivery.body, link: null },
+        rendered: {
+          subject: delivery.subject,
+          body: delivery.body,
+          link: delivery.link_page ? { page: delivery.link_page, meta: delivery.link_meta ? JSON.parse(delivery.link_meta) : undefined } : null,
+        },
         deliveryId: delivery.id,
         settings,
       })
