@@ -22,7 +22,7 @@ function buildDeepLinkUrl(link: { page: string, meta?: Record<string, any> } | n
   const queryString = metaEntries.length
     ? `?${new URLSearchParams(metaEntries.map(([key, value]) => [key, String(value)])).toString()}`
     : ''
-  return `${base}#${link.page}${queryString}`
+  return `${base}/#${link.page}${queryString}`
 }
 
 export const pushChannel: NotificationChannel = {

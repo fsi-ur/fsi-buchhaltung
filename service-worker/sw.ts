@@ -31,14 +31,15 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       icon: '/logo-192x192.png',
       badge: '/logo-192x192.png',
-      data: { url: payload.url || '/' },
+      data: { url: payload.url || '' },
     }),
   )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data as { url?: string } | undefined)?.url || '/'
+  const rawUrl = (event.notification.data as { url?: string } | undefined)?.url || ''
+  const url = new URL(rawUrl, self.registration.scope).href
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
