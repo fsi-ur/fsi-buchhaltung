@@ -32,6 +32,7 @@ export interface Invoice {
   due_date: string
   paid_at: string | null
   contact_person: string | null
+  recipient_attention: string | null
   service_date: string | null
   invoice_number: string
   subject: string | null
@@ -51,6 +52,7 @@ export interface InvoiceRow {
   due_date: string
   paid_at: string | null
   contact_person: string | null
+  recipient_attention: string | null
   service_date: string | null
   invoice_number: string
   subject: string | null
@@ -79,6 +81,7 @@ export interface CreateInvoiceBody {
   due_date: string
   paid_at: string | null
   contact_person: string | null
+  recipient_attention: string | null
   service_date: string | null
   invoice_number: string
   subject: string | null

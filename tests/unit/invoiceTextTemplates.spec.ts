@@ -62,6 +62,11 @@ describe('renderInvoiceTextTemplate', () => {
       .toBe('FSi')
   })
 
+  it('renders the recipient attention name, or nothing when unset', () => {
+    expect(renderInvoiceTextTemplate('Hallo {recipient_attention}', { ...context, recipient_attention: ' Max ' })).toBe('Hallo Max')
+    expect(renderInvoiceTextTemplate('{recipient_attention}', context)).toBe('')
+  })
+
   // An unknown placeholder must survive verbatim
   it('leaves an unknown placeholder untouched', () => {
     expect(renderInvoiceTextTemplate('Hallo {{empfaenger}}', context)).toBe('Hallo {{empfaenger}}')

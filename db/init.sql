@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   due_date DATE NOT NULL,
   paid_at DATE NULL,
   contact_person VARCHAR(255) NULL,
+  recipient_attention VARCHAR(255) NULL,
   service_date DATE NULL,
   invoice_number VARCHAR(127) NOT NULL UNIQUE,
   subject VARCHAR(255) NULL,

@@ -11,6 +11,7 @@ export interface InvoiceTextTemplateContext {
   invoice_date_day?: string | null
   association_name?: string | null
   contact_person?: string | null
+  recipient_attention?: string | null
   invoice_date?: string | null
   service_date?: string | null
   due_date?: string | null
@@ -51,6 +52,7 @@ export function renderInvoiceTextTemplate(template: string, context: InvoiceText
     invoice_date_day: context.invoice_date_day?.trim() || invoiceDatePartsValue.day,
     association_name: context.association_name?.trim() || '',
     contact_person: context.contact_person?.trim() || context.association_name?.trim() || '',
+    recipient_attention: context.recipient_attention?.trim() || '',
     invoice_date: formatInvoiceTemplateDate(context.invoice_date),
     service_date: formatInvoiceTemplateDate(context.service_date || context.invoice_date),
     due_date: formatInvoiceTemplateDate(context.due_date),

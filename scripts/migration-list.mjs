@@ -16,4 +16,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-audit-log.mjs',
   'migrate-appointments.mjs',
   'migrate-association-documents.mjs',
+  'migrate-invoice-recipient-attention.mjs',
 ]

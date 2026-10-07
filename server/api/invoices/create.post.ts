@@ -95,8 +95,8 @@ export default defineEventHandler(async (event): Promise<CreateInvoiceResponse> 
 
       const result: any = await query(
         `INSERT INTO invoices
-          (company_id, source_type, is_kleinunternehmer, invoice_date, due_date, paid_at, contact_person, service_date, invoice_number, subject, intro_text, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (company_id, source_type, is_kleinunternehmer, invoice_date, due_date, paid_at, contact_person, recipient_attention, service_date, invoice_number, subject, intro_text, notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           parsed.company_id,
           parsed.source_type,
@@ -105,6 +105,7 @@ export default defineEventHandler(async (event): Promise<CreateInvoiceResponse> 
           parsed.due_date,
           parsed.paid_at,
           parsed.contact_person,
+          parsed.recipient_attention,
           parsed.service_date,
           parsed.invoice_number,
           parsed.subject,

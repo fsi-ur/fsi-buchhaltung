@@ -33,6 +33,7 @@ export const INVOICE_TEXT_VARIABLES: InvoiceTextVariable[] = [
   { key: 'increment', label: 'Fortlaufende Nummer' },
   { key: 'association_name', label: 'Verein' },
   { key: 'contact_person', label: 'Ansprechperson' },
+  { key: 'recipient_attention', label: 'z. Hd. (Empfänger)' },
   { key: 'service_date', label: 'Leistungsdatum' },
   { key: 'due_date', label: 'Fällig am' },
 ]

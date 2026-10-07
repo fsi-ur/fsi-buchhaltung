@@ -34,6 +34,7 @@ function normalizeInvoiceLogRow(invoice: any) {
     due_date: String(invoice.due_date || ''),
     paid_at: invoice.paid_at ? String(invoice.paid_at) : null,
     contact_person: invoice.contact_person ? String(invoice.contact_person).trim() : null,
+    recipient_attention: invoice.recipient_attention ? String(invoice.recipient_attention).trim() : null,
     service_date: invoice.service_date ? String(invoice.service_date) : null,
     invoice_number: String(invoice.invoice_number || '').trim(),
     subject: invoice.subject ? String(invoice.subject).trim() : null,
@@ -77,6 +78,7 @@ function buildGeneratedInvoiceComparable(invoice: Record<string, any>, positions
     due_date: String(invoice.due_date || ''),
     paid_at: invoice.paid_at ? String(invoice.paid_at) : null,
     contact_person: invoice.contact_person ? String(invoice.contact_person).trim() : null,
+    recipient_attention: invoice.recipient_attention ? String(invoice.recipient_attention).trim() : null,
     service_date: invoice.service_date ? String(invoice.service_date) : null,
     invoice_number: String(invoice.invoice_number || '').trim(),
     subject: invoice.subject ? String(invoice.subject).trim() : null,
@@ -120,6 +122,7 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
           due_date,
           paid_at,
           contact_person,
+          recipient_attention,
           service_date,
           invoice_number,
           subject,
@@ -187,6 +190,7 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
           invoice_date: existing.invoice_date,
           due_date: existing.due_date,
           contact_person: existing.contact_person,
+          recipient_attention: existing.recipient_attention,
           service_date: existing.service_date,
           invoice_number: existing.invoice_number,
           subject: existing.subject,
@@ -201,6 +205,7 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
           invoice_date: String(parsed.invoice_date),
           due_date: String(parsed.due_date),
           contact_person: parsed.contact_person,
+          recipient_attention: parsed.recipient_attention,
           service_date: parsed.service_date,
           invoice_number: parsed.invoice_number,
           subject: parsed.subject,
@@ -271,7 +276,7 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
 
       await query(
         `UPDATE invoices
-         SET company_id = ?, source_type = ?, is_kleinunternehmer = ?, invoice_date = ?, due_date = ?, paid_at = ?, contact_person = ?, service_date = ?, invoice_number = ?, subject = ?, intro_text = ?, notes = ?, status = ?
+         SET company_id = ?, source_type = ?, is_kleinunternehmer = ?, invoice_date = ?, due_date = ?, paid_at = ?, contact_person = ?, recipient_attention = ?, service_date = ?, invoice_number = ?, subject = ?, intro_text = ?, notes = ?, status = ?
          WHERE id = ?`,
         [
           parsed.company_id,
@@ -281,6 +286,7 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
           parsed.due_date,
           parsed.paid_at,
           parsed.contact_person,
+          parsed.recipient_attention,
           parsed.service_date,
           parsed.invoice_number,
           parsed.subject,

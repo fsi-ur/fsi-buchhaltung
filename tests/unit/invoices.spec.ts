@@ -129,6 +129,7 @@ describe('normalizeInvoicePayload', () => {
       due_date: '2026-02-15',
       paid_at: null,
       contact_person: '  Anna  ',
+      recipient_attention: '  Max Mustermann  ',
       service_date: null,
       invoice_number: '  R-1  ',
       subject: '   ',
@@ -143,6 +144,7 @@ describe('normalizeInvoicePayload', () => {
     expect(normalized.company_id).toBe(7)
     expect(normalized.is_kleinunternehmer).toBe(true)
     expect(normalized.contact_person).toBe('Anna')
+    expect(normalized.recipient_attention).toBe('Max Mustermann')
     expect(normalized.invoice_number).toBe('R-1')
     expect(normalized.subject).toBeNull()
     expect(normalized.notes).toBeNull()

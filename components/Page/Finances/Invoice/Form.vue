@@ -80,6 +80,10 @@
           </template>
         </CommonSearchSelect>
       </div>
+      <div v-if="!isUpload" class="field">
+        <label>{{ t('invoice.recipientAttention') }}</label>
+        <input v-model="form.recipient_attention" class="input" :placeholder="t('invoice.recipientAttentionPlaceholder')" :disabled="disabled">
+      </div>
     </section>
 
     <section class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -492,6 +496,7 @@ const renderedInvoiceTextDefaults = computed(() => {
   return renderInvoiceTextSettings(invoiceTextSettings.value, {
     invoice_number: form.value.invoice_number,
     contact_person: form.value.contact_person,
+    recipient_attention: form.value.recipient_attention,
     invoice_date: form.value.invoice_date,
     service_date: form.value.service_date,
     due_date: form.value.due_date,
@@ -581,6 +586,7 @@ function setSourceType(sourceType: InvoiceSourceType) {
       source_type: sourceType,
       is_kleinunternehmer: false,
       contact_person: null,
+      recipient_attention: null,
       subject: null,
       intro_text: null,
       notes: null,

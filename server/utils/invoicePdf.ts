@@ -31,8 +31,12 @@ function compactAddress(parts: Array<string | null | undefined>) {
   return parts.map(part => part?.trim()).filter(Boolean).join(' ')
 }
 
-function formatMoney(value: number) {
-  return `${value.toFixed(2).replace('.', ',')} €`
+/** German notation with thousands separators, e.g. `1.000,00 €`. */
+export function formatMoney(value: number) {
+  const [integer, decimals] = Math.abs(value).toFixed(2).split('.')
+  const sign = value < 0 && `${integer}${decimals}` !== '000' ? '-' : ''
+  const grouped = integer!.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${sign}${grouped},${decimals} €`
 }
 
 function formatRate(value: number) {
@@ -136,6 +140,7 @@ export function buildInvoicePdf(params: {
     invoice_number: invoice.invoice_number,
     association_name: association.name,
     contact_person: invoice.contact_person,
+    recipient_attention: invoice.recipient_attention,
     invoice_date: invoice.invoice_date,
     service_date: invoice.service_date,
     due_date: invoice.due_date,
@@ -160,6 +165,7 @@ export function buildInvoicePdf(params: {
 
   let recipientY = 642
   for (const line of [
+    invoice.recipient_attention?.trim() ? `z. Hd. ${invoice.recipient_attention.trim()}` : '',
     compactAddress([company.street, company.street_number]),
     compactAddress([company.postal_code, company.city]),
     company.country && company.country.trim().toLowerCase() !== 'deutschland' ? company.country : '',
