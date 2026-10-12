@@ -1,3 +1,5 @@
+import { ASSOCIATION_TIME_ZONE } from '~/server/utils/notifications/time'
+
 const CRLF = '\r\n'
 
 export interface IcsFeedEvent {
@@ -83,17 +85,40 @@ function formatUtcTimestamp(date: Date): string {
   )
 }
 
-// The schema stores naive DATETIME values with no timezone (treated as
-// Europe/Berlin floating local time throughout the app, e.g. eventShifts.ts).
-// Rather than hand-roll a Europe/Berlin VTIMEZONE/DST block, we emit floating
-// local time (no TZID/UTC conversion) — calendar apps display it as-is,
-// which matches how the rest of the app already shows these times.
+const OFFSET_PARTS = new Intl.DateTimeFormat('en-GB', {
+  timeZone: ASSOCIATION_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+
+/** Offset of the association's zone from UTC at the given instant, in milliseconds. */
+function zoneOffsetMs(instantMs: number): number {
+  const parts = OFFSET_PARTS.formatToParts(new Date(instantMs))
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(part => part.type === type)?.value ?? 0)
+  // Some engines render midnight as hour "24" under hour12: false.
+  const hour = get('hour') === 24 ? 0 : get('hour')
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second'))
+  return asUtc - (instantMs - (instantMs % 1000))
+}
+
 function formatLocalDateTime(value: string): string {
   const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
   if (!match) return ''
 
   const [, year, month, day, hours, minutes, seconds] = match
-  return `${year}${month}${day}T${hours}${minutes}${seconds ?? '00'}`
+  const wallClockAsUtc = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds ?? 0))
+
+  // First guess with the offset at the wall-clock moment, then re-check at the resulting instant
+  // so times right after a DST switch use the offset actually in force then.
+  let instant = wallClockAsUtc - zoneOffsetMs(wallClockAsUtc)
+  instant = wallClockAsUtc - zoneOffsetMs(instant)
+
+  return formatUtcTimestamp(new Date(instant))
 }
 
 function formatAllDayDate(value: string): string {
@@ -144,6 +169,7 @@ export function buildIcsFeed({
   lines.push('CALSCALE:GREGORIAN')
   lines.push('METHOD:PUBLISH')
   lines.push(`X-WR-CALNAME:${escapeIcsText(calendarName)}`)
+  lines.push(`X-WR-TIMEZONE:${ASSOCIATION_TIME_ZONE}`)
   lines.push('REFRESH-INTERVAL;VALUE=DURATION:PT1H')
   lines.push('X-PUBLISHED-TTL:PT1H')
 
