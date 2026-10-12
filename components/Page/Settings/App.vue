@@ -1,5 +1,47 @@
 <template>
   <CommonCard
+    :title="t('settings.app.timeZoneTitle')"
+    :description="t('settings.app.timeZoneText')"
+  >
+    <div class="field">
+      <label>{{ t('settings.app.timeZoneLabel') }}</label>
+      <!-- Select and button share one row; items-stretch gives the button the input's exact height. -->
+      <div class="flex items-stretch gap-2">
+        <CommonSearchSelect
+          v-model="timeZoneQuery"
+          class="min-w-0 flex-1"
+          :options="timeZoneOptions"
+          :selected-label="selectedTimeZone"
+          :placeholder="t('settings.app.timeZoneSearchPlaceholder')"
+          :empty-text="t('common.noResults')"
+          :disabled="isSavingTimeZone"
+          menu-width="wide"
+          @select="selectTimeZone"
+          @clear-selection="selectedTimeZone = ''"
+        />
+        <button
+          class="btn-primary shrink-0"
+          :disabled="isSavingTimeZone || !timeZoneChanged"
+          :class="{ 'opacity-50 cursor-not-allowed': isSavingTimeZone || !timeZoneChanged }"
+          @click="saveTimeZone"
+        >
+          {{ isSavingTimeZone ? t('settings.app.timeZoneSaving') : t('settings.app.timeZoneSave') }}
+        </button>
+      </div>
+      <p v-if="selectedTimeZone" class="text-xs text-base-500">
+        {{ t('settings.app.timeZoneCurrentTime', { time: timeZonePreview }) }}
+      </p>
+    </div>
+
+    <p
+      v-if="timeZoneChanged"
+      class="rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
+    >
+      {{ t('settings.app.timeZoneChangeWarning') }}
+    </p>
+  </CommonCard>
+
+  <CommonCard
     :title="t('settings.app.invoiceTextsTitle')"
     :description="t('settings.app.invoiceTextsText')"
   >
@@ -321,6 +363,9 @@ import type { InvoiceTextSettings, InvoiceTextVariable } from '~/types/appSettin
 import type { AuditRetentionSettings } from '~/types/audit'
 import type { GetAuditSettingsResponse } from '~/server/api/audit/settings.get'
 import type { SaveAuditSettingsResponse } from '~/server/api/audit/settings.save.post'
+import type { GetAppTimeZoneResponse } from '~/server/api/settings/app/time-zone.get'
+import { useAppTimeZone } from '~/composables/useAppTimeZone'
+import { isValidTimeZone, listTimeZones, nowLocalDateTime } from '~/shared/time'
 
 const { t } = useI18n()
 const { formatDateTime } = useLocaleFormatters()
@@ -342,6 +387,18 @@ const restorePreview = ref<Extract<PreviewSnapshotResponse, { ok: true }> | null
 const restoreConfirmation = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const archiveInput = ref<HTMLInputElement | null>(null)
+const { timeZone: appTimeZone, setTimeZone } = useAppTimeZone()
+const savedTimeZone = ref(appTimeZone.value)
+const selectedTimeZone = ref(appTimeZone.value)
+const timeZoneQuery = ref(appTimeZone.value)
+const isSavingTimeZone = ref(false)
+const timeZoneOptions = listTimeZones().map(zone => ({ key: zone, label: zone, value: zone, searchText: zone.replace(/[_/]/g, ' ') }))
+const timeZoneChanged = computed(() => Boolean(selectedTimeZone.value) && selectedTimeZone.value !== savedTimeZone.value)
+const timeZonePreview = computed(() => {
+  if (!isValidTimeZone(selectedTimeZone.value)) return ''
+  const now = nowLocalDateTime(selectedTimeZone.value)
+  return `${now.slice(8, 10)}.${now.slice(5, 7)}.${now.slice(0, 4)}, ${now.slice(11, 16)}`
+})
 const isSavingInvoiceTexts = ref(false)
 const invoiceTextForm = ref<InvoiceTextSettings>({
   invoice_number_template: '',
@@ -404,8 +461,52 @@ const canRestorePreview = computed(() => {
 
 onMounted(loadInvoiceTexts)
 onMounted(loadAuditRetention)
+onMounted(loadTimeZone)
 
 useAppRefresh().onRefresh(loadInvoiceTexts)
+
+async function loadTimeZone() {
+  try {
+    const res = await $fetch<GetAppTimeZoneResponse>('/api/settings/app/time-zone')
+    savedTimeZone.value = res.timeZone
+    selectedTimeZone.value = res.timeZone
+    timeZoneQuery.value = res.timeZone
+  } catch {
+    toast.error(t('settings.app.timeZoneLoadFailed'))
+  }
+}
+
+function selectTimeZone(value: unknown) {
+  selectedTimeZone.value = String(value)
+}
+
+async function saveTimeZone() {
+  if (!isValidTimeZone(selectedTimeZone.value)) {
+    toast.error(t('settings.app.timeZoneInvalid'))
+    return
+  }
+
+  isSavingTimeZone.value = true
+  try {
+    const res = await $fetch<{ ok: boolean, timeZone?: string, error?: string }>('/api/settings/app/time-zone.save', {
+      method: 'POST',
+      body: { timeZone: selectedTimeZone.value },
+    })
+    if (!res.ok || !res.timeZone) {
+      toast.error(res.error || t('settings.app.timeZoneSaveFailed'))
+      return
+    }
+
+    savedTimeZone.value = res.timeZone
+    // Every date on every page reads the zone from this shared state, so they follow immediately.
+    setTimeZone(res.timeZone)
+    toast.success(t('settings.app.timeZoneSaved'))
+  } catch {
+    toast.error(t('settings.app.timeZoneSaveFailed'))
+  } finally {
+    isSavingTimeZone.value = false
+  }
+}
 
 async function loadAuditRetention() {
   const res = await $fetch<GetAuditSettingsResponse>('/api/audit/settings')

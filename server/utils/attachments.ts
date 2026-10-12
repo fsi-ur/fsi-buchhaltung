@@ -4,6 +4,7 @@ import { query } from '~/server/utils/db'
 import { resolveSendableDocuments } from '~/server/utils/associationDocuments'
 import type { DbConn } from '~/server/utils/notifications/types'
 import type { AttachmentItem, AttachmentSelection } from '~/types/attachment'
+import { utcNowSql } from '~/server/utils/time'
 
 export const ATTACHMENT_UPLOAD_FOLDER = 'attachments'
 
@@ -211,10 +212,10 @@ export async function saveAttachmentSelection(
   if (removedFiles.length) {
     await query(
       `UPDATE file_attachments
-       SET detached_at = NOW(), detached_by = ?
+       SET detached_at = ?, detached_by = ?
        WHERE entity_type = ? AND entity_id = ? AND detached_at IS NULL
          AND file_id IN (${removedFiles.map(() => '?').join(',')})`,
-      [userId, entityType, entityId, ...removedFiles],
+      [utcNowSql(), userId, entityType, entityId, ...removedFiles],
       conn,
     )
   }

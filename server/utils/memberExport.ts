@@ -6,6 +6,7 @@ import {
   type MemberExportConfig,
   type MemberExportDataColumnKey,
 } from '~/types/member'
+import type { LocalDate } from '~/shared/time'
 
 export interface MemberExportRow {
   last_name: string
@@ -189,8 +190,6 @@ export function memberExportCellValue(member: MemberExportRow, column: MemberExp
   }
 }
 
-export function memberExportFileName(extension: 'pdf' | 'xlsx') {
-  const today = new Date()
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `Mitgliederliste_${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}.${extension}`
+export function memberExportFileName(extension: 'pdf' | 'xlsx', createdOn: LocalDate) {
+  return `Mitgliederliste_${createdOn}.${extension}`
 }

@@ -132,9 +132,9 @@ export default defineEventHandler(async (event): Promise<SendTestNotificationRes
        VALUES (?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         typeKey,
-        localWallClockNow(),
-        localWallClockNow(),
-        localWallClockNow(),
+        await localWallClockNow(),
+        await localWallClockNow(),
+        await localWallClockNow(),
         current.user.id,
         JSON.stringify({ kind: 'users', userIds: [current.user.id] }),
         channels.join(','),
@@ -196,7 +196,7 @@ export default defineEventHandler(async (event): Promise<SendTestNotificationRes
         unsubscribeToken: null,
         attachments: mailAttachments,
       })
-      await query(`UPDATE notification_deliveries SET status = 'sent', sent_at = ? WHERE id = ?`, [localWallClockNow(), deliveryId])
+      await query(`UPDATE notification_deliveries SET status = 'sent', sent_at = ? WHERE id = ?`, [await localWallClockNow(), deliveryId])
       results.push({ channel: channelKey, status: 'sent', address, error: null })
     } catch (err: any) {
       const message = String(err?.message || err).slice(0, 300)

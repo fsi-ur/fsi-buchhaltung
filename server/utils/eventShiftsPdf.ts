@@ -5,6 +5,7 @@ import {
 import { createPdfDocumentLayout, PDF_LAYOUT } from '~/server/utils/pdfLayout'
 import type { AssociationProfileRow } from '~/types/association'
 import type { EventShiftSlot, EventShiftTypeDescriptions } from '~/types/event'
+import { weekdayOfLocalDate } from '~/shared/time'
 
 export interface ShiftPlanEventInfo {
   name: string
@@ -19,8 +20,7 @@ function formatDayLabel(dayKey: string) {
   const match = dayKey.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!match) return dayKey
 
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-  return `${WEEKDAY_LABELS[date.getDay()]}, ${match[3]}.${match[2]}.${match[1]}`
+  return `${WEEKDAY_LABELS[weekdayOfLocalDate(dayKey)]}, ${match[3]}.${match[2]}.${match[1]}`
 }
 
 function formatTime(value: string) {

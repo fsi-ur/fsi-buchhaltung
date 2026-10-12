@@ -241,7 +241,7 @@ const { t } = useI18n()
 const { hasPermission } = useAuth()
 const toast = useToast()
 const { setPage } = usePage()
-const { formatLocalDate } = useLocaleFormatters()
+const { formatDate } = useLocaleFormatters()
 
 type AppointmentDetailResponse = Extract<GetAppointmentResponse, { ok: true }>
 
@@ -277,11 +277,11 @@ const timeLabel = computed(() => {
   const entry = props.entry
   if (!entry) return ''
   if (entry.allDay) {
-    const start = formatLocalDate(entry.startsAt)
-    const end = formatLocalDate(entry.endsAt)
+    const start = formatDate(entry.startsAt)
+    const end = formatDate(entry.endsAt)
     return start === end ? `${start} · ${t('calendar.allDay')}` : `${start} – ${end} · ${t('calendar.allDay')}`
   }
-  return `${formatLocalDate(entry.startsAt)}, ${entry.startsAt.slice(11, 16)} – ${entry.endsAt.slice(11, 16)}`
+  return `${formatDate(entry.startsAt)}, ${entry.startsAt.slice(11, 16)} – ${entry.endsAt.slice(11, 16)}`
 })
 
 const responseOptions = computed(() => ([

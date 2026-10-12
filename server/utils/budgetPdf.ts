@@ -3,6 +3,7 @@ import { createPdfDocumentLayout, PDF_LAYOUT } from '~/server/utils/pdfLayout'
 import type { AssociationProfileRow } from '~/types/association'
 import type { BudgetDetail } from '~/types/budget'
 import type { CostCentreRow } from '~/types/costCentre'
+import type { LocalDate } from '~/shared/time'
 
 interface BudgetStatementRow {
   costCentre: CostCentreRow
@@ -147,8 +148,9 @@ export function buildBudgetPdf(params: {
   costCentres: CostCentreRow[]
   association: AssociationProfileRow | null
   logo?: { mimeType: string, data: Buffer } | null
+  createdOn: LocalDate
 }) {
-  const { budget, costCentres, association, logo = null } = params
+  const { budget, costCentres, association, logo = null, createdOn } = params
   const layout = createPdfDocumentLayout({ logo })
 
   const { contentLeft, contentRight } = PDF_LAYOUT
@@ -297,8 +299,7 @@ export function buildBudgetPdf(params: {
 
   layout.y = hasLogo ? 672 : 688
 
-  const today = new Date()
-  const createdAt = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`
+  const createdAt = `${createdOn.slice(8, 10)}.${createdOn.slice(5, 7)}.${createdOn.slice(0, 4)}`
   const metaRows: Array<[string, string]> = [
     ['Zeitraum:', `${formatDate(budget.start_date)} - ${formatDate(budget.end_date)}`],
     ['Erstellt am:', createdAt],

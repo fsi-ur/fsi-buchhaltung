@@ -22,7 +22,7 @@ export default defineEventHandler(async (event): Promise<CreateNotificationRespo
   if (!current.ok) return current
 
   const body = await readBody<Partial<CustomNotificationDraft>>(event)
-  const bounds = getScheduleBounds()
+  const bounds = await getScheduleBounds()
   const validationError = validateCustomNotification(body, bounds)
   if (validationError) return { ok: false, error: validationError }
 

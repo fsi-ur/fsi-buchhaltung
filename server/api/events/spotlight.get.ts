@@ -5,6 +5,8 @@ import { getOrganizerEventIds, isAnyEventOrganizer, loadEventRelations } from '~
 import { buildEventPlanningSummary } from '~/server/utils/eventPlanningSummary'
 import { loadCurrentMemberIdForUser, loadEventShiftSlots } from '~/server/utils/eventShifts'
 import type { EventRow, EventSpotlight, EventSpotlightStatus } from '~/types/event'
+import { appNowLocalDateTime } from '~/server/utils/time'
+import { diffLocalDates, normalizeLocalDateTime, type LocalDateTime } from '~/shared/time'
 
 interface GetEventSpotlightSuccess {
   ok: true
@@ -19,20 +21,18 @@ interface GetEventSpotlightError {
 
 export type GetEventSpotlightResponse = GetEventSpotlightSuccess | GetEventSpotlightError
 
-function resolveStatus(startsAt: string, endsAt: string, now: number): EventSpotlightStatus {
-  const start = new Date(startsAt).getTime()
-  const end = new Date(endsAt).getTime()
-  if (Number.isFinite(start) && start > now) return 'upcoming'
-  if (Number.isFinite(end) && end >= now) return 'ongoing'
+function resolveStatus(startsAt: string, endsAt: string, now: LocalDateTime): EventSpotlightStatus {
+  const start = normalizeLocalDateTime(startsAt)
+  const end = normalizeLocalDateTime(endsAt)
+  if (start && start > now) return 'upcoming'
+  if (end && end >= now) return 'ongoing'
   return 'past'
 }
 
-function daysToStart(startsAt: string, now: Date): number | null {
-  const start = new Date(startsAt)
-  if (Number.isNaN(start.getTime())) return null
-  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  return Math.round((startDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+function daysToStart(startsAt: string, now: LocalDateTime): number | null {
+  const start = normalizeLocalDateTime(startsAt)
+  if (!start) return null
+  return diffLocalDates(now.slice(0, 10), start.slice(0, 10))
 }
 
 export default defineEventHandler(async (event): Promise<GetEventSpotlightResponse> => {
@@ -48,20 +48,23 @@ export default defineEventHandler(async (event): Promise<GetEventSpotlightRespon
   const canSignup = hasPermission(current.user, 'events.shifts.signup')
 
   try {
+    const now = await appNowLocalDateTime()
     const [upcomingRows, latestRows, organizerEventIds, currentMemberId] = await Promise.all([
       query<EventRow[]>(
         `SELECT id, name, starts_at, ends_at, location, expected_guests
          FROM events
-         WHERE ends_at >= NOW()
+         WHERE ends_at >= ?
          ORDER BY starts_at ASC, ends_at ASC, name ASC
          LIMIT 1`,
+        [now],
       ),
       query<EventRow[]>(
         `SELECT id, name, starts_at, ends_at, location, expected_guests
          FROM events
-         WHERE ends_at < NOW()
+         WHERE ends_at < ?
          ORDER BY ends_at DESC, starts_at DESC, name ASC
          LIMIT 1`,
+        [now],
       ),
       // Organizer status also unlocks the planning summary, so it matters for
       // everyone without events.view — not just for users who cannot open events.
@@ -78,9 +81,6 @@ export default defineEventHandler(async (event): Promise<GetEventSpotlightRespon
     const organizerSet = new Set(organizerEventIds.map(Number))
     const eventIds = rows.map(row => Number(row.id))
     const relations = await loadEventRelations(eventIds)
-
-    const now = new Date()
-    const nowMs = now.getTime()
 
     async function toSpotlight(row: EventRow): Promise<EventSpotlight> {
       const id = Number(row.id)
@@ -99,7 +99,7 @@ export default defineEventHandler(async (event): Promise<GetEventSpotlightRespon
         member_organizers: memberOrganizers,
         subdivision_organizers: subdivisionOrganizers,
         cost_centre_splits: costCentreSplits,
-        status: resolveStatus(String(row.starts_at), String(row.ends_at), nowMs),
+        status: resolveStatus(String(row.starts_at), String(row.ends_at), now),
         daysToStart: daysToStart(String(row.starts_at), now),
         canOpen: canOpenAll || organizerSet.has(id),
         planning: null,

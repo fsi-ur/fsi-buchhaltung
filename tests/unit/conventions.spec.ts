@@ -211,3 +211,46 @@ describe('migrations', () => {
     expect(missing, 'migrations with no npm script').toEqual([])
   })
 })
+
+describe('time zones', () => {
+  // The time model is in shared/time.ts: TIMESTAMP = instant, DATETIME/DATE = wall clock / day in the
+  // app time zone (`app_time_zone` setting). These patterns read the zone of whatever machine the code
+  // happens to run on — the UTC session of the DB, the Node process, the viewer's browser — instead.
+  const SOURCE_DIRS = ['components', 'composables', 'layouts', 'plugins', 'server', 'shared', 'utils']
+  const ALLOWED_FILES = new Set(['shared/time.ts'])
+
+  function sourceFiles(dir: string): string[] {
+    const absolute = path.join(root, dir)
+    if (!fs.existsSync(absolute)) return []
+    return fs.readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+      const relative = `${dir}/${entry.name}`
+      if (entry.isDirectory()) return sourceFiles(relative)
+      return /\.(ts|vue|mjs)$/.test(entry.name) ? [relative] : []
+    })
+  }
+
+  const files = SOURCE_DIRS.flatMap(sourceFiles).filter(file => !ALLOWED_FILES.has(file))
+
+  function offenders(pattern: RegExp, onlyIn?: (file: string) => boolean) {
+    return files
+      .filter(file => !onlyIn || onlyIn(file))
+      .flatMap(file => read(file).split('\n')
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => pattern.test(line) && !/^\s*(\/\/|\/\*|\*)/.test(line))
+        .map(({ index }) => `${file}:${index + 1}`))
+  }
+
+  it('never hard-codes the association\'s zone — it comes from the app_time_zone setting', () => {
+    expect(offenders(/['"`]Europe\/Berlin['"`]/)).toEqual([])
+  })
+
+  it('never takes "today" as the UTC date of an instant', () => {
+    expect(offenders(/toISOString\(\)\.(slice|substring)\(0, ?10\)|toISOString\(\)\.split\(['"]T['"]\)/)).toEqual([])
+  })
+
+  it('never lets SQL pick "now" or "today" in the session\'s UTC', () => {
+    const isServer = (file: string) => file.startsWith('server/')
+    // Upper-case SQL only, and not a method call — `Date.now()` is fine, it is an instant.
+    expect(offenders(/(?<![.\w])(NOW|CURDATE|CURRENT_DATE|CURTIME|UTC_TIMESTAMP|LOCALTIME|SYSDATE)\(\)|(?<![.\w])CURRENT_DATE(?!\w)/, isServer)).toEqual([])
+  })
+})

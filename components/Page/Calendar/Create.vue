@@ -84,7 +84,8 @@ import type { AppointmentFormValue } from '~/components/Page/Calendar/Form.vue'
 import type { GetAppointmentResponse } from '~/server/api/appointments/[id].get'
 import type { GetAppointmentOptionsResponse, AppointmentMemberOption, AppointmentSubdivisionOption } from '~/server/api/appointments/options.get'
 import type { AppointmentEditScope, AppointmentTypeRow, SaveAppointmentBody } from '~/types/appointment'
-import { nowInBerlin } from '~/composables/useCalendarView'
+import { nowWallClockFrame } from '~/composables/useCalendarView'
+const { timeZone } = useAppTimeZone()
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -139,10 +140,10 @@ function pad2(value: number) {
 /** A new appointment defaults to the next full hour, one hour long. */
 function emptyForm(): AppointmentFormValue {
   const preset = pageMeta.value?.presetDate as string | undefined
-  // The wall-clock strings this form edits are the association's local time (Europe/Berlin), not
-  // the viewer's — the default day/hour must be read the same way, or a viewer in a different
-  // timezone gets a default that has already passed, or one still a day away.
-  const now = nowInBerlin()
+  // The wall-clock strings this form edits are in the app time zone, not the viewer's — the default
+  // day/hour must be read the same way, or a viewer in a different timezone gets a default that has
+  // already passed, or one still a day away.
+  const now = nowWallClockFrame(timeZone.value)
   const day = preset && /^\d{4}-\d{2}-\d{2}$/.test(preset)
     ? preset
     : `${now.getUTCFullYear()}-${pad2(now.getUTCMonth() + 1)}-${pad2(now.getUTCDate())}`

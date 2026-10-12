@@ -233,7 +233,7 @@ import {
   dayKeyOf,
   groupEntriesByDay,
   loadSourceFilter,
-  nowInBerlin,
+  nowWallClockFrame,
   parseDayKey,
   saveSourceFilter,
   shiftAnchor,
@@ -245,6 +245,7 @@ import {
 } from '~/composables/useCalendarView'
 import type { GetCalendarEntriesResponse } from '~/server/api/calendar/entries.get'
 import type { AppointmentEditScope, AppointmentTypeRow, CalendarEntry } from '~/types/appointment'
+const { timeZone } = useAppTimeZone()
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -267,7 +268,7 @@ const view = ref<CalendarViewMode>(
 // of the month `anchor` points at, and keeping it as "today" is what makes switching straight from
 // the initial month view to week view land on the current week instead of the week containing the
 // 1st.
-const anchor = ref(nowInBerlin())
+const anchor = ref(nowWallClockFrame(timeZone.value))
 const entries = ref<CalendarEntry[]>([])
 const appointmentTypes = ref<AppointmentTypeRow[]>([])
 const loading = ref(true)
@@ -320,7 +321,7 @@ const activeFilterCount = computed(() => {
 /** Whether the shown period already contains today, which is what greys out the "today" button. */
 const isCurrentPeriod = computed(() => {
   const { from, to } = windowForView(anchor.value, view.value)
-  const today = todayKey()
+  const today = todayKey(timeZone.value)
   return today >= dayKeyOf(from) && today <= dayKeyOf(to)
 })
 
@@ -374,7 +375,7 @@ function step(direction: -1 | 1) {
 }
 
 function goToToday() {
-  anchor.value = nowInBerlin()
+  anchor.value = nowWallClockFrame(timeZone.value)
 }
 
 function openEntry(entry: CalendarEntry) {
@@ -528,7 +529,7 @@ async function cancelAppointment(entry: CalendarEntry, scope: AppointmentEditSco
 }
 
 function listWindow(months: number) {
-  const today = nowInBerlin()
+  const today = nowWallClockFrame(timeZone.value)
   const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + months, today.getUTCDate()))
   return { from: `${toDayKey(today)} 00:00:00`, to: `${toDayKey(to)} 23:59:59` }
 }

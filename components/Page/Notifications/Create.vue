@@ -308,6 +308,7 @@ import type { GetNotificationRecipientOptionsResponse } from '~/server/api/notif
 import type { CreateNotificationResponse } from '~/server/api/notifications/create.post'
 import type { AttachmentSelection } from '~/types/attachment'
 import type { CustomNotificationDraft } from '~/types/notification'
+const { nowLocal } = useAppTimeZone()
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -515,9 +516,7 @@ function validate(): string[] {
 }
 
 function localNowString() {
-  const now = new Date()
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:00`
+  return `${nowLocal().slice(0, 16)}:00`
 }
 
 async function submit() {

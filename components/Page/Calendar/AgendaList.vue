@@ -99,6 +99,8 @@
 import { useI18n } from '~/composables/useI18n'
 import { entryDaySegment, groupEntriesByDay, todayKey } from '~/composables/useCalendarView'
 import type { AppointmentResponseValue, CalendarEntry } from '~/types/appointment'
+import { addDaysToLocalDate } from '~/shared/time'
+const { timeZone } = useAppTimeZone()
 
 const props = defineProps<{
   entries: CalendarEntry[]
@@ -115,8 +117,8 @@ const { formatDayHeading } = useLocaleFormatters()
 
 const days = computed(() => {
   const grouped = groupEntriesByDay(props.entries)
-  const today = todayKey()
-  const tomorrow = shiftDayKey(today, 1)
+  const today = todayKey(timeZone.value)
+  const tomorrow = addDaysToLocalDate(today, 1)
 
   return Array.from(grouped.entries())
     .sort(([a], [b]) => a.localeCompare(b))
@@ -129,16 +131,9 @@ const days = computed(() => {
     }))
 })
 
-function shiftDayKey(key: string, days: number) {
-  const date = new Date(`${key}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
-}
-
 /**
- * Entry timestamps are wall-clock strings in the association's local time, not real UTC instants —
- * `formatTime` would convert them to Europe/Berlin a second time. A plain slice reads the
- * hour/minute exactly as stored.
+ * Entry timestamps are wall-clock strings in the app time zone (shared/time.ts), so a plain slice
+ * reads the hour/minute exactly as stored.
  */
 function entryTimeLabel(entry: CalendarEntry, dayKey: string) {
   if (entry.allDay) return t('calendar.allDay')

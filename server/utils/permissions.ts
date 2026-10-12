@@ -1,5 +1,6 @@
 import { PERMISSIONS, type PermissionKey, implied } from '~/config/permissions'
 import { query } from '~/server/utils/db'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface RoleRow {
   role_id: number
@@ -35,6 +36,7 @@ export async function getUserRoleIds(userId: number): Promise<number[]> {
 }
 
 export async function getUserPositionIds(userId: number): Promise<number[]> {
+  const today = await appTodayLocalDate()
   const rows = await query<PositionRow[]>(
     `SELECT mp.position_id
      FROM members m
@@ -42,9 +44,9 @@ export async function getUserPositionIds(userId: number): Promise<number[]> {
      JOIN positions p ON p.id = mp.position_id
      WHERE m.account = ?
        AND p.is_active = 1
-       AND (mp.until IS NULL OR mp.until >= CURRENT_DATE())
-       AND mp.since <= CURRENT_DATE()`,
-    [userId]
+       AND (mp.until IS NULL OR mp.until >= ?)
+       AND mp.since <= ?`,
+    [userId, today, today]
   )
   const ids = rows.map(r => Number(r.position_id)).filter(id => Number.isFinite(id))
   return Array.from(new Set(ids))

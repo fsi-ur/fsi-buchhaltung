@@ -1,14 +1,15 @@
 import type mariadb from 'mariadb'
 import { hmacToken, makeToken } from '~/server/utils/auth'
 import { query } from '~/server/utils/db'
+import { utcNowSql } from '~/server/utils/time'
 
 export async function generateCalendarToken(userId: number, conn?: mariadb.PoolConnection): Promise<string> {
   const rawToken = makeToken()
   const tokenHash = hmacToken(rawToken)
 
   await query(
-    `UPDATE users SET calendar_token_hash = ?, calendar_token_created_at = NOW() WHERE id = ?`,
-    [tokenHash, userId],
+    `UPDATE users SET calendar_token_hash = ?, calendar_token_created_at = ? WHERE id = ?`,
+    [tokenHash, utcNowSql(), userId],
     conn,
   )
 

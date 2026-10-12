@@ -30,9 +30,9 @@ export function detectPeriodShortcut(startDate: string, endDate: string, allowed
   return none
 }
 
-export function currentSemesterPeriod(today = new Date()): { year: number, semester: Exclude<QuickSemester, ''> } {
-  const year = today.getFullYear()
-  const month = today.getMonth() + 1
+export function currentSemesterPeriod(today: string): { year: number, semester: Exclude<QuickSemester, ''> } {
+  const year = Number(today.slice(0, 4))
+  const month = Number(today.slice(5, 7))
 
   if (month >= 4 && month <= 9) return { year, semester: 'summer' }
   return { year: month >= 10 ? year : year - 1, semester: 'winter' }

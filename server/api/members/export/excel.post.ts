@@ -9,6 +9,7 @@ import {
   parseMemberExportConfig,
 } from '~/server/utils/memberExport'
 import { buildXlsxWorkbook } from '~/server/utils/xlsx'
+import { appNowLocalDateTime, appTodayLocalDate } from '~/server/utils/time'
 
 export default defineEventHandler(async (event) => {
   const current = await requirePermission(event, 'members.view')
@@ -34,12 +35,12 @@ export default defineEventHandler(async (event) => {
   const compactLine = (parts: Array<string | null | undefined>) =>
     parts.map(part => String(part ?? '').trim()).filter(Boolean).join(' ')
 
-  const today = new Date()
-  const pad = (part: number) => String(part).padStart(2, '0')
-  const createdAt = `${pad(today.getDate())}.${pad(today.getMonth() + 1)}.${today.getFullYear()}`
+  const createdOn = await appTodayLocalDate()
+  const createdAt = `${createdOn.slice(8, 10)}.${createdOn.slice(5, 7)}.${createdOn.slice(0, 4)}`
 
   const hasBlankColumns = config.columns.some(column => column.key === 'blank')
   const workbook = buildXlsxWorkbook({
+    modifiedAt: await appNowLocalDateTime(),
     sheetName: 'Mitglieder',
     title: config.title,
     subtitle: `${members.length} ${members.length === 1 ? 'Mitglied' : 'Mitglieder'} · Stand: ${createdAt}`,
@@ -66,6 +67,6 @@ export default defineEventHandler(async (event) => {
   })
 
   setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  setHeader(event, 'Content-Disposition', `attachment; filename="${memberExportFileName('xlsx')}"`)
+  setHeader(event, 'Content-Disposition', `attachment; filename="${memberExportFileName('xlsx', createdOn)}"`)
   return workbook
 })

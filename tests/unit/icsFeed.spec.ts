@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildIcsFeed } from '~/server/utils/icsFeed'
 
-function feedFor(startsAt: string, endsAt: string): string {
+function feedFor(startsAt: string, endsAt: string, timeZone = 'Europe/Berlin'): string {
   return buildIcsFeed({
     events: [{ id: 1, name: 'Test', starts_at: startsAt, ends_at: endsAt, location: null, description: '' }],
     shifts: [],
@@ -9,6 +9,7 @@ function feedFor(startsAt: string, endsAt: string): string {
     appointments: [],
     calendarName: 'Test',
     host: 'example.org',
+    timeZone,
   })
 }
 
@@ -39,6 +40,12 @@ describe('buildIcsFeed timezones', () => {
     expect(lineValue(feedFor('2026-10-25 00:30:00', '2026-10-25 04:00:00'), 'DTEND')).toBe('DTEND:20261025T030000Z')
   })
 
+  it('reads wall clocks in the configured app time zone, not a fixed one', () => {
+    const ics = feedFor('2026-07-15 18:00:00', '2026-07-15 22:30:00', 'America/New_York')
+    expect(lineValue(ics, 'DTSTART')).toBe('DTSTART:20260715T220000Z')
+    expect(ics).toContain('X-WR-TIMEZONE:America/New_York')
+  })
+
   it('keeps all-day appointments and date-only deadlines as floating dates', () => {
     const ics = buildIcsFeed({
       events: [],
@@ -56,6 +63,7 @@ describe('buildIcsFeed timezones', () => {
       }],
       calendarName: 'Test',
       host: 'example.org',
+      timeZone: 'Europe/Berlin',
     })
     expect(ics).toContain('DTSTART;VALUE=DATE:20260715')
     expect(ics).toContain('DTSTART;VALUE=DATE:20260720')
@@ -70,6 +78,7 @@ describe('buildIcsFeed timezones', () => {
       appointments: [],
       calendarName: 'Test',
       host: 'example.org',
+      timeZone: 'Europe/Berlin',
     })
     expect(lineValue(ics, 'DTSTART')).toBe('DTSTART:20260715T160000Z')
     expect(ics).toContain('X-WR-TIMEZONE:Europe/Berlin')

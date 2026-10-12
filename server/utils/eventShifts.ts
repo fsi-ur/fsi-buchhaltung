@@ -4,13 +4,14 @@ import type { EventShiftMember, EventShiftSlot, EventShiftTemplate, EventShiftTy
 import { enqueueNotification, dropFutureReminders } from '~/server/utils/notifications/enqueue'
 import { pickChangedFields, type ChangedField } from '~/server/utils/notifications/changeDescription'
 import { formatLocalDateTime } from '~/server/utils/notifications/render'
+import { normalizeLocalDateTime } from '~/shared/time'
 
 interface EventShiftSlotRow {
   id: number
   name: string
   description: string
-  starts_at: string | Date
-  ends_at: string | Date
+  starts_at: string
+  ends_at: string
   required_people: number
 }
 
@@ -28,43 +29,10 @@ interface EventShiftMemberRow {
 }
 
 function normalizeDateTime(value: unknown) {
-  const trimmed = String(value ?? '').trim()
-  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s)(\d{2}):(\d{2})(?::(\d{2}))?$/)
-  if (!match) return null
-
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const hours = Number(match[4])
-  const minutes = Number(match[5])
-  const seconds = Number(match[6] ?? 0)
-
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59 || seconds > 59) return null
-  const parsed = new Date(year, month - 1, day, hours, minutes, seconds)
-  if (
-    parsed.getFullYear() !== year
-    || parsed.getMonth() !== month - 1
-    || parsed.getDate() !== day
-    || parsed.getHours() !== hours
-    || parsed.getMinutes() !== minutes
-    || parsed.getSeconds() !== seconds
-  ) {
-    return null
-  }
-
-  return `${String(year).padStart(4, '0')}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6] ?? '00'}`
+  return normalizeLocalDateTime(value)
 }
 
-function formatDateTimeForClient(value: string | Date) {
-  if (value instanceof Date) {
-    const year = value.getFullYear()
-    const month = String(value.getMonth() + 1).padStart(2, '0')
-    const day = String(value.getDate()).padStart(2, '0')
-    const hours = String(value.getHours()).padStart(2, '0')
-    const minutes = String(value.getMinutes()).padStart(2, '0')
-    return `${year}-${month}-${day}T${hours}:${minutes}`
-  }
-
+function formatDateTimeForClient(value: string) {
   return String(value).trim().replace(' ', 'T').slice(0, 16)
 }
 

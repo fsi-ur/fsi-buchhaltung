@@ -5,6 +5,7 @@ import { Readable } from 'stream'
 import { createError, defineEventHandler, sendStream, setHeader } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { query } from '~/server/utils/db'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface FileRecord {
   id: number
@@ -105,7 +106,7 @@ export default defineEventHandler(async (event) => {
       files.push({ ...file, archive_path: archivePath, absolute_path: absolutePath, included })
     }
 
-    const date = new Date().toISOString().slice(0, 10)
+    const date = await appTodayLocalDate()
 
     setHeader(event, 'Content-Type', 'application/x-tar')
     setHeader(event, 'Content-Disposition', `attachment; filename="fsi-buchhaltung-files-${date}.tar"`)

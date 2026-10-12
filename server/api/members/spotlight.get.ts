@@ -3,6 +3,8 @@ import { query } from '~/server/utils/db'
 import { hasPermission, requirePermission } from '~/server/utils/api/guards'
 import { MemberStatus, type MemberBirthday, type MemberSpotlightStats } from '~/types/member'
 import { parseMemberStatus } from '~/server/utils/members'
+import { appTodayLocalDate } from '~/server/utils/time'
+import { addDaysToLocalDate, diffLocalDates, isLocalDate, type LocalDate } from '~/shared/time'
 
 const BIRTHDAY_HORIZON_DAYS = 60
 const MAX_BIRTHDAYS = 4
@@ -22,19 +24,18 @@ interface GetMemberSpotlightError {
 
 export type GetMemberSpotlightResponse = GetMemberSpotlightSuccess | GetMemberSpotlightError
 
-function nextBirthday(birthdate: string, today: Date) {
-  const birth = new Date(birthdate)
-  if (Number.isNaN(birth.getTime())) return null
+function nextBirthday(birthdate: string, today: LocalDate) {
+  const birth = String(birthdate ?? '').slice(0, 10)
+  if (!isLocalDate(birth)) return null
 
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  let next = new Date(today.getFullYear(), birth.getMonth(), birth.getDate())
-  if (next.getTime() < todayMidnight.getTime()) {
-    next = new Date(today.getFullYear() + 1, birth.getMonth(), birth.getDate())
-  }
+  const [birthYear, birthMonth, birthDay] = birth.split('-').map(Number) as [number, number, number]
+  const todayYear = Number(today.slice(0, 4))
+  const onYear = (year: number) => addDaysToLocalDate(`${year}-${String(birthMonth).padStart(2, '0')}-01`, birthDay - 1)
 
-  const daysUntil = Math.round((next.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24))
-  const turningAge = next.getFullYear() - birth.getFullYear()
-  return { daysUntil, turningAge }
+  let next = onYear(todayYear)
+  if (next < today) next = onYear(todayYear + 1)
+
+  return { daysUntil: diffLocalDates(today, next), turningAge: Number(next.slice(0, 4)) - birthYear }
 }
 
 export default defineEventHandler(async (event): Promise<GetMemberSpotlightResponse> => {
@@ -64,7 +65,7 @@ export default defineEventHandler(async (event): Promise<GetMemberSpotlightRespo
     )
 
     const counts = { active: 0, passive: 0, hold: 0, left: 0, honorary: 0, activeAccounts: 0, inactiveAccounts: 0 }
-    const today = new Date()
+    const today = await appTodayLocalDate()
     const birthdays: MemberBirthday[] = []
 
     for (const row of rows) {

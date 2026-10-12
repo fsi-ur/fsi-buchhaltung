@@ -6,6 +6,7 @@ import { loadBudgetDetail } from '~/server/utils/budgets'
 import { buildBudgetPdf } from '~/server/utils/budgetPdf'
 import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~/server/utils/invoices'
 import type { CostCentreRow } from '~/types/costCentre'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 export default defineEventHandler(async (event) => {
   const current = await requirePermission(event, 'budgets.view')
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event) => {
     logo = null
   }
 
-  const pdf = buildBudgetPdf({ budget, costCentres, association, logo })
+  const pdf = buildBudgetPdf({ budget, costCentres, association, logo, createdOn: await appTodayLocalDate() })
 
   const semesterShort = budget.semester === 'summer' ? 'SoSe' : 'WiSe'
   setHeader(event, 'Content-Type', 'application/pdf')

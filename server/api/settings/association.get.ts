@@ -9,6 +9,7 @@ import type {
   AssociationResponsibleMemberOption,
   AssociationResponsiblePositionOption,
 } from '~/types/association'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface AssociationProfileBaseRow {
   id: number
@@ -64,6 +65,7 @@ export default defineEventHandler(async (event): Promise<GetAssociationProfileRe
   const current = await requirePermission(event, 'settings.association.manage')
   if (!current.ok) return current
 
+  const today = await appTodayLocalDate()
   const [profileRows, memberRows, positionRows, responsibleMemberRows, responsiblePositionRows] = await Promise.all([
     query<AssociationProfileBaseRow[]>(`
       SELECT
@@ -93,11 +95,11 @@ export default defineEventHandler(async (event): Promise<GetAssociationProfileRe
       FROM positions p
       LEFT JOIN member_positions mp
         ON mp.position_id = p.id
-        AND mp.since <= CURRENT_DATE()
-        AND (mp.until IS NULL OR mp.until >= CURRENT_DATE())
+        AND mp.since <= ?
+        AND (mp.until IS NULL OR mp.until >= ?)
       LEFT JOIN members m ON m.id = mp.member_id
       ORDER BY p.code ASC, m.last_name ASC, m.first_name ASC
-    `),
+    `, [today, today]),
     query<{ member_id: number }[]>(`
       SELECT member_id
       FROM association_responsible_members

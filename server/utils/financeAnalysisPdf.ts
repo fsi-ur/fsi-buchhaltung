@@ -16,10 +16,12 @@ import type {
 } from '~/types/financeAnalysis'
 import { InvoiceStatus } from '~/types/invoice'
 import { ReceiptStatus } from '~/types/receipt'
+import type { LocalDate } from '~/shared/time'
 
 export type FinanceAnalysisExportGrouping = 'none' | 'costCentres' | 'spheres'
 
 export interface FinanceAnalysisPdfOptions {
+  createdOn: LocalDate
   analysis: FinanceAnalysisData
   comparisonAnalysis: FinanceAnalysisData | null
   filters: FinanceAnalysisFilters
@@ -956,7 +958,7 @@ function renderTableOfContents(layout: PdfDocumentLayout, entries: TocEntry[], i
 // ---------------------------------------------------------------------------
 
 export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
-  const { analysis, comparisonAnalysis, filters, association, logo = null } = options
+  const { analysis, comparisonAnalysis, filters, association, logo = null, createdOn } = options
   const summary = analysis.summary
   const layout = createPdfDocumentLayout({ logo })
   const { contentLeft } = PDF_LAYOUT
@@ -995,8 +997,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
 
   layout.y = hasLogo ? 672 : 688
 
-  const today = new Date()
-  const createdAt = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`
+  const createdAt = `${createdOn.slice(8, 10)}.${createdOn.slice(5, 7)}.${createdOn.slice(0, 4)}`
 
   const metaRows: Array<[string, string]> = [
     ['Erstellt am:', createdAt],

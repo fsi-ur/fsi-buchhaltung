@@ -245,6 +245,7 @@ import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { MemberListItem } from '~/types/member'
 import type { CreateCashCountBody, CreateCashCountPositionBody } from '~/types/cashCount'
 import type { EventRow } from '~/types/event'
+import { normalizeLocalDateTime } from '~/shared/time'
 
 type MemberField = 'counted_by_first' | 'counted_by_second' | 'checked_by'
 type AmountField = 'amount_before' | 'amount_after'
@@ -263,7 +264,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { formatCurrency, formatDateTime, formatLocalDateTime } = useLocaleFormatters()
+const { formatCurrency, formatDateTime } = useLocaleFormatters()
 
 const form = computed({
   get: () => props.modelValue,
@@ -384,9 +385,9 @@ function hasDuplicateRegisterNumbers() {
 
 function hasValidDateOrder() {
   if (!form.value.counted_before_at) return true
-  const beforeTs = Date.parse(form.value.counted_before_at)
-  const afterTs = Date.parse(form.value.counted_after_at)
-  return Number.isFinite(beforeTs) && Number.isFinite(afterTs) && afterTs > beforeTs
+  const before = normalizeLocalDateTime(form.value.counted_before_at)
+  const after = normalizeLocalDateTime(form.value.counted_after_at)
+  return Boolean(before && after && after > before)
 }
 
 function memberLabel(member: MemberListItem) {
@@ -394,7 +395,7 @@ function memberLabel(member: MemberListItem) {
 }
 
 function eventLabel(event: EventRow) {
-  const startsAt = formatLocalDateTime(event.starts_at)
+  const startsAt = formatDateTime(event.starts_at)
   return [event.name, startsAt, event.location].filter(Boolean).join(' | ')
 }
 

@@ -6,6 +6,7 @@ import { MEMBER_WELCOME_TYPES, type NotificationTypeKey } from '~/config/notific
 import { MemberStatus } from '~/types/member'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { DbConn } from '~/server/utils/notifications/types'
+import { addDaysToLocalDate, isLocalDate, type LocalDateTime } from '~/shared/time'
 
 const DEDUPE_PREFIX = 'member.welcome'
 
@@ -56,13 +57,11 @@ function welcomePayload(member: MemberWelcomeRow) {
   }
 }
 
-export function welcomeSendTime(joinedAt: string, delayDays: number, sendTime: string): string {
-  const match = String(joinedAt ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!match) return localWallClockNow()
+export function welcomeSendTime(joinedAt: string, delayDays: number, sendTime: string, now: LocalDateTime): LocalDateTime {
+  const joinDay = String(joinedAt ?? '').slice(0, 10)
+  if (!isLocalDate(joinDay)) return now
 
-  const base = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
-  base.setUTCDate(base.getUTCDate() + delayDays)
-  const day = base.toISOString().slice(0, 10)
+  const day = addDaysToLocalDate(joinDay, delayDays)
   return `${day} ${sendTime.length === 5 ? `${sendTime}:00` : sendTime}`
 }
 
@@ -100,7 +99,7 @@ export async function scheduleMemberWelcome(
   const settings = await getNotificationSettings(conn)
   if (!isTypeEnabled(settings, type)) return { ok: true, id: 0, scheduledFor: null }
 
-  const scheduledFor = welcomeSendTime(member.joined_at, settings.member_welcome.delay_days, settings.member_welcome.send_time)
+  const scheduledFor = welcomeSendTime(member.joined_at, settings.member_welcome.delay_days, settings.member_welcome.send_time, await localWallClockNow())
 
   const result = await enqueueNotification({
     type,

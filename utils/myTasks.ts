@@ -1,40 +1,31 @@
 import type { MyEventTask } from '~/types/event'
+import { diffLocalDateTimeMinutes, diffLocalDates, isLocalDate, normalizeLocalDateTime, type LocalDateTime } from '~/shared/time'
 
 export type TaskUrgency = 'overdue' | 'today' | 'soon' | 'later' | 'none'
 
 const SOON_DAYS = 3
 
-function pad2(value: number) {
-  return String(value).padStart(2, '0')
-}
-
-function localDayKey(date: Date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
-}
-
-export function parseTaskDeadline(deadline: string | null): Date | null {
+export function parseTaskDeadline(deadline: string | null): LocalDateTime | null {
   if (!deadline) return null
-  const normalized = deadline.length <= 10 ? `${deadline}T23:59:59` : deadline.replace(' ', 'T')
-  const date = new Date(normalized)
-  return Number.isNaN(date.getTime()) ? null : date
+  const trimmed = deadline.trim()
+  if (isLocalDate(trimmed)) return `${trimmed} 23:59:59`
+  return normalizeLocalDateTime(trimmed)
 }
 
-export function taskUrgency(deadline: string | null, now: Date = new Date()): TaskUrgency {
+export function taskUrgency(deadline: string | null, now: LocalDateTime): TaskUrgency {
   const due = parseTaskDeadline(deadline)
   if (!due) return 'none'
-  if (due.getTime() < now.getTime()) return 'overdue'
-  if (localDayKey(due) === localDayKey(now)) return 'today'
-  if (due.getTime() - now.getTime() <= SOON_DAYS * 86400000) return 'soon'
+  if (due < now) return 'overdue'
+  if (due.slice(0, 10) === now.slice(0, 10)) return 'today'
+  if (diffLocalDateTimeMinutes(now, due) <= SOON_DAYS * 24 * 60) return 'soon'
   return 'later'
 }
 
 /** Whole calendar days from today to the deadline's day (negative when overdue). */
-export function daysUntilDeadline(deadline: string | null, now: Date = new Date()): number | null {
-  if (!deadline) return null
-  const dueDay = new Date(`${deadline.slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(dueDay.getTime())) return null
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  return Math.round((dueDay.getTime() - today.getTime()) / 86400000)
+export function daysUntilDeadline(deadline: string | null, now: LocalDateTime): number | null {
+  const due = parseTaskDeadline(deadline)
+  if (!due) return null
+  return diffLocalDates(now.slice(0, 10), due.slice(0, 10))
 }
 
 /**
@@ -43,8 +34,9 @@ export function daysUntilDeadline(deadline: string | null, now: Date = new Date(
  */
 export function sortMyTasks<T extends Pick<MyEventTask, 'id' | 'deadline' | 'status' | 'eventName' | 'title'>>(tasks: T[]): T[] {
   return [...tasks].sort((a, b) => {
-    const dueA = parseTaskDeadline(a.deadline)?.getTime() ?? Number.POSITIVE_INFINITY
-    const dueB = parseTaskDeadline(b.deadline)?.getTime() ?? Number.POSITIVE_INFINITY
+    // Canonical wall-clock strings order like the times they are; no deadline sorts last.
+    const dueA = parseTaskDeadline(a.deadline) ?? '￿'
+    const dueB = parseTaskDeadline(b.deadline) ?? '￿'
     if (dueA !== dueB) return dueA < dueB ? -1 : 1
 
     if (a.status !== b.status) return a.status === 'in_progress' ? -1 : 1

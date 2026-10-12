@@ -294,6 +294,7 @@ import type { GetBudgetResponse } from '~/server/api/finances/budgets/[id].get'
 import type { BudgetCostCentreLine, BudgetDetail, BudgetSemester, SaveBudgetBody } from '~/types/budget'
 import type { CostCentreRow } from '~/types/costCentre'
 import { downloadBudgetPlanPdf } from '~/utils/budgetPdfDownload'
+const { today: appToday } = useAppTimeZone()
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -350,7 +351,7 @@ const headerSentinelRef = ref<HTMLElement | null>(null)
 const isHeaderStuck = ref(false)
 let headerStickyObserver: IntersectionObserver | null = null
 
-const currentYear = new Date().getFullYear()
+const currentYear = Number(appToday().slice(0, 4))
 const yearOptions = computed(() => Array.from({ length: 11 }, (_, index) => currentYear + 1 - index))
 const openLineNotes = ref<Record<number, boolean>>({})
 
@@ -542,9 +543,9 @@ onBeforeUnmount(() => {
 useAppRefresh().onRefresh(loadCostCentres)
 
 function resolveDefaultPeriod() {
-  const now = new Date()
-  const month = now.getMonth() + 1
-  const year = now.getFullYear()
+  const today = appToday()
+  const month = Number(today.slice(5, 7))
+  const year = Number(today.slice(0, 4))
 
   if (month >= 4 && month <= 9) return { year, semester: 'summer' as BudgetSemester }
   if (month >= 10) return { year, semester: 'winter' as BudgetSemester }

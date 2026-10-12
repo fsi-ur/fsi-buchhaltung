@@ -8,6 +8,7 @@ import type {
   WikiEffectiveLevel,
   WikiScopeType,
 } from '~/types/wiki'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 const LEVEL_ORDER: Record<WikiEffectiveLevel, number> = { none: 0, read: 1, write: 2, admin: 3 }
 
@@ -77,11 +78,12 @@ export async function resolveViewerSubjects(user: User, conn?: mariadb.PoolConne
   let subdivisionIds: number[] = []
 
   if (memberId) {
+    const today = await appTodayLocalDate(conn)
     const positionRows = await query<Array<{ position_id: number }>>(
       `SELECT position_id
        FROM member_positions
-       WHERE member_id = ? AND (until IS NULL OR until >= CURDATE())`,
-      [memberId],
+       WHERE member_id = ? AND (until IS NULL OR until >= ?)`,
+      [memberId, today],
       conn,
     )
     positionIds = positionRows.map(row => Number(row.position_id))

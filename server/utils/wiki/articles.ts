@@ -21,6 +21,7 @@ import type {
   WikiTreeSpace,
 } from '~/types/wiki'
 import type { WikiHeading as WikiHeadingType } from '~/server/utils/wiki/render'
+import { parseInstant } from '~/shared/time'
 
 export const MAX_MARKDOWN_LENGTH = 200_000
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -249,8 +250,10 @@ export function isStale(article: Pick<WikiArticle, 'review_interval_days' | 'rev
   if (!article.review_interval_days) return false
   const reference = article.reviewed_at ?? article.published_at
   if (!reference) return false
-  const due = new Date(reference).getTime() + article.review_interval_days * 24 * 60 * 60 * 1000
-  return Number.isFinite(due) && due < Date.now()
+  const referenceInstant = parseInstant(reference)
+  if (!referenceInstant) return false
+  const due = referenceInstant.getTime() + article.review_interval_days * 24 * 60 * 60 * 1000
+  return due < Date.now()
 }
 
 export async function trackArticleView(userId: number, articleId: number) {

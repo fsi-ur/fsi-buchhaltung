@@ -12,6 +12,7 @@ import { downloadFinanceAnalysisReport } from '~/utils/excel/financeAnalysisRepo
 import { downloadFinanceAnalysisPdf } from '~/utils/financeAnalysisPdfDownload'
 import type { InvoiceStatus } from '~/types/invoice'
 import type { ReceiptStatus } from '~/types/receipt'
+import { addDaysToLocalDate, isLocalDate } from '~/shared/time'
 
 export type FinanceAnalysisExportFormat = 'pdf' | 'excel'
 export type ReportPagesExportMode = 'none' | 'reportOnly' | 'comparisonOnly' | 'both'
@@ -48,13 +49,7 @@ export interface FinanceAnalysisExportContext {
 }
 
 function addOneDay(dateString: string) {
-  const parts = dateString.split('-').map(Number)
-  if (parts.length !== 3 || parts.some(value => Number.isNaN(value))) return dateString
-
-  const [year, month, day] = parts as [number, number, number]
-  const date = new Date(year, month - 1, day)
-  date.setDate(date.getDate() + 1)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return isLocalDate(dateString) ? addDaysToLocalDate(dateString, 1) : dateString
 }
 
 function findCoveringBudgets(periodStartDate: string, periodEndDate: string, items: BudgetListItem[]) {
@@ -81,6 +76,7 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
   const { t, locale } = useI18n()
   const { hasPermission } = useAuth()
   const { formatCurrency, formatDate, formatDateTime } = useLocaleFormatters()
+  const { nowLocal } = useAppTimeZone()
 
   const isExporting = ref(false)
   const exportError = ref('')
@@ -249,6 +245,7 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
         formatCurrency,
         formatDate,
         formatDateTime,
+        nowLocal,
       })
 
       return true

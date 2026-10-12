@@ -41,6 +41,7 @@ import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { usePage } from '~/composables/usePage'
 import { useAuth } from '~/composables/useAuth'
 import { type MemberListItem, MemberStatus } from '~/types/member'
+const { today: appToday } = useAppTimeZone()
 
 const { setPage } = usePage()
 const { t } = useI18n()
@@ -144,8 +145,7 @@ function statusLabel(member: MemberListItem) {
   if (member.status === MemberStatus.Active) return t('member.states.active')
   if (member.status === MemberStatus.Passive) return t('member.states.passive')
   if (member.status === MemberStatus.Hold) return t('member.states.hold')
-  const today = new Date().toISOString().slice(0, 10)
-  if (member.left_at && member.left_at > today) {
+  if (member.left_at && member.left_at > appToday()) {
     return t('member.states.leaving')
   }
   return t('member.states.left')

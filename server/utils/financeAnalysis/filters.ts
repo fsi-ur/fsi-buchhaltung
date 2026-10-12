@@ -1,6 +1,7 @@
 import { query } from '~/server/utils/db'
 import { InvoiceStatus } from '~/types/invoice'
 import { ReceiptStatus } from '~/types/receipt'
+import type { LocalDate } from '~/shared/time'
 
 export type FinanceAnalysisReceiptDateField = 'receipt_date' | 'reimbursement_submitted_at'
 export type FinanceAnalysisInvoiceDateField = 'invoice_date' | 'due_date' | 'service_date' | 'paid_at'
@@ -20,9 +21,8 @@ function isDateOnly(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-function defaultDateRange() {
-  const now = new Date()
-  const year = now.getFullYear()
+function defaultDateRange(today: LocalDate) {
+  const year = today.slice(0, 4)
   return {
     start: `${year}-01-01`,
     end: `${year}-12-31`,
@@ -82,8 +82,8 @@ export function parseBooleanFlag(value: unknown) {
   return value === true || value === 'true' || value === '1' || value === 1
 }
 
-export function parseFinanceAnalysisFilters(input: Record<string, unknown>): FinanceAnalysisFilters {
-  const fallback = defaultDateRange()
+export function parseFinanceAnalysisFilters(input: Record<string, unknown>, today: LocalDate): FinanceAnalysisFilters {
+  const fallback = defaultDateRange(today)
 
   return {
     startDate: isDateOnly(input.startDate) ? input.startDate : fallback.start,

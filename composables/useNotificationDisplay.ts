@@ -2,6 +2,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { NOTIFICATION_TYPE_MAP, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
+import { localDateTimeToInstant, normalizeLocalDateTime, parseInstant } from '~/shared/time'
 
 type BadgeTone = 'base' | 'warning' | 'success' | 'dangerCancelled' | 'danger' | 'baseMuted'
 
@@ -59,22 +60,17 @@ const NOTIFICATION_STATUS_TONES: Record<string, BadgeTone> = {
   skipped: 'baseMuted',
 }
 
-/**
- * Notification timestamps are bare "YYYY-MM-DD HH:mm:ss" strings in the association's local time
- * (server/utils/notifications/time.ts writes every one of them that way), so they are parsed in the
- * browser's own local zone — appending a "Z" would shift them by the UTC offset.
- */
-function parseLocalDate(value: string): Date {
-  if (!/[Z+\-]\d{2}:?\d{2}$/.test(value) && !value.endsWith('Z')) {
-    const withT = value.replace(' ', 'T')
-    return new Date(withT.includes('T') ? withT : `${withT}T00:00:00`)
-  }
-  return new Date(value)
-}
-
 export function useNotificationDisplay() {
   const { t } = useI18n()
-  const { formatLocalDateTime } = useLocaleFormatters()
+  const { formatDateTime } = useLocaleFormatters()
+  const { timeZone } = useAppTimeZone()
+
+  function toInstant(value: string): Date | null {
+    const instant = parseInstant(value)
+    if (instant) return instant
+    const local = normalizeLocalDateTime(value)
+    return local ? localDateTimeToInstant(local, timeZone.value) : null
+  }
 
   function typeIcon(typeKey: NotificationTypeKey) {
     return TYPE_ICONS[typeKey] || 'material-symbols:notifications-rounded'
@@ -123,7 +119,8 @@ export function useNotificationDisplay() {
   }
 
   function relativeTime(value: string) {
-    const date = parseLocalDate(value)
+    const date = toInstant(value)
+    if (!date) return ''
     const minutes = Math.floor((Date.now() - date.getTime()) / 60000)
     if (minutes < 1) return t('notifications.relativeTime.now')
     if (minutes < 60) return t('notifications.relativeTime.minutes', { count: minutes })
@@ -131,12 +128,12 @@ export function useNotificationDisplay() {
     if (hours < 24) return t('notifications.relativeTime.hours', { count: hours })
     const days = Math.floor(hours / 24)
     if (days < 7) return t('notifications.relativeTime.days', { count: days })
-    return formatLocalDateTime(value)
+    return formatDateTime(value)
   }
 
   /** Absolute timestamp for tooltips — plain string reformat, no timezone shift. */
   function absoluteTime(value: string) {
-    return formatLocalDateTime(value)
+    return formatDateTime(value)
   }
 
   /**
@@ -150,7 +147,7 @@ export function useNotificationDisplay() {
 
   /** `scheduled_for` is stored as association-local wall clock, so no timezone shift. */
   function scheduledTime(value: string) {
-    return formatLocalDateTime(value)
+    return formatDateTime(value)
   }
 
   function formatLeadMinutes(minutes: number) {

@@ -9,6 +9,7 @@ import {
   SnapshotError,
 } from '~/server/utils/databaseSnapshots'
 import { consumeSnapshotRestoreSession } from '~/server/utils/snapshotRestoreSessions'
+import { resetAppTimeZoneCache } from '~/server/utils/time'
 
 interface RestoreSnapshotSuccess {
   ok: true
@@ -56,6 +57,7 @@ export default defineEventHandler(async (event): Promise<RestoreSnapshotResponse
         const filesResult = await restorePreparedFilesArchive(filesToWrite)
         restoredFiles = filesResult.files
       })
+      resetAppTimeZoneCache()
 
       return { ...dbResult, files: restoredFiles }
     }

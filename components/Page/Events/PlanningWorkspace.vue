@@ -441,12 +441,14 @@ import type {
   EventTimelineKind,
   PlanningChecklist,
 } from './planning/types'
+import { diffLocalDates, isLocalDate } from '~/shared/time'
+const { today: appToday } = useAppTimeZone()
 
 defineEmits<{ (e: 'openMenu'): void }>()
 
 const { hasPermission, resolveFlag, isSimulating } = useAuth()
 const { t } = useI18n()
-const { formatDate, formatDateTime, formatLocalDate, formatLocalDateTime } = useLocaleFormatters()
+const { formatDate, formatDateTime } = useLocaleFormatters()
 const { pageMeta, setPage } = usePage()
 const { returnTarget, goToReturnTarget } = useReturnTarget('Events')
 const toast = useToast()
@@ -726,12 +728,10 @@ const allocationIsValid = computed(() => {
 })
 
 const daysToEvent = computed(() => {
-  if (!form.value.starts_at) return null
-  const start = new Date(form.value.starts_at)
-  const today = new Date()
-  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
-  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  return Math.round((startDay.getTime() - todayDay.getTime()) / (1000 * 60 * 60 * 24))
+  // starts_at is a wall clock in the app time zone; count calendar days there.
+  const startDay = String(form.value.starts_at || '').slice(0, 10)
+  if (!isLocalDate(startDay)) return null
+  return diffLocalDates(appToday(), startDay)
 })
 
 const pendingTasks = computed(() =>
@@ -867,8 +867,7 @@ const planningProgress = computed(() => {
 })
 
 function todayDateKey(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return appToday()
 }
 
 const overviewTimelineItems = computed(() => {
@@ -967,7 +966,7 @@ function overviewItemChipClass(item: EventTimelineItem): string {
 }
 
 function overviewRelativeLabel(item: EventTimelineItem): string {
-  const days = Math.round((Date.parse(item.raw.slice(0, 10)) - Date.parse(todayDateKey())) / 86400000)
+  const days = diffLocalDates(todayDateKey(), item.raw.slice(0, 10))
   if (days === 0) return t('event.planning.today')
   if (days === 1) return t('event.planning.tomorrow')
   return t('event.planning.inDays', { days })
@@ -976,8 +975,8 @@ function overviewRelativeLabel(item: EventTimelineItem): string {
 function formatMaybeDateTime(value: string) {
   if (!value) return t('common.notAvailable')
   try {
-    if (value.length <= 10) return formatLocalDate(value)
-    return formatLocalDateTime(value)
+    if (value.length <= 10) return formatDate(value)
+    return formatDateTime(value)
   }
   catch {
     return value

@@ -14,7 +14,7 @@ export default defineEventHandler(async (event): Promise<MarkNotificationsReadRe
   const body = await readBody<{ ids?: number[], all?: boolean }>(event)
 
   // Local wall clock, like every other notification timestamp (see server/utils/notifications/time.ts).
-  const readAt = localWallClockNow()
+  const readAt = await localWallClockNow()
 
   if (body?.all) {
     await query(

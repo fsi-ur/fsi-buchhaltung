@@ -108,8 +108,9 @@
 
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
-import { buildMonthMatrix, entryDaySegment, groupEntriesByDay, isoWeekNumber, WEEKDAY_KEYS } from '~/composables/useCalendarView'
+import { buildMonthMatrix, todayKey, entryDaySegment, groupEntriesByDay, isoWeekNumber, WEEKDAY_KEYS } from '~/composables/useCalendarView'
 import type { AppointmentResponseValue, CalendarEntry } from '~/types/appointment'
+const { timeZone } = useAppTimeZone()
 
 const props = defineProps<{
   anchor: Date
@@ -143,7 +144,7 @@ const weekdayLabels = computed(() => WEEKDAY_KEYS.map((key, index) => ({
   isWeekend: index >= 5,
 })))
 
-const weeks = computed(() => buildMonthMatrix(props.anchor).map(days => ({
+const weeks = computed(() => buildMonthMatrix(props.anchor, todayKey(timeZone.value)).map(days => ({
   key: days[0]?.key ?? '',
   number: isoWeekNumber(days[0]?.date ?? props.anchor),
   days,

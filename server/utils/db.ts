@@ -2,6 +2,7 @@ import mariadb from 'mariadb'
 import { clearAuditActor, setAuditActor } from '~/server/utils/dbAudit'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { User } from '~/types/user'
+import { castTimestampColumn, normalizeQueryParams } from '~/shared/time'
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST,
@@ -12,6 +13,7 @@ const pool = mariadb.createPool({
   connectionLimit: Number(process.env.DB_CONN_LIMIT || 5),
   dateStrings: true,
   timezone: 'UTC',
+  typeCast: castTimestampColumn,
 })
 
 export async function getDbConnection() {
@@ -28,7 +30,7 @@ export async function query<T = any>(sql: string, params?: unknown[], conn?: mar
       shouldRelease = true
     }
 
-    const result = await connection.query(sql, params)
+    const result = await connection.query(sql, normalizeQueryParams(params))
     return normalizeBigInt(result)
   } finally {
     if (shouldRelease && connection) connection.release()

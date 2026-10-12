@@ -240,6 +240,7 @@ import MembersForm from './Form.vue'
 import { useAuth } from '~/composables/useAuth'
 import type { PositionRow } from '~/types/position'
 import type { SubdivisionOption } from '~/types/subdivision'
+const { today: appToday } = useAppTimeZone()
 
 const emit = defineEmits<{
   (e: 'openMenu'): void
@@ -386,8 +387,7 @@ const isLeftStatusTransition = computed(() => {
 const isLeftDateDue = computed(() => {
   const leftAt = form.value.left_at
   if (!leftAt) return false
-  const today = new Date().toISOString().slice(0, 10)
-  return leftAt <= today
+  return leftAt <= appToday()
 })
 
 const positionLabelById = computed(() => {

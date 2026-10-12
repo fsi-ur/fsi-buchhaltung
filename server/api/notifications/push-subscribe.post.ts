@@ -23,7 +23,7 @@ export default defineEventHandler(async (event): Promise<PushSubscribeResponse> 
     `INSERT INTO notification_push_subscriptions (user_id, endpoint, p256dh, auth, user_agent, created_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), p256dh = VALUES(p256dh), auth = VALUES(auth), user_agent = VALUES(user_agent)`,
-    [current.user.id, endpoint, p256dh, auth, userAgent, localWallClockNow()],
+    [current.user.id, endpoint, p256dh, auth, userAgent, await localWallClockNow()],
   )
 
   return { ok: true }

@@ -8,6 +8,7 @@ import type { AssociationProfileRow } from '~/types/association'
 import type { CompanyRow } from '~/types/company'
 import type { FileRow } from '~/types/file'
 import { renderInvoiceTextTemplate } from '~/utils/invoiceTextTemplates'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 export function validateInvoicePayload(invoice: any) {
   if (!invoice || typeof invoice !== 'object') return 'Missing invoice data'
@@ -151,6 +152,7 @@ export async function getAssociationProfileForInvoice(conn?: any): Promise<Assoc
 }
 
 export async function getAssociationResponsibleMemberNames(conn?: any): Promise<string[]> {
+  const today = await appTodayLocalDate(conn)
   const [memberRows, positionRows] = await Promise.all([
     query<Array<{ full_name: string }>>(
       `SELECT DISTINCT TRIM(CONCAT(m.first_name, ' ', m.last_name)) AS full_name
@@ -165,11 +167,11 @@ export async function getAssociationResponsibleMemberNames(conn?: any): Promise<
        FROM association_responsible_positions arp
        INNER JOIN member_positions mp
          ON mp.position_id = arp.position_id
-         AND mp.since <= CURRENT_DATE()
-         AND (mp.until IS NULL OR mp.until >= CURRENT_DATE())
+         AND mp.since <= ?
+         AND (mp.until IS NULL OR mp.until >= ?)
        INNER JOIN members m ON m.id = mp.member_id
        ORDER BY m.last_name ASC, m.first_name ASC`,
-      [],
+      [today, today],
       conn,
     ),
   ])

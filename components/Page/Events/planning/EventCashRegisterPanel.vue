@@ -309,6 +309,7 @@ import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { CashRegisterOverview, EventCashRegisterResponse } from '~/server/api/events/[id]/cash-register.get'
 import type { CashRegisterStandFilterValue, CashRegisterStandStat } from '~/server/utils/cashRegisterStands'
 import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
+const { toLocalDateTime } = useAppTimeZone()
 
 const props = defineProps<{
   eventId: number
@@ -473,20 +474,21 @@ function barHeight(revenue: number) {
   return Math.max(revenue > 0 ? 4 : 2, scaled)
 }
 
-function toBerlinIso(hour: string) {
-  return new Date(hour.replace(' ', 'T') + 'Z').toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' })
+/** `hour` is an ISO instant (the start of a UTC hour); shown as the wall clock of the app time zone. */
+function toLocalHour(hour: string) {
+  return toLocalDateTime(hour)
 }
 
 function hourLabel(hour: string) {
-  return toBerlinIso(hour).slice(11, 16)
+  return toLocalHour(hour).slice(11, 16)
 }
 
 function dayLabel(hour: string) {
   const entries = overview.value?.hourly ?? []
   const index = entries.findIndex(entry => entry.hour === hour)
-  const berlinDate = toBerlinIso(hour).slice(0, 10)
-  if (index > 0 && toBerlinIso(entries[index - 1]!.hour).slice(0, 10) === berlinDate) return ''
-  return `${berlinDate.slice(8, 10)}.${berlinDate.slice(5, 7)}.`
+  const localDate = toLocalHour(hour).slice(0, 10)
+  if (index > 0 && toLocalHour(entries[index - 1]!.hour).slice(0, 10) === localDate) return ''
+  return `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}.`
 }
 
 async function loadOverview() {

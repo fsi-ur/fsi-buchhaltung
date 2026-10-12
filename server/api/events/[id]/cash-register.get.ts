@@ -22,6 +22,7 @@ import {
   type CashRegisterStandFilterValue,
   type CashRegisterStandStat,
 } from '~/server/utils/cashRegisterStands'
+import { instantToSql, sqlTimestampToInstant, type Instant } from '~/shared/time'
 
 export interface CashRegisterOverviewItem {
   id: number
@@ -31,7 +32,7 @@ export interface CashRegisterOverviewItem {
 }
 
 export interface CashRegisterHourlyEntry {
-  hour: string
+  hour: Instant
   revenue: number
   quantity: number
 }
@@ -82,8 +83,8 @@ function fillHourlyGaps(rows: Array<{ hour_start: string, revenue: unknown, quan
   if (!rows.length) return []
 
   const byHour = new Map(rows.map(row => [row.hour_start, row]))
-  const toTime = (value: string) => new Date(value.replace(' ', 'T') + 'Z').getTime()
-  const toKey = (time: number) => new Date(time).toISOString().slice(0, 19).replace('T', ' ')
+  const toTime = (value: string) => new Date(sqlTimestampToInstant(value)).getTime()
+  const toKey = (time: number) => instantToSql(new Date(time))
 
   const firstTime = toTime(rows[0]!.hour_start)
   const lastTime = toTime(rows[rows.length - 1]!.hour_start)
@@ -93,7 +94,7 @@ function fillHourlyGaps(rows: Array<{ hour_start: string, revenue: unknown, quan
   for (let time = firstTime; time <= lastTime; time += hourMs) {
     const row = byHour.get(toKey(time))
     result.push({
-      hour: toKey(time),
+      hour: new Date(time).toISOString(),
       revenue: Number(row?.revenue ?? 0),
       quantity: Number(row?.quantity ?? 0),
     })

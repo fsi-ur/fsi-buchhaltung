@@ -19,6 +19,7 @@ import type {
   WikiEmbedRequestItem,
   WikiEmbedResult,
 } from '~/types/wiki'
+import { appNowLocalDateTime, appTodayLocalDate } from '~/server/utils/time'
 
 type EmbedArgs = Record<string, string | number | boolean>
 
@@ -33,13 +34,6 @@ function limitArg(args: EmbedArgs, fallback = DEFAULT_LIST_LIMIT) {
   const raw = Number(args.limit)
   if (!Number.isFinite(raw)) return fallback
   return Math.min(Math.max(Math.trunc(raw), 1), MAX_LIST_LIMIT)
-}
-
-function todayIso() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
 }
 
 function sanitizeArgs(definition: WikiEmbedDefinition, args: EmbedArgs): EmbedArgs {
@@ -86,7 +80,7 @@ async function resolveBudgetStatus(args: EmbedArgs): Promise<WikiEmbedBudgetStat
   const requestedYear = Number(args.year)
   const year = Number.isInteger(requestedYear) && requestedYear >= 1900 && requestedYear <= 2999
     ? requestedYear
-    : new Date().getFullYear()
+    : Number((await appTodayLocalDate()).slice(0, 4))
 
   const requestedCostCentreId = Number(args.costCentreId)
   const costCentreId = Number.isInteger(requestedCostCentreId) && requestedCostCentreId > 0
@@ -170,7 +164,7 @@ async function resolveBudgetStatus(args: EmbedArgs): Promise<WikiEmbedBudgetStat
 }
 
 async function resolveCashPosition(): Promise<WikiEmbedCashPositionData> {
-  const date = todayIso()
+  const date = await appTodayLocalDate()
   const position = await computeTotalMoney(date)
 
   return {
@@ -182,13 +176,14 @@ async function resolveCashPosition(): Promise<WikiEmbedCashPositionData> {
 }
 
 async function resolveNextEvents(args: EmbedArgs): Promise<WikiEmbedNextEventsData> {
+  const now = await appNowLocalDateTime()
   const rows = await query<Array<{ id: number, name: string, starts_at: string, ends_at: string, location: string | null }>>(
     `SELECT id, name, starts_at, ends_at, location
      FROM events
-     WHERE ends_at >= NOW()
+     WHERE ends_at >= ?
      ORDER BY starts_at ASC, id ASC
      LIMIT ?`,
-    [limitArg(args, 3)],
+    [now, limitArg(args, 3)],
   )
 
   return {
@@ -206,6 +201,7 @@ async function resolveMyShifts(user: User, args: EmbedArgs): Promise<WikiEmbedMy
   const memberId = await loadCurrentMemberIdForUser(user.id)
   if (!memberId) return { memberLinked: false, shifts: [] }
 
+  const now = await appNowLocalDateTime()
   const rows = await query<Array<{
     id: number, name: string, starts_at: string, ends_at: string, event_id: number, event_name: string
   }>>(
@@ -213,10 +209,10 @@ async function resolveMyShifts(user: User, args: EmbedArgs): Promise<WikiEmbedMy
      FROM event_shift_members sm
      JOIN event_shift_slots s ON s.id = sm.shift_id
      JOIN events e ON e.id = s.event_id
-     WHERE sm.member_id = ? AND s.ends_at >= NOW()
+     WHERE sm.member_id = ? AND s.ends_at >= ?
      ORDER BY s.starts_at ASC, s.id ASC
      LIMIT ?`,
-    [memberId, limitArg(args)],
+    [memberId, now, limitArg(args)],
   )
 
   return {
@@ -280,18 +276,20 @@ async function resolveAssociationContact(): Promise<WikiEmbedAssociationContactD
 
   if (!profile) return { associationName: null, email: null, positions: [], members: [] }
 
+  const today = await appTodayLocalDate()
+
   const positionRows = await query<Array<{ id: number, code: string, name: string, holder: string | null }>>(
     `SELECT p.id, p.code, p.name,
             CASE WHEN m.id IS NULL THEN NULL ELSE CONCAT(m.first_name, ' ', m.last_name) END AS holder
      FROM association_responsible_positions arp
      JOIN positions p ON p.id = arp.position_id
      LEFT JOIN member_positions mp ON mp.position_id = p.id
-       AND mp.since <= CURDATE()
-       AND (mp.until IS NULL OR mp.until >= CURDATE())
+       AND mp.since <= ?
+       AND (mp.until IS NULL OR mp.until >= ?)
      LEFT JOIN members m ON m.id = mp.member_id
      WHERE arp.association_profile_id = ?
      ORDER BY p.code ASC, m.last_name ASC, m.first_name ASC`,
-    [Number(profile.id)],
+    [today, today, Number(profile.id)],
   )
 
   const positions: WikiEmbedContactPosition[] = []

@@ -17,4 +17,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-appointments.mjs',
   'migrate-association-documents.mjs',
   'migrate-invoice-recipient-attention.mjs',
+  'migrate-explicit-time-zones.mjs',
 ]

@@ -1,6 +1,7 @@
 import type mariadb from 'mariadb'
 import type { CreateCashCountBody, CreateCashCountPositionBody } from '~/types/cashCount'
 import { query } from '~/server/utils/db'
+import { normalizeLocalDateTime } from '~/shared/time'
 
 export function normalizeCashCountAmount(value: unknown) {
   const amount = Number(value)
@@ -27,8 +28,8 @@ export function normalizeCashCountBody(body: CreateCashCountBody) {
     counted_by_first: Number(body.counted_by_first || 0),
     counted_by_second: Number(body.counted_by_second || 0),
     checked_by: Number(body.checked_by || 0),
-    counted_before_at: isRegisterCheck ? null : String(body.counted_before_at || ''),
-    counted_after_at: String(body.counted_after_at || ''),
+    counted_before_at: isRegisterCheck ? null : (normalizeLocalDateTime(body.counted_before_at) ?? String(body.counted_before_at || '')),
+    counted_after_at: normalizeLocalDateTime(body.counted_after_at) ?? String(body.counted_after_at || ''),
     positions: Array.isArray(body.positions)
       ? body.positions.map((position, index) => {
           const normalized = normalizeCashCountPosition(position, index)
@@ -55,13 +56,13 @@ export function validateCashCountBody(body: ReturnType<typeof normalizeCashCount
     return 'Each position requires amount_before and amount_after'
   }
 
-  const afterTs = Date.parse(body.counted_after_at)
-  if (!Number.isFinite(afterTs)) return 'Invalid timestamps'
+  const after = normalizeLocalDateTime(body.counted_after_at)
+  if (!after) return 'Invalid timestamps'
 
   if (!isRegisterCheck) {
-    const beforeTs = Date.parse(body.counted_before_at!)
-    if (!Number.isFinite(beforeTs)) return 'Invalid timestamps'
-    if (afterTs <= beforeTs) return 'counted_after_at must be later than counted_before_at'
+    const before = normalizeLocalDateTime(body.counted_before_at)
+    if (!before) return 'Invalid timestamps'
+    if (after <= before) return 'counted_after_at must be later than counted_before_at'
   }
 
   return null

@@ -74,11 +74,13 @@ import { useToast } from '~/composables/useToast'
 import { dayKeyOf, todayKey } from '~/composables/useCalendarView'
 import type { GetCalendarEntriesResponse } from '~/server/api/calendar/entries.get'
 import type { AppointmentResponseValue, CalendarEntry } from '~/types/appointment'
+import { addDaysToLocalDate, nowLocalDateTime } from '~/shared/time'
+const { timeZone } = useAppTimeZone()
 
 const { t } = useI18n()
 const toast = useToast()
 const { setPage } = usePage()
-const { formatLocalDate } = useLocaleFormatters()
+const { formatDate } = useLocaleFormatters()
 
 const WINDOW_DAYS = 30
 const MAX_ENTRIES = 5
@@ -87,26 +89,21 @@ const loading = ref(true)
 const upcoming = ref<CalendarEntry[]>([])
 const respondingKey = ref('')
 
-function pad2(value: number) {
-  return String(value).padStart(2, '0')
-}
-
 function isToday(entry: CalendarEntry) {
-  return dayKeyOf(entry.startsAt) === todayKey()
+  return dayKeyOf(entry.startsAt) === todayKey(timeZone.value)
 }
 
 function whenLabel(entry: CalendarEntry) {
   const dayKey = dayKeyOf(entry.startsAt)
-  const today = todayKey()
+  const today = todayKey(timeZone.value)
 
-  const tomorrow = new Date(`${today}T00:00:00Z`)
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+  const tomorrow = addDaysToLocalDate(today, 1)
 
   const date = dayKey === today
     ? t('calendar.today')
-    : dayKey === tomorrow.toISOString().slice(0, 10)
+    : dayKey === tomorrow
       ? t('calendar.tomorrow')
-      : formatLocalDate(entry.startsAt)
+      : formatDate(entry.startsAt)
 
   return entry.allDay ? `${date} · ${t('calendar.allDay')}` : `${date} · ${entry.startsAt.slice(11, 16)}`
 }
@@ -148,13 +145,12 @@ async function respond(entry: CalendarEntry, response: AppointmentResponseValue)
 async function load() {
   loading.value = true
   try {
-    const now = new Date()
-    const to = new Date(now.getTime() + WINDOW_DAYS * 86400000)
+    const now = nowLocalDateTime(timeZone.value)
 
     const res = await $fetch<GetCalendarEntriesResponse>('/api/calendar/entries', {
       query: {
-        from: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:00`,
-        to: `${to.getFullYear()}-${pad2(to.getMonth() + 1)}-${pad2(to.getDate())} 23:59:59`,
+        from: `${now.slice(0, 16)}:00`,
+        to: `${addDaysToLocalDate(now.slice(0, 10), WINDOW_DAYS)} 23:59:59`,
       },
     })
 

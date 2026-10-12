@@ -164,7 +164,8 @@ const expanded = ref(false)
 const statusMenuId = ref<number | null>(null)
 const savingId = ref<number | null>(null)
 const completingId = ref<number | null>(null)
-const now = ref(new Date())
+const { nowLocal } = useAppTimeZone()
+const now = ref(nowLocal())
 
 const shownTasks = computed(() => expanded.value ? tasks.value : tasks.value.slice(0, MAX_COLLAPSED))
 const overdueCount = computed(() => tasks.value.filter(task => urgencyOf(task) === 'overdue').length)
@@ -314,7 +315,7 @@ async function load() {
   } catch {
     tasks.value = []
   } finally {
-    now.value = new Date()
+    now.value = nowLocal()
     loading.value = false
     loadedOnce.value = true
   }
@@ -324,7 +325,7 @@ let clockId: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   load()
-  clockId = setInterval(() => { now.value = new Date() }, 60000)
+  clockId = setInterval(() => { now.value = nowLocal() }, 60000)
 })
 
 onBeforeUnmount(() => {

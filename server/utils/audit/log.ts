@@ -12,6 +12,7 @@ import { fieldKind, fieldLabelKey, GLOBALLY_IGNORED_COLUMNS } from '~/server/uti
 import { isRedactedColumn } from '~/server/utils/audit/redaction'
 import { AUDIT_FINANCE_TABLES } from '~/server/utils/audit/retention'
 import type { User } from '~/types/user'
+import { instantToSql, isInstant, sqlTimestampToInstant } from '~/shared/time'
 
 export type AuditOperation = 'insert' | 'update' | 'delete'
 
@@ -221,13 +222,26 @@ function valuesEqual(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+function markInstants(state: Record<string, any> | null, timestampColumns: string[]) {
+  if (!state || !timestampColumns.length) return state
+  const marked = { ...state }
+  for (const column of timestampColumns) {
+    const value = marked[column]
+    if (typeof value === 'string') marked[column] = sqlTimestampToInstant(value)
+  }
+  return marked
+}
+
 async function buildEntry(
   row: RawRow,
-  previousState: Record<string, any> | null,
-  primaryKeyColumns: string[],
+  rawPreviousState: Record<string, any> | null,
+  tableMeta: AuditedTableMetadata | undefined,
 ): Promise<AuditEntry> {
   const def = getAuditTableDefinition(row.table_name)
-  const currentState = parseJson(row.state) ?? {}
+  const primaryKeyColumns = tableMeta?.primaryKeyColumns ?? []
+  const timestampColumns = tableMeta?.timestampColumns ?? []
+  const currentState = markInstants(parseJson(row.state), timestampColumns) ?? {}
+  const previousState = markInstants(rawPreviousState, timestampColumns)
   // A single-column surrogate PK (the common `id BIGINT AUTO_INCREMENT` case) is pure noise in a
   // diff. A composite/natural PK (junction tables like user_roles(user_id, role_id)) carries the
   // actual data of the row — those columns must NOT be ignored or the entry would show no fields.
@@ -299,8 +313,7 @@ async function hydrateRows(rows: RawRow[]): Promise<AuditGroup[]> {
 
   const entries: AuditEntry[] = []
   for (const row of rows) {
-    const primaryKeyColumns = metadata.get(row.table_name)?.primaryKeyColumns ?? []
-    entries.push(await buildEntry(row, previousStates.get(row.id) ?? null, primaryKeyColumns))
+    entries.push(await buildEntry(row, previousStates.get(row.id) ?? null, metadata.get(row.table_name)))
   }
 
   await resolveReferences(entries)
@@ -365,8 +378,8 @@ function buildAuditFilterClauses(visibleTables: string[], filters: AuditFilters)
   const clauses = [`table_name IN (${visibleTables.map(() => '?').join(', ')})`]
   const params: unknown[] = [...visibleTables]
 
-  if (filters.from) { clauses.push('changed_at >= ?'); params.push(filters.from) }
-  if (filters.to) { clauses.push('changed_at <= ?'); params.push(filters.to) }
+  if (filters.from && isInstant(filters.from)) { clauses.push('changed_at >= ?'); params.push(filters.from) }
+  if (filters.to && isInstant(filters.to)) { clauses.push('changed_at <= ?'); params.push(filters.to) }
   if (filters.userIds?.length) {
     // "System" is the absence of an actor, so it can't be expressed as an id — it has to be ORed in
     // as an IS NULL check alongside the id list.
@@ -734,8 +747,7 @@ export async function pruneAuditLog(options: { retentionDays: number, financeRet
     if (cutoffDays <= 0) return
     if (tableFilter === 'finance' && !financeTables.length) return
 
-    const cutoff = new Date(now.getTime() - cutoffDays * 24 * 60 * 60 * 1000)
-    const cutoffStr = cutoff.toISOString().slice(0, 19).replace('T', ' ')
+    const cutoffStr = instantToSql(new Date(now.getTime() - cutoffDays * 24 * 60 * 60 * 1000))
 
     const tableClause = !financeTables.length
       ? '1=1'

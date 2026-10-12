@@ -90,7 +90,7 @@ defineEmits<{ (e: 'open'): void }>()
 const MAX_OPEN_SHIFTS = 3
 
 const { t } = useI18n()
-const { formatLocalDate, formatLocalDateTime } = useLocaleFormatters()
+const { formatDate, formatDateTime } = useLocaleFormatters()
 
 const fullyStaffed = computed(() => props.shifts.filter(shift => shift.member_count >= shift.required_people).length)
 const staffedPercent = computed(() => props.shifts.length ? Math.round((fullyStaffed.value / props.shifts.length) * 100) : 0)
@@ -101,7 +101,7 @@ const hiddenOpenShiftCount = computed(() => openShifts.value.length - visibleOpe
 
 function timeLabel(shift: EventSpotlightShift) {
   const sameDay = shift.starts_at.slice(0, 10) === shift.ends_at.slice(0, 10)
-  if (sameDay) return `${formatLocalDate(shift.starts_at)} · ${shift.starts_at.slice(11, 16)} – ${shift.ends_at.slice(11, 16)}`
-  return `${formatLocalDateTime(shift.starts_at)} – ${formatLocalDateTime(shift.ends_at)}`
+  if (sameDay) return `${formatDate(shift.starts_at)} · ${shift.starts_at.slice(11, 16)} – ${shift.ends_at.slice(11, 16)}`
+  return `${formatDateTime(shift.starts_at)} – ${formatDateTime(shift.ends_at)}`
 }
 </script>

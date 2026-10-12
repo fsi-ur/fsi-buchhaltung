@@ -324,7 +324,7 @@ export async function runNotificationDispatch({ now, limit = 50 }: { now?: Date,
       const settings = await getNotificationSettings()
       if (!settings.notifications_enabled) return
 
-      const referenceNow = now ?? localWallClockNowDate()
+      const referenceNow = now ?? await localWallClockNowDate()
 
       try {
         await sweepReminders(referenceNow, settings)

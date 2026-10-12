@@ -18,28 +18,31 @@ describe('welcomeTypeForStatus', () => {
 })
 
 describe('welcomeSendTime', () => {
+  // The current wall clock in the app time zone, as the caller passes it in.
+  const NOW = '2026-03-04 10:15:00'
+
   it('sends on the joining day itself with no delay', () => {
-    expect(welcomeSendTime('2026-03-05', 0, '09:00')).toBe('2026-03-05 09:00:00')
+    expect(welcomeSendTime('2026-03-05', 0, '09:00', NOW)).toBe('2026-03-05 09:00:00')
   })
 
   it('adds the delay in whole days', () => {
-    expect(welcomeSendTime('2026-03-05', 7, '18:30')).toBe('2026-03-12 18:30:00')
+    expect(welcomeSendTime('2026-03-05', 7, '18:30', NOW)).toBe('2026-03-12 18:30:00')
   })
 
   it('rolls over month and year boundaries', () => {
-    expect(welcomeSendTime('2026-12-28', 5, '09:00')).toBe('2027-01-02 09:00:00')
+    expect(welcomeSendTime('2026-12-28', 5, '09:00', NOW)).toBe('2027-01-02 09:00:00')
   })
 
   it('ignores a time part on the joining date', () => {
-    expect(welcomeSendTime('2026-03-05 13:45:00', 1, '09:00')).toBe('2026-03-06 09:00:00')
+    expect(welcomeSendTime('2026-03-05 13:45:00', 1, '09:00', NOW)).toBe('2026-03-06 09:00:00')
   })
 
   it('accepts a send time that already carries seconds', () => {
-    expect(welcomeSendTime('2026-03-05', 0, '09:00:30')).toBe('2026-03-05 09:00:30')
+    expect(welcomeSendTime('2026-03-05', 0, '09:00:30', NOW)).toBe('2026-03-05 09:00:30')
   })
 
   it('falls back to now when the joining date is unusable', () => {
-    expect(welcomeSendTime('', 3, '09:00')).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(welcomeSendTime('', 3, '09:00', NOW)).toBe(NOW)
   })
 })
 

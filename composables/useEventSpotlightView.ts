@@ -17,7 +17,7 @@ export interface EventSummaryTile {
 /** Shared presentation logic for an event spotlight/widget: labels, date range and planning summary tiles. */
 export function useEventSpotlightView(event: Ref<EventSpotlight | null>) {
   const { t } = useI18n()
-  const { formatLocalDate, formatLocalDateTime } = useLocaleFormatters()
+  const { formatDate, formatDateTime } = useLocaleFormatters()
 
   const statusLabel = computed(() => {
     if (!event.value) return ''
@@ -40,10 +40,10 @@ export function useEventSpotlightView(event: Ref<EventSpotlight | null>) {
     if (active.starts_at && active.ends_at) {
       const sameDay = active.starts_at.slice(0, 10) === active.ends_at.slice(0, 10)
       return sameDay
-        ? `${formatLocalDateTime(active.starts_at)} – ${formatTime(active.ends_at)}`
-        : `${formatLocalDateTime(active.starts_at)} – ${formatLocalDateTime(active.ends_at)}`
+        ? `${formatDateTime(active.starts_at)} – ${formatTime(active.ends_at)}`
+        : `${formatDateTime(active.starts_at)} – ${formatDateTime(active.ends_at)}`
     }
-    return formatLocalDateTime(active.starts_at || active.ends_at)
+    return formatDateTime(active.starts_at || active.ends_at)
   })
 
   const organizerLabels = computed(() => {
@@ -108,8 +108,8 @@ export function useEventSpotlightView(event: Ref<EventSpotlight | null>) {
 
   function formatTime(value?: string | null) {
     if (!value) return ''
-    const full = formatLocalDateTime(value)
-    const date = formatLocalDate(value)
+    const full = formatDateTime(value)
+    const date = formatDate(value)
     // Strip the leading date portion to keep just the time when on the same day.
     return full.startsWith(date) ? full.slice(date.length).trim().replace(/^[,·\s]+/, '') : full
   }

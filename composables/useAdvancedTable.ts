@@ -1,4 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue'
+import { resolveWallClock, wallClockFrame } from '~/shared/time'
 
 export type SortDirection = 'asc' | 'desc' | null
 export type TableFilterType = 'text' | 'number' | 'date'
@@ -51,7 +52,7 @@ function normalizeText(value: unknown): string {
   return String(value).trim().toLocaleLowerCase('de-DE')
 }
 
-function toComparableValue(type: TableFilterType, value: unknown): number | string | null {
+function toComparableValue(type: TableFilterType, value: unknown, timeZone: string): number | string | null {
   if (value === null || value === undefined || value === '') return null
 
   if (type === 'number') {
@@ -75,33 +76,20 @@ function toComparableValue(type: TableFilterType, value: unknown): number | stri
   }
 
   if (type === 'date') {
-    const ts = Date.parse(String(value))
-    return Number.isFinite(ts) ? ts : null
+    const resolved = resolveWallClock(value, timeZone)
+    return resolved ? wallClockFrame(resolved.wallClock).getTime() : null
   }
 
   return normalizeText(value)
 }
 
-function toDateSearchTokens(value: unknown): string[] {
+function toDateSearchTokens(value: unknown, timeZone: string): string[] {
   if (!value) return []
   const raw = String(value)
-  // Treat bare DB strings (no timezone marker) as UTC
-  const utcStr = (!/[Z+\-]\d{2}:?\d{2}$/.test(raw) && !raw.endsWith('Z'))
-    ? raw.replace(' ', 'T') + 'Z'
-    : raw
-  const ts = Date.parse(utcStr)
-  if (!Number.isFinite(ts)) return [normalizeText(raw)]
-  return [
-    normalizeText(raw),
-    normalizeText(
-      new Date(ts).toLocaleDateString('de-DE', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        timeZone: 'Europe/Berlin',
-      }),
-    ),
-  ]
+  const resolved = resolveWallClock(raw, timeZone)
+  if (!resolved) return [normalizeText(raw)]
+  const [year, month, day] = resolved.wallClock.slice(0, 10).split('-')
+  return [normalizeText(raw), normalizeText(`${day}.${month}.${year}`)]
 }
 
 function defaultFilters<T, K extends string>(columns: TableColumnConfig<T, K>[]): Record<string, ColumnFilter> {
@@ -152,6 +140,7 @@ export function useAdvancedTable<T, K extends string>(
   const globalSearchInput = persistKey ? useState<string>(`table:${persistKey}:search`, () => '') : ref('')
   const globalSearchTerm = ref('')
   const pageSize = useAdvancedTablePageSize()
+  const { timeZone } = useAppTimeZone()
   const page = persistKey ? useState<number>(`table:${persistKey}:page`, () => 1) : ref(1)
 
   const columnByKey = computed(() => {
@@ -188,7 +177,7 @@ export function useAdvancedTable<T, K extends string>(
       let min: number | null = null
       let max: number | null = null
       for (const row of rows.value) {
-        const comparable = toComparableValue('number', column.getValue(row))
+        const comparable = toComparableValue('number', column.getValue(row), timeZone.value)
         if (typeof comparable !== 'number') continue
         if (min === null || comparable < min) min = comparable
         if (max === null || comparable > max) max = comparable
@@ -281,11 +270,11 @@ export function useAdvancedTable<T, K extends string>(
         if (filter?.type === 'number' || filter?.type === 'date') {
           if (filter.min === '' && filter.max === '') continue
 
-          const comparable = toComparableValue(filter.type, value)
+          const comparable = toComparableValue(filter.type, value, timeZone.value)
           if (comparable === null || typeof comparable === 'string') return false
 
-          const minComparable = filter.min === '' ? null : toComparableValue(filter.type, filter.min)
-          const maxComparable = filter.max === '' ? null : toComparableValue(filter.type, filter.max)
+          const minComparable = filter.min === '' ? null : toComparableValue(filter.type, filter.min, timeZone.value)
+          const maxComparable = filter.max === '' ? null : toComparableValue(filter.type, filter.max, timeZone.value)
 
           if (typeof minComparable === 'number' && comparable < minComparable) return false
           if (typeof maxComparable === 'number' && comparable > maxComparable) return false
@@ -299,7 +288,7 @@ export function useAdvancedTable<T, K extends string>(
         if (!column.globalSearchable) return false
         const raw = column.getValue(row)
         if (column.filterType === 'date') {
-          return toDateSearchTokens(raw).some(token => token.includes(searchTerm))
+          return toDateSearchTokens(raw, timeZone.value).some(token => token.includes(searchTerm))
         }
         return normalizeText(raw).includes(searchTerm)
       })
@@ -314,8 +303,8 @@ export function useAdvancedTable<T, K extends string>(
     const factor = sortDirection.value === 'asc' ? 1 : -1
     sorted.sort((a, b) => {
       const filterType = activeColumn.filterType ?? 'text'
-      const left = toComparableValue(filterType, activeColumn.getValue(a))
-      const right = toComparableValue(filterType, activeColumn.getValue(b))
+      const left = toComparableValue(filterType, activeColumn.getValue(a), timeZone.value)
+      const right = toComparableValue(filterType, activeColumn.getValue(b), timeZone.value)
 
       if (left === null && right === null) return 0
       if (left === null) return 1

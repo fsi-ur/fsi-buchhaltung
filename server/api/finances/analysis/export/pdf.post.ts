@@ -13,6 +13,7 @@ import { buildFinanceAnalysisPdf, type FinanceAnalysisExportGrouping } from '~/s
 import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~/server/utils/invoices'
 import type { BudgetDetail } from '~/types/budget'
 import type { CostCentreRow } from '~/types/costCentre'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 const MAX_COMPARISON_BUDGETS = 12
 
@@ -43,7 +44,7 @@ export default defineEventHandler(async (event) => {
   if (!current.ok) return current
 
   const body = (await readBody(event)) ?? {}
-  const filters = parseFinanceAnalysisFilters(body)
+  const filters = parseFinanceAnalysisFilters(body, await appTodayLocalDate())
 
   if (filters.startDate > filters.endDate) {
     return { ok: false, error: 'The start date must be before or equal to the end date.' }
@@ -107,6 +108,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const pdf = buildFinanceAnalysisPdf({
+      createdOn: await appTodayLocalDate(),
       analysis,
       comparisonAnalysis,
       filters,

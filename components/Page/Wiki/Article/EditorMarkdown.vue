@@ -251,7 +251,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { hasPermission } = useAuth()
 const { loadGlossary } = useWikiGlossary()
-const { formatLocalDateTime } = useLocaleFormatters()
+const { formatDateTime } = useLocaleFormatters()
 
 const TABLE_SNIPPET = '| Spalte | Spalte |\n| --- | --- |\n| Wert | Wert |'
 
@@ -310,7 +310,7 @@ const eventOptions = computed<SearchSelectOption<number>[]>(() => events.value
   })))
 
 function eventLabel(event: Event) {
-  const startsAt = formatLocalDateTime(event.starts_at)
+  const startsAt = formatDateTime(event.starts_at)
   return [event.name, startsAt, event.location].filter(Boolean).join(' | ')
 }
 

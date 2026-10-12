@@ -566,6 +566,8 @@ import { useToast } from '~/composables/useToast'
 import { downloadShiftPlanPdf } from '~/utils/shiftPlanPdfDownload'
 import type { EventShiftTypeDescriptions, EventMemberOption } from '~/types/event'
 import type { EventShiftPermissionMode, PlanningShiftSlot, PlanningShiftTemplate } from './types'
+import { normalizeLocalDateTime, wallClockFrame } from '~/shared/time'
+const { today: appToday } = useAppTimeZone()
 
 type TimetableSectionKey = 'before' | 'during' | 'after'
 type ShiftColumn = {
@@ -1333,49 +1335,23 @@ function sanitizeIntegerInput(value: string) {
 }
 
 function parseDateTimeInput(value: string) {
-  if (!value) return null
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
-  if (!match) return null
-
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const hours = Number(match[4])
-  const minutes = Number(match[5])
-  const date = new Date(year, month - 1, day, hours, minutes)
-  if (
-    date.getFullYear() !== year
-    || date.getMonth() !== month - 1
-    || date.getDate() !== day
-    || date.getHours() !== hours
-    || date.getMinutes() !== minutes
-  ) {
-    return null
-  }
-
-  return Number.isNaN(date.getTime()) ? null : date
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value ?? '')) return null
+  const normalized = normalizeLocalDateTime(value)
+  return normalized ? wallClockFrame(normalized) : null
 }
 
 function normalizeDateTimeInput(value?: string) {
   if (!value) return null
-  const trimmed = value.trim().replace(' ', 'T')
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) return trimmed.slice(0, 16)
-
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : formatDateTimeInput(parsed)
+  const normalized = normalizeLocalDateTime(value)
+  return normalized ? normalized.replace(' ', 'T').slice(0, 16) : null
 }
 
-function formatDateTimeInput(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  const hours = String(value.getHours()).padStart(2, '0')
-  const minutes = String(value.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
+function formatDateTimeInput(frame: Date) {
+  return frame.toISOString().slice(0, 16)
 }
 
 function defaultDateTimeInput(time: string) {
-  const date = eventStartAt.value?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+  const date = eventStartAt.value?.slice(0, 10) ?? appToday()
   return `${date}T${time}`
 }
 
@@ -1391,7 +1367,7 @@ function dayKeyForShift(shift: PlanningShiftSlot) {
 
 function formatDayLabel(dayKey: string) {
   if (dayKey === 'unknown') return t('event.planning.dateMissing')
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${dayKey}T00:00`))
+  return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${dayKey}T00:00:00Z`))
 }
 
 function formatTimeLabel(value: string) {

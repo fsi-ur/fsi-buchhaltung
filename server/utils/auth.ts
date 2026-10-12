@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { query } from './db'
 import bcrypt from 'bcrypt'
+import { instantToSql } from '~/shared/time'
 
 const {
   SESSION_SECRET,
@@ -33,11 +34,10 @@ export async function comparePassword(password: string, hash: string) {
 export async function createSession(userId: number, token: string) {
   const tokenHash = hmacToken(token)
   const now = new Date()
-  const lastActiveAt = now.toISOString().slice(0, 19).replace('T', ' ')
+  const lastActiveAt = instantToSql(now)
   const createdAt = lastActiveAt
 
-  const expires = new Date(Date.now() + maxAgeMinutes * 60 * 1000)
-  const expiresAt = expires.toISOString().slice(0, 19).replace('T', ' ')
+  const expiresAt = instantToSql(new Date(now.getTime() + maxAgeMinutes * 60 * 1000))
 
   const res = await query(
     `INSERT INTO sessions (user_id, token_hash, created_at, last_active_at, expires_at)
@@ -63,8 +63,7 @@ export async function getSessionByToken(token: string) {
 
 export async function touchSession(token: string) {
   const tokenHash = hmacToken(token)
-  const now = new Date()
-  const lastActiveAt = now.toISOString().slice(0, 19).replace('T', ' ')
+  const lastActiveAt = instantToSql(new Date())
 
   const res = await query(
     `UPDATE sessions SET last_active_at = ? WHERE token_hash = ?`,
@@ -79,5 +78,5 @@ export async function deleteSessionByToken(token: string) {
 }
 
 export async function cleanupExpiredSessions() {
-  await query(`DELETE FROM sessions WHERE expires_at IS NOT NULL AND expires_at < NOW()`)
+  await query(`DELETE FROM sessions WHERE expires_at IS NOT NULL AND expires_at < ?`, [instantToSql(new Date())])
 }

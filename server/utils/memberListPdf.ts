@@ -7,6 +7,7 @@ import {
 } from '~/server/utils/memberExport'
 import type { AssociationProfileRow } from '~/types/association'
 import type { MemberExportConfig } from '~/types/member'
+import type { LocalDate } from '~/shared/time'
 
 const CELL_PADDING = 4
 const LINE_HEIGHT = 11
@@ -16,8 +17,10 @@ export function buildMemberListPdf(params: {
   members: MemberExportRow[]
   association: AssociationProfileRow | null
   logo?: { mimeType: string, data: Buffer } | null
+  /** "Stand" — today in the app time zone. */
+  createdOn: LocalDate
 }) {
-  const { config, members, association, logo = null } = params
+  const { config, members, association, logo = null, createdOn } = params
   const layout = createPdfDocumentLayout({ logo })
 
   const { contentLeft, contentRight } = PDF_LAYOUT
@@ -143,9 +146,7 @@ export function buildMemberListPdf(params: {
     layout.y -= 17
   }
 
-  const today = new Date()
-  const pad = (part: number) => String(part).padStart(2, '0')
-  const createdAt = `${pad(today.getDate())}.${pad(today.getMonth() + 1)}.${today.getFullYear()}`
+  const createdAt = `${createdOn.slice(8, 10)}.${createdOn.slice(5, 7)}.${createdOn.slice(0, 4)}`
   layout.page.texts.push({
     x: contentLeft,
     y: layout.y - 2,

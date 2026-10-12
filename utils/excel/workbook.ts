@@ -1,3 +1,4 @@
+import type { LocalDateTime } from '~/shared/time'
 export type SpreadsheetCellType = 'String' | 'Number'
 export type WorksheetOrientation = 'portrait' | 'landscape'
 
@@ -53,6 +54,7 @@ export interface SpreadsheetWorksheetDefinition {
 
 export interface SpreadsheetWorkbookDefinition {
   sheets: SpreadsheetWorksheetDefinition[]
+  modifiedAt: LocalDateTime
   stylesXml?: string
   author?: string
   company?: string
@@ -504,18 +506,19 @@ function createDrawingXml(images: PreparedSheetImage[]) {
 </xdr:wsDr>`
 }
 
-function getDosDateTime(date: Date) {
-  const year = Math.max(date.getFullYear(), 1980)
-  const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
-  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2)
+function getDosDateTime(value: LocalDateTime) {
+  const [rawYear, month, day, hour, minute, second] = value.split(/[- :]/).map(Number) as [number, number, number, number, number, number]
+  const year = Math.max(rawYear, 1980)
+  const dosDate = ((year - 1980) << 9) | (month << 5) | day
+  const dosTime = (hour << 11) | (minute << 5) | Math.floor(second / 2)
 
   return { dosDate, dosTime }
 }
 
-function createZip(entries: { name: string, data: Uint8Array }[]) {
+function createZip(entries: { name: string, data: Uint8Array }[], modifiedAt: LocalDateTime) {
   const localFiles: Uint8Array[] = []
   const centralDirectory: Uint8Array[] = []
-  const { dosDate, dosTime } = getDosDateTime(new Date())
+  const { dosDate, dosTime } = getDosDateTime(modifiedAt)
   let offset = 0
 
   for (const entry of entries) {
@@ -612,7 +615,7 @@ export function createSpreadsheetRow(cells: SpreadsheetCell[], height?: number):
   }
 }
 
-export function createSpreadsheetWorkbook({ sheets, stylesXml, author = 'FSi Accounting', company = 'FSi Accounting' }: SpreadsheetWorkbookDefinition) {
+export function createSpreadsheetWorkbook({ sheets, modifiedAt, stylesXml, author = 'FSi Accounting', company = 'FSi Accounting' }: SpreadsheetWorkbookDefinition) {
   const imageExtensions: SpreadsheetImageExtension[] = []
   let globalImageIndex = 0
   const preparedSheets: PreparedWorksheetDefinition[] = sheets.map(sheet => ({
@@ -667,7 +670,7 @@ export function createSpreadsheetWorkbook({ sheets, stylesXml, author = 'FSi Acc
     })(),
   ]
 
-  return new Blob([createZip(entries)], { type: XLSX_MIME_TYPE })
+  return new Blob([createZip(entries, modifiedAt)], { type: XLSX_MIME_TYPE })
 }
 
 export function downloadExcelWorkbook(content: Blob, fileName: string) {

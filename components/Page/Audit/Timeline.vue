@@ -200,6 +200,7 @@ import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { usePage } from '~/composables/usePage'
 import { useReturnTarget } from '~/composables/useReturnTarget'
 import type { AuditEntry, AuditGroup } from '~/types/audit'
+import { addDaysToLocalDate } from '~/shared/time'
 
 const props = withDefaults(defineProps<{
   groups: AuditGroup[]
@@ -229,7 +230,8 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { formatDate, formatTime, formatDayHeading, formatRelativeTime, formatCurrency, berlinDayKey } = useLocaleFormatters()
+const { formatDate, formatDateTime, formatTime, formatDayHeading, formatRelativeTime, formatCurrency, localDayKey } = useLocaleFormatters()
+const { today } = useAppTimeZone()
 const { setPage } = usePage()
 const { returnTarget } = useReturnTarget((props.returnPage as any) ?? 'AuditLog')
 
@@ -333,7 +335,7 @@ function fieldDisplay(field: AuditEntry['fields'][number], which: 'before' | 'af
   }
   if (field.kind === 'money') return formatCurrency(Number(raw))
   if (field.kind === 'date') return formatDate(String(raw))
-  if (field.kind === 'datetime') return `${formatDate(String(raw))}, ${formatTime(String(raw))}`
+  if (field.kind === 'datetime') return formatDateTime(String(raw))
   if (field.kind === 'bool') return raw ? '✓' : '✗'
   if (field.kind === 'json') return typeof raw === 'string' ? raw.slice(0, 200) : JSON.stringify(raw).slice(0, 200)
   const text = String(raw)
@@ -346,15 +348,16 @@ function openRecord(entry: AuditEntry) {
 }
 
 function dayLabel(dayKey: string) {
-  if (dayKey === berlinDayKey(new Date().toISOString())) return t('audit.today')
-  if (dayKey === berlinDayKey(new Date(Date.now() - 86400000).toISOString())) return t('audit.yesterday')
+  const todayKey = today()
+  if (dayKey === todayKey) return t('audit.today')
+  if (dayKey === addDaysToLocalDate(todayKey, -1)) return t('audit.yesterday')
   return formatDayHeading(dayKey)
 }
 
 const days = computed(() => {
   const byDay = new Map<string, AuditGroup[]>()
   for (const group of props.groups) {
-    const key = berlinDayKey(group.changedAt)
+    const key = localDayKey(group.changedAt)
     if (!byDay.has(key)) byDay.set(key, [])
     byDay.get(key)!.push(group)
   }

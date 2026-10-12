@@ -222,6 +222,7 @@ import type {
   SavePositionAssignmentBody,
   SavePositionBody,
 } from '~/types/position'
+const { today: appToday } = useAppTimeZone()
 
 interface EditablePositionAssignment extends SavePositionAssignmentBody {
   member_query: string
@@ -308,11 +309,7 @@ const memberOptionsById = computed(() => {
 })
 
 function todayValue() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return appToday()
 }
 
 function positionRow(item: SettingsEntityRow) {

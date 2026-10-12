@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { filterVisibleArticles, getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
 import { isStale } from '~/server/utils/wiki/articles'
+import { parseInstant } from '~/shared/time'
 
 export interface WikiStaleArticle {
   id: number
@@ -53,7 +54,7 @@ export default defineEventHandler(async (event): Promise<WikiStaleResponse> => {
       .filter(row => isStale(row as any))
       .map((row) => {
         const reference = row.reviewed_at ?? row.published_at
-        const dueAt = new Date(new Date(reference!).getTime() + Number(row.review_interval_days) * 24 * 60 * 60 * 1000)
+        const dueAt = new Date(parseInstant(reference)!.getTime() + Number(row.review_interval_days) * 24 * 60 * 60 * 1000)
 
         return {
           id: Number(row.id),

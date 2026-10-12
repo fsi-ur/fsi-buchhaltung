@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { parseFinanceAnalysisFilters } from '~/server/utils/financeAnalysis/filters'
 import { loadFinanceAnalysis } from '~/server/utils/financeAnalysis/load'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface FinanceAnalysisSuccess {
   ok: true
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event): Promise<FinanceAnalysisResponse
   const current = await requirePermission(event, ['receipts.view', 'cash_counts.view', 'invoices.view'], { requireAll: true })
   if (!current.ok) return current
 
-  const filters = parseFinanceAnalysisFilters(getQuery(event))
+  const filters = parseFinanceAnalysisFilters(getQuery(event), await appTodayLocalDate())
 
   if (filters.startDate > filters.endDate) {
     return { ok: false, error: 'The start date must be before or equal to the end date.' }

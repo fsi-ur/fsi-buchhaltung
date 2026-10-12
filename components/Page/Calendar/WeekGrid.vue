@@ -147,8 +147,9 @@
 
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
-import { buildWeekDays, entryDaySegment, groupEntriesByDay, nowInBerlin, todayKey, weekdayIndexOf, WEEKDAY_KEYS } from '~/composables/useCalendarView'
+import { buildWeekDays, entryDaySegment, groupEntriesByDay, nowWallClockFrame, todayKey, weekdayIndexOf, WEEKDAY_KEYS } from '~/composables/useCalendarView'
 import type { CalendarEntry } from '~/types/appointment'
+const { timeZone } = useAppTimeZone()
 
 const props = defineProps<{
   anchor: Date
@@ -186,19 +187,19 @@ const scrollRef = ref<HTMLElement | null>(null)
 const nowMinutes = ref(minutesSinceMidnight())
 let nowTimer: ReturnType<typeof setInterval> | null = null
 
-const days = computed(() => buildWeekDays(props.anchor))
+const days = computed(() => buildWeekDays(props.anchor, todayKey(timeZone.value)))
 const entriesByDay = computed(() => groupEntriesByDay(props.entries))
 
 const hasAllDayEntries = computed(() => props.entries.some(entry => entry.allDay))
 
 const nowOffset = computed(() => {
-  const today = todayKey()
+  const today = todayKey(timeZone.value)
   if (!days.value.some(day => day.key === today)) return null
   return (nowMinutes.value / 60) * HOUR_HEIGHT
 })
 
 function minutesSinceMidnight() {
-  const now = nowInBerlin()
+  const now = nowWallClockFrame(timeZone.value)
   return now.getUTCHours() * 60 + now.getUTCMinutes()
 }
 

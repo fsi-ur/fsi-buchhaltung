@@ -46,7 +46,7 @@ const props = defineProps<{
 const { setPage } = usePage()
 const { hasPermission, resolveFlag, isSimulating } = useAuth()
 const { t } = useI18n()
-const { formatLocalDateTime } = useLocaleFormatters()
+const { formatDateTime } = useLocaleFormatters()
 
 const canEdit = computed(() => hasPermission('events.edit'))
 const resolvedReturnTarget = computed(() => cloneReturnTarget(props.returnTarget) ?? buildReturnTarget('Events'))
@@ -77,7 +77,7 @@ const columns = computed<AdvancedTableColumn<Event>[]>(() => [
     filterType: 'date',
     globalSearchable: true,
     getValue: row => row.starts_at,
-    format: row => formatLocalDateTime(row.starts_at),
+    format: row => formatDateTime(row.starts_at),
     mobileLabel: true,
   },
   {
@@ -86,7 +86,7 @@ const columns = computed<AdvancedTableColumn<Event>[]>(() => [
     filterType: 'date',
     globalSearchable: true,
     getValue: row => row.ends_at,
-    format: row => formatLocalDateTime(row.ends_at),
+    format: row => formatDateTime(row.ends_at),
     mobileLabel: true,
   },
   {

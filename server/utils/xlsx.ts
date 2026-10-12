@@ -1,5 +1,6 @@
 import { deflateRawSync, deflateSync } from 'zlib'
 import { readImageSize, wrapText } from '~/server/utils/pdf'
+import type { LocalDateTime } from '~/shared/time'
 
 /**
  * Minimal XLSX writer, hand-rolled like the PDF writer in `server/utils/pdf.ts`
@@ -38,15 +39,17 @@ function crc32(data: Buffer) {
   return (crc ^ 0xFFFFFFFF) >>> 0
 }
 
-function dosDateTime(date: Date) {
-  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2)
-  const day = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
-  return { time, day }
+/** ZIP entry times are zone-less DOS wall clocks; fill them from a wall clock in the app time zone. */
+function dosDateTime(value: LocalDateTime) {
+  const [year, month, day, hour, minute, second] = value.split(/[- :]/).map(Number) as [number, number, number, number, number, number]
+  const time = (hour << 11) | (minute << 5) | Math.floor(second / 2)
+  const date = ((Math.max(year, 1980) - 1980) << 9) | (month << 5) | day
+  return { time, day: date }
 }
 
 /** Builds a stored/deflated ZIP archive (the container format of .xlsx). */
-function buildZip(entries: Array<{ name: string, data: Buffer }>) {
-  const { time, day } = dosDateTime(new Date())
+function buildZip(entries: Array<{ name: string, data: Buffer }>, modifiedAt: LocalDateTime) {
+  const { time, day } = dosDateTime(modifiedAt)
   const localParts: Buffer[] = []
   const centralParts: Buffer[] = []
   let offset = 0
@@ -314,8 +317,11 @@ export function buildXlsxWorkbook(params: {
   letterhead?: { name: string, addressLines: string[] } | null
   /** Logo anchored at the top-right of the table, matching the generated PDFs. */
   logo?: { mimeType: string, data: Buffer } | null
+  /** File timestamp inside the archive — the current wall clock in the app time zone. */
+  modifiedAt: LocalDateTime
 }) {
   const {
+    modifiedAt,
     sheetName,
     title,
     subtitle = '',
@@ -466,5 +472,5 @@ ${drawing ? '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/off
     )
   }
 
-  return buildZip(entries)
+  return buildZip(entries, modifiedAt)
 }

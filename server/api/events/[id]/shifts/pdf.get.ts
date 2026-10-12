@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     return { ok: false, error: 'Not authorized' }
   }
 
-  const eventRows = await query<Array<{ name: string, starts_at: string | Date, ends_at: string | Date, location: string | null }>>(
+  const eventRows = await query<Array<{ name: string, starts_at: string, ends_at: string, location: string | null }>>(
     `SELECT name, starts_at, ends_at, location
      FROM events
      WHERE id = ?
@@ -28,13 +28,7 @@ export default defineEventHandler(async (event) => {
   )
   if (!eventRows[0]) return { ok: false, error: 'Event not found' }
 
-  const formatDateTime = (value: string | Date) => {
-    if (value instanceof Date) {
-      const pad = (part: number) => String(part).padStart(2, '0')
-      return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`
-    }
-    return String(value).trim().replace(' ', 'T').slice(0, 16)
-  }
+  const formatDateTime = (value: string) => String(value).trim().replace(' ', 'T').slice(0, 16)
 
   const eventInfo: ShiftPlanEventInfo = {
     name: String(eventRows[0].name),

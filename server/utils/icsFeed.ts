@@ -1,4 +1,4 @@
-import { ASSOCIATION_TIME_ZONE } from '~/server/utils/notifications/time'
+import { localDateTimeToInstant, normalizeLocalDateTime } from '~/shared/time'
 
 const CRLF = '\r\n'
 
@@ -85,40 +85,10 @@ function formatUtcTimestamp(date: Date): string {
   )
 }
 
-const OFFSET_PARTS = new Intl.DateTimeFormat('en-GB', {
-  timeZone: ASSOCIATION_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-})
-
-/** Offset of the association's zone from UTC at the given instant, in milliseconds. */
-function zoneOffsetMs(instantMs: number): number {
-  const parts = OFFSET_PARTS.formatToParts(new Date(instantMs))
-  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(part => part.type === type)?.value ?? 0)
-  // Some engines render midnight as hour "24" under hour12: false.
-  const hour = get('hour') === 24 ? 0 : get('hour')
-  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second'))
-  return asUtc - (instantMs - (instantMs % 1000))
-}
-
-function formatLocalDateTime(value: string): string {
-  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
-  if (!match) return ''
-
-  const [, year, month, day, hours, minutes, seconds] = match
-  const wallClockAsUtc = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds ?? 0))
-
-  // First guess with the offset at the wall-clock moment, then re-check at the resulting instant
-  // so times right after a DST switch use the offset actually in force then.
-  let instant = wallClockAsUtc - zoneOffsetMs(wallClockAsUtc)
-  instant = wallClockAsUtc - zoneOffsetMs(instant)
-
-  return formatUtcTimestamp(new Date(instant))
+function formatLocalDateTime(value: string, timeZone: string): string {
+  const normalized = normalizeLocalDateTime(String(value).trim().slice(0, 19))
+  if (!normalized) return ''
+  return formatUtcTimestamp(localDateTimeToInstant(normalized, timeZone))
 }
 
 function formatAllDayDate(value: string): string {
@@ -150,6 +120,8 @@ export interface BuildIcsFeedArgs {
   appointments: IcsFeedAppointment[]
   calendarName: string
   host: string
+  /** The app time zone every DATETIME in the feed is meant in. */
+  timeZone: string
 }
 
 export function buildIcsFeed({
@@ -159,6 +131,7 @@ export function buildIcsFeed({
   appointments,
   calendarName,
   host,
+  timeZone,
 }: BuildIcsFeedArgs): string {
   const dtstamp = formatUtcTimestamp(new Date())
   const lines: string[] = []
@@ -169,7 +142,7 @@ export function buildIcsFeed({
   lines.push('CALSCALE:GREGORIAN')
   lines.push('METHOD:PUBLISH')
   lines.push(`X-WR-CALNAME:${escapeIcsText(calendarName)}`)
-  lines.push(`X-WR-TIMEZONE:${ASSOCIATION_TIME_ZONE}`)
+  lines.push(`X-WR-TIMEZONE:${timeZone}`)
   lines.push('REFRESH-INTERVAL;VALUE=DURATION:PT1H')
   lines.push('X-PUBLISHED-TTL:PT1H')
 
@@ -177,8 +150,8 @@ export function buildIcsFeed({
     lines.push('BEGIN:VEVENT')
     lines.push(`UID:event-${evt.id}@${host}`)
     lines.push(`DTSTAMP:${dtstamp}`)
-    lines.push(`DTSTART:${formatLocalDateTime(evt.starts_at)}`)
-    lines.push(`DTEND:${formatLocalDateTime(evt.ends_at)}`)
+    lines.push(`DTSTART:${formatLocalDateTime(evt.starts_at, timeZone)}`)
+    lines.push(`DTEND:${formatLocalDateTime(evt.ends_at, timeZone)}`)
     lines.push(`SUMMARY:${escapeIcsText(evt.name)}`)
     if (evt.location) lines.push(`LOCATION:${escapeIcsText(evt.location)}`)
     if (evt.description) lines.push(`DESCRIPTION:${escapeIcsText(evt.description)}`)
@@ -189,8 +162,8 @@ export function buildIcsFeed({
     lines.push('BEGIN:VEVENT')
     lines.push(`UID:shift-${shift.id}@${host}`)
     lines.push(`DTSTAMP:${dtstamp}`)
-    lines.push(`DTSTART:${formatLocalDateTime(shift.starts_at)}`)
-    lines.push(`DTEND:${formatLocalDateTime(shift.ends_at)}`)
+    lines.push(`DTSTART:${formatLocalDateTime(shift.starts_at, timeZone)}`)
+    lines.push(`DTEND:${formatLocalDateTime(shift.ends_at, timeZone)}`)
     lines.push(`SUMMARY:${escapeIcsText(`Schicht: ${shift.name} (${shift.eventName})`)}`)
     if (shift.location) lines.push(`LOCATION:${escapeIcsText(shift.location)}`)
     if (shift.description) lines.push(`DESCRIPTION:${escapeIcsText(shift.description)}`)
@@ -204,7 +177,7 @@ export function buildIcsFeed({
     lines.push(`UID:task-${task.id}@${host}`)
     lines.push(`DTSTAMP:${dtstamp}`)
     if (hasTime) {
-      lines.push(`DTSTART:${formatLocalDateTime(task.deadline)}`)
+      lines.push(`DTSTART:${formatLocalDateTime(task.deadline, timeZone)}`)
     } else {
       lines.push(`DTSTART;VALUE=DATE:${formatAllDayDate(task.deadline)}`)
     }
@@ -223,8 +196,8 @@ export function buildIcsFeed({
       lines.push(`DTSTART;VALUE=DATE:${formatAllDayDate(appointment.starts_at)}`)
       lines.push(`DTEND;VALUE=DATE:${nextDay(appointment.ends_at)}`)
     } else {
-      lines.push(`DTSTART:${formatLocalDateTime(appointment.starts_at)}`)
-      lines.push(`DTEND:${formatLocalDateTime(appointment.ends_at)}`)
+      lines.push(`DTSTART:${formatLocalDateTime(appointment.starts_at, timeZone)}`)
+      lines.push(`DTEND:${formatLocalDateTime(appointment.ends_at, timeZone)}`)
     }
     lines.push(`SUMMARY:${escapeIcsText(appointment.title)}`)
     if (appointment.location) lines.push(`LOCATION:${escapeIcsText(appointment.location)}`)

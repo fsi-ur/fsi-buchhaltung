@@ -10,7 +10,6 @@ import {
   type CalendarTaskStatus,
 } from '~/server/utils/calendarSources'
 import { agendaPlainText } from '~/server/utils/appointments'
-import { formatWallClock } from '~/server/utils/appointments/recurrence'
 import { getUserPermissions, getUserPositionIds, getUserRoleIds } from '~/server/utils/permissions'
 import {
   buildIcsFeed,
@@ -19,6 +18,8 @@ import {
   type IcsFeedShift,
   type IcsFeedTaskDeadline,
 } from '~/server/utils/icsFeed'
+import { addMinutesToLocalDateTime, nowLocalDateTime } from '~/shared/time'
+import { getAppTimeZone } from '~/server/utils/time'
 
 const TASK_STATUS_LABELS: Record<CalendarTaskStatus, string> = {
   open: 'Offen',
@@ -88,10 +89,11 @@ export default defineEventHandler(async (event) => {
   )
   const memberId = memberRows[0] ? Number(memberRows[0].id) : null
 
-  const now = new Date()
+  const timeZone = await getAppTimeZone()
+  const now = nowLocalDateTime(timeZone)
   const appointmentWindow = {
-    from: formatWallClock(new Date(now.getTime() - APPOINTMENT_PAST_DAYS * 86400000)),
-    to: formatWallClock(new Date(now.getTime() + APPOINTMENT_FUTURE_DAYS * 86400000)),
+    from: addMinutesToLocalDateTime(now, -APPOINTMENT_PAST_DAYS * 24 * 60),
+    to: addMinutesToLocalDateTime(now, APPOINTMENT_FUTURE_DAYS * 24 * 60),
   }
 
   // The same loaders the in-app calendar uses, so both surfaces can never show different things.
@@ -176,6 +178,7 @@ export default defineEventHandler(async (event) => {
     appointments: icsAppointments,
     calendarName: 'FSi Kalender',
     host,
+    timeZone,
   })
 
   setHeader(event, 'Content-Type', 'text/calendar; charset=utf-8')

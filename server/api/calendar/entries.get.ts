@@ -15,6 +15,8 @@ import { getMemberIdForUser, resolveAppointmentViewer } from '~/server/utils/app
 import { hasPermission } from '~/server/utils/api/guards'
 import { formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import type { AppointmentTypeRow, CalendarEntry } from '~/types/appointment'
+import { addDaysToLocalDate, type LocalDate } from '~/shared/time'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface GetCalendarEntriesSuccess {
   ok: true
@@ -38,7 +40,7 @@ export default defineEventHandler(async (event): Promise<GetCalendarEntriesRespo
   if (!current.ok) return current
 
   const params = getQuery(event)
-  const window = resolveWindow(params.from, params.to)
+  const window = resolveWindow(params.from, params.to, await appTodayLocalDate())
   if (!window) return { ok: false, error: 'Ungültiger Zeitraum.' }
 
   const viewer = await resolveAppointmentViewer(current.user)
@@ -72,16 +74,14 @@ export default defineEventHandler(async (event): Promise<GetCalendarEntriesRespo
   }
 })
 
-/** Defaults to the current month when the client sends nothing usable. */
-function resolveWindow(from: unknown, to: unknown): CalendarWindow | null {
+function resolveWindow(from: unknown, to: unknown, today: LocalDate): CalendarWindow | null {
   const parsedFrom = parseWallClock(typeof from === 'string' ? normalizeBoundary(from, '00:00:00') : null)
   const parsedTo = parseWallClock(typeof to === 'string' ? normalizeBoundary(to, '23:59:59') : null)
 
   if (!parsedFrom || !parsedTo) {
-    const now = new Date()
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59))
-    return { from: formatWallClock(start), to: formatWallClock(end) }
+    const monthStart = `${today.slice(0, 7)}-01`
+    const monthEnd = addDaysToLocalDate(addDaysToLocalDate(monthStart, 31).slice(0, 7) + '-01', -1)
+    return { from: `${monthStart} 00:00:00`, to: `${monthEnd} 23:59:59` }
   }
 
   if (parsedTo.getTime() < parsedFrom.getTime()) return null

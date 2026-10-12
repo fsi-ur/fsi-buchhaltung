@@ -1,6 +1,7 @@
 import type mariadb from 'mariadb'
 import type { CreateBankStatementBody, CreateBankStatementPositionBody } from '~/types/bankStatement'
 import { query } from '~/server/utils/db'
+import { isLocalDate, normalizeLocalDateTime } from '~/shared/time'
 
 export function normalizeBankStatementPosition(
   position: CreateBankStatementPositionBody,
@@ -25,7 +26,7 @@ export function normalizeBankStatementBody(body: CreateBankStatementBody) {
   return {
     statement_number: String(body.statement_number || '').trim(),
     checked_by: Number(body.checked_by || 0),
-    statement_date: String(body.statement_date || ''),
+    statement_date: normalizeLocalDateTime(body.statement_date) ?? String(body.statement_date || ''),
     positions: Array.isArray(body.positions)
       ? body.positions.map(p => normalizeBankStatementPosition(p))
       : [],
@@ -35,11 +36,11 @@ export function normalizeBankStatementBody(body: CreateBankStatementBody) {
 export function validateBankStatementBody(body: ReturnType<typeof normalizeBankStatementBody>) {
   if (!body.statement_number) return 'Statement number is required'
   if (!body.checked_by) return 'checked_by is required'
-  if (!body.statement_date || !Number.isFinite(Date.parse(body.statement_date))) return 'Valid statement_date is required'
+  if (!normalizeLocalDateTime(body.statement_date)) return 'Valid statement_date is required'
   if (!body.positions.length) return 'At least one position is required'
 
   for (const position of body.positions) {
-    if (!position.position_date || !Number.isFinite(Date.parse(position.position_date))) {
+    if (!isLocalDate(String(position.position_date ?? '').slice(0, 10))) {
       return 'Each position must have a valid date'
     }
     if (position.position_type === 'receipt' && !position.receipt_id) return 'Each receipt position must reference a receipt'

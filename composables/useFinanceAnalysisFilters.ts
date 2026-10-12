@@ -57,9 +57,10 @@ export function shiftDateByYears(value: string, years: number) {
 
 export function useFinanceAnalysisFilters() {
   const { t, locale } = useI18n()
-  const currentYear = new Date().getFullYear()
+  const today = useAppTimeZone().today()
+  const currentYear = Number(today.slice(0, 4))
 
-  const defaultSemester = currentSemesterPeriod()
+  const defaultSemester = currentSemesterPeriod(today)
 
   const startDate = ref(defaultSemester.semester === 'summer'
     ? `${defaultSemester.year}-04-01`

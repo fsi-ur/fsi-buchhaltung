@@ -3,6 +3,7 @@ import { getSessionByToken, touchSession, inactivityMinutes, deleteSessionByToke
 import { getUserPermissions, getUserPositionIds, getUserRoleIds } from './permissions'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { User } from '~/types/user'
+import { parseInstant } from '~/shared/time'
 
 interface SessionSuccess {
   ok: true
@@ -33,11 +34,12 @@ export async function getCurrentUserFromEvent(event: any, touch: boolean): Promi
   const mustChangePassword = session.must_change_password === 1 || session.must_change_password === '1'
 
   const now = new Date()
-  if (session.expires_at && new Date(session.expires_at + 'Z') < now) {
+  const expiresAt = parseInstant(session.expires_at)
+  if (expiresAt && expiresAt < now) {
     return { ok: false, error: "session expired" }
   }
 
-  const lastActive = new Date(session.last_active_at + 'Z')
+  const lastActive = parseInstant(session.last_active_at) ?? new Date(0)
   const inactivityLimit = new Date(lastActive.getTime() + inactivityMinutes * 60 * 1000)
 
   if (inactivityLimit < now) {

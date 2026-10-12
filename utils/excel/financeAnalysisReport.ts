@@ -1,3 +1,4 @@
+import { addDaysToLocalDate, isLocalDate, type LocalDateTime } from '~/shared/time'
 ﻿import type { CostCentreRow } from '~/types/costCentre'
 import type { BudgetCostCentreLine } from '~/types/budget'
 import type {
@@ -32,6 +33,7 @@ interface TranslateFunction {
 }
 
 interface FinanceAnalysisReportFormatters {
+  nowLocal: () => LocalDateTime
   formatCurrency: (value: number) => string
   formatDate: (value: string) => string
   formatDateTime: (value: string) => string
@@ -247,13 +249,7 @@ function roundCurrency(value: number) {
 }
 
 function addOneDay(dateString: string) {
-  const parts = dateString.split('-').map(Number)
-  if (parts.length !== 3 || parts.some(value => Number.isNaN(value))) return dateString
-
-  const [year, month, day] = parts as [number, number, number]
-  const next = new Date(year, month - 1, day)
-  next.setDate(next.getDate() + 1)
-  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+  return isLocalDate(dateString) ? addDaysToLocalDate(dateString, 1) : dateString
 }
 
 function buildVisibleStatementCostCentres(
@@ -1709,6 +1705,7 @@ function buildWorkbook(options: FinanceAnalysisReportOptions) {
 
   return createSpreadsheetWorkbook({
     sheets: sheets.map(sheet => prependWorksheetBranding(sheet, options.logo)),
+    modifiedAt: options.nowLocal(),
   })
 }
 

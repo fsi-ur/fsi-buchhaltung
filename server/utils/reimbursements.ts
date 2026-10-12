@@ -1,5 +1,6 @@
 import type { CreateReimbursementBody } from '~/types/reimbursement'
 import { ReceiptStatus } from '~/types/receipt'
+import { isLocalDate } from '~/shared/time'
 
 export function statusFromReimbursement(reimbursement: CreateReimbursementBody): ReceiptStatus {
   if (reimbursement.disbursed_at) return ReceiptStatus.Paid
@@ -26,6 +27,9 @@ export function validateReimbursementBody(reimbursement: CreateReimbursementBody
   }
   if (Boolean(reimbursement.disbursed_by) !== Boolean(reimbursement.disbursed_at)) {
     return 'disbursed_by and disbursed_at must both be set or both be empty'
+  }
+  for (const value of [reimbursement.submitted_at, reimbursement.checked_at, reimbursement.disbursed_at]) {
+    if (value && !isLocalDate(value)) return 'Dates must be given as YYYY-MM-DD'
   }
 
   return null

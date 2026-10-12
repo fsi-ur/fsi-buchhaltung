@@ -1,3 +1,5 @@
+-- Time columns follow one rule (shared/time.ts): TIMESTAMP = instant (UTC), DATETIME = wall clock in
+-- the app time zone (app_settings.app_time_zone), DATE = calendar day in the app time zone.
 -- Schema initialization for fsi-buchhaltung
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -6,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   must_change_password TINYINT(1) NOT NULL DEFAULT 0,
   calendar_token_hash CHAR(64) NULL,
-  calendar_token_created_at DATETIME NULL
+  calendar_token_created_at TIMESTAMP NULL DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -476,10 +478,10 @@ CREATE TABLE IF NOT EXISTS reimbursements (
   bic VARCHAR(11),
   advance DECIMAL(10,2) NOT NULL DEFAULT 0,
   cash TINYINT(1) NOT NULL,
-  submitted_at TIMESTAMP NOT NULL,
-  checked_at TIMESTAMP,
+  submitted_at DATE NOT NULL,
+  checked_at DATE NULL,
   checked_by BIGINT UNSIGNED,
-  disbursed_at TIMESTAMP,
+  disbursed_at DATE NULL,
   disbursed_by BIGINT UNSIGNED,
   FOREIGN KEY (paid_by) REFERENCES members(id),
   FOREIGN KEY (checked_by) REFERENCES members(id),
@@ -500,8 +502,8 @@ CREATE TABLE IF NOT EXISTS cash_counts (
   counted_by_first BIGINT UNSIGNED NOT NULL,
   counted_by_second BIGINT UNSIGNED NOT NULL,
   checked_by BIGINT UNSIGNED NOT NULL,
-  counted_before_at TIMESTAMP NULL,
-  counted_after_at TIMESTAMP NOT NULL,
+  counted_before_at DATETIME NULL,
+  counted_after_at DATETIME NOT NULL,
   FOREIGN KEY (event_id) REFERENCES events(id),
   FOREIGN KEY (counted_by_first) REFERENCES members(id),
   FOREIGN KEY (counted_by_second) REFERENCES members(id),
@@ -523,7 +525,7 @@ CREATE TABLE IF NOT EXISTS bank_statements (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   statement_number VARCHAR(50) NOT NULL,
   checked_by BIGINT UNSIGNED NOT NULL,
-  statement_date TIMESTAMP NOT NULL,
+  statement_date DATETIME NOT NULL,
   FOREIGN KEY (checked_by) REFERENCES members(id)
 );
 
@@ -551,7 +553,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
   scheduled_for DATETIME NOT NULL,
   created_by BIGINT UNSIGNED NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL,
   sent_at DATETIME NULL,
   cancelled_at DATETIME NULL,
   recipient_rule TEXT NOT NULL,
@@ -608,7 +610,7 @@ CREATE TABLE IF NOT EXISTS notification_push_subscriptions (
   p256dh VARCHAR(255) NOT NULL,
   auth VARCHAR(255) NOT NULL,
   user_agent VARCHAR(255) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL,
   last_used_at DATETIME NULL,
   UNIQUE KEY uq_push_endpoint (endpoint),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -876,8 +878,8 @@ CREATE TABLE IF NOT EXISTS appointments (
   notify_reminder TINYINT(1) NOT NULL DEFAULT 1,
   reminder_lead_minutes VARCHAR(64) NULL,
   created_by BIGINT UNSIGNED NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_appointments_starts_at (starts_at),
   FOREIGN KEY (type_id) REFERENCES appointment_types(id),
   FOREIGN KEY (created_by) REFERENCES users(id)
@@ -922,7 +924,7 @@ CREATE TABLE IF NOT EXISTS appointment_responses (
   occurrence_date DATETIME NOT NULL,
   response ENUM('yes','no','maybe') NOT NULL,
   comment VARCHAR(255) NULL,
-  responded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  responded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY unique_appointment_response (appointment_id, member_id, occurrence_date),
   FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
   FOREIGN KEY (member_id) REFERENCES members(id)
@@ -933,7 +935,7 @@ CREATE TABLE IF NOT EXISTS association_documents (
   title VARCHAR(191) NOT NULL,
   description VARCHAR(500) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_by BIGINT UNSIGNED NULL,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
@@ -943,7 +945,7 @@ CREATE TABLE IF NOT EXISTS entity_documents (
   entity_type VARCHAR(50) NOT NULL,
   entity_id BIGINT UNSIGNED NOT NULL,
   document_id BIGINT UNSIGNED NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_by BIGINT UNSIGNED NULL,
   UNIQUE KEY uq_entity_document (entity_type, entity_id, document_id),
   KEY idx_entity_documents_document (document_id),

@@ -93,8 +93,8 @@ describe('my open tasks', () => {
   it('sets the status and drops pending deadline reminders once done', async () => {
     const task = await createTask(eventId, 'Fertig machen', { deadline: '2099-01-01' })
     await query(
-      `INSERT INTO notifications (type_key, status, scheduled_for, recipient_rule, dedupe_key)
-       VALUES ('task.deadline_reminder', 'scheduled', '2098-12-31 00:00:00', '{}', ?)`,
+      `INSERT INTO notifications (type_key, status, scheduled_for, created_at, recipient_rule, dedupe_key)
+       VALUES ('task.deadline_reminder', 'scheduled', '2098-12-31 00:00:00', '2098-12-01 00:00:00', '{}', ?)`,
       [`task.deadline_reminder:${task}:2880`],
     )
 

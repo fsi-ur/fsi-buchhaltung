@@ -40,6 +40,7 @@ import { useAuth } from '~/composables/useAuth'
 import BankStatementForm from './Form.vue'
 import type { CreateBankStatementBody } from '~/types/bankStatement'
 import type { GetBankStatementResponse } from '~/server/api/bank_statements/[id].get'
+const { nowLocal } = useAppTimeZone()
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -69,7 +70,7 @@ const openingBalance = ref(0)
 const form = ref<CreateBankStatementBody>({
   statement_number: '',
   checked_by: 0,
-  statement_date: new Date().toISOString().slice(0, 16),
+  statement_date: nowLocal().slice(0, 16),
   positions: [{ position_type: 'receipt', position_date: '', receipt_id: null, invoice_id: null, event_id: null, amount: 0, notes: null }],
 })
 
@@ -77,7 +78,7 @@ function applyDraft(draft: Partial<CreateBankStatementBody>) {
   form.value = {
     statement_number: draft.statement_number || '',
     checked_by: Number(draft.checked_by || 0),
-    statement_date: draft.statement_date || new Date().toISOString().slice(0, 16),
+    statement_date: draft.statement_date || nowLocal().slice(0, 16),
     positions: Array.isArray(draft.positions) ? draft.positions.map(p => ({
       id: p.id,
       position_type: p.position_type,

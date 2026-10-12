@@ -49,7 +49,7 @@ export const pushChannel: NotificationChannel = {
     const results = await Promise.allSettled(subscriptions.map(async (sub) => {
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
-        await query(`UPDATE notification_push_subscriptions SET last_used_at = ? WHERE id = ?`, [localWallClockNow(), sub.id])
+        await query(`UPDATE notification_push_subscriptions SET last_used_at = ? WHERE id = ?`, [await localWallClockNow(), sub.id])
       } catch (err: any) {
         if (err?.statusCode === 404 || err?.statusCode === 410) {
           await query(`DELETE FROM notification_push_subscriptions WHERE id = ?`, [sub.id])

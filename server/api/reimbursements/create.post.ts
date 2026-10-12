@@ -35,7 +35,6 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
   if (validationError) return { ok: false, error: validationError }
 
   const submittedAt = reimbursement.submitted_at
-    || new Date().toISOString().slice(0, 19).replace('T', ' ')
 
   try {
     return await withAuditTransaction(current.user, async (conn) => {

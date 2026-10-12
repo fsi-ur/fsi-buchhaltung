@@ -33,6 +33,7 @@ import { usePage } from '~/composables/usePage'
 import { useAuth } from '~/composables/useAuth'
 import type { CreateCashCountBody } from '~/types/cashCount'
 import type { GetCashCountResponse } from '~/server/api/cash_counts/[id].get'
+import { normalizeLocalDateTime } from '~/shared/time'
 
 const emit = defineEmits<{
   (e: 'openMenu'): void
@@ -111,9 +112,9 @@ function onRemoveFile() {
 function hasValidDateOrder() {
   if (form.value.event_id === null) return true
   if (!form.value.counted_before_at) return false
-  const beforeTs = Date.parse(form.value.counted_before_at)
-  const afterTs = Date.parse(form.value.counted_after_at)
-  return Number.isFinite(beforeTs) && Number.isFinite(afterTs) && afterTs > beforeTs
+  const before = normalizeLocalDateTime(form.value.counted_before_at)
+  const after = normalizeLocalDateTime(form.value.counted_after_at)
+  return Boolean(before && after && after > before)
 }
 
 function hasCompletePositions() {

@@ -1,4 +1,5 @@
 import type { CalendarEntry, CalendarSource } from '~/types/appointment'
+import { nowLocalDateTime, todayLocalDate, wallClockFrame } from '~/shared/time'
 
 export type CalendarViewMode = 'month' | 'week' | 'list'
 
@@ -23,30 +24,12 @@ export const WEEKDAY_KEYS = ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'su'] as const
 const STORAGE_KEY = 'calendar-sources'
 const ALL_SOURCES: CalendarSource[] = ['appointment', 'event', 'shift', 'task']
 
-const BERLIN_TIME_ZONE = 'Europe/Berlin'
-const BERLIN_PARTS = new Intl.DateTimeFormat('en-GB', {
-  timeZone: BERLIN_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-})
-
 function pad2(value: number) {
   return String(value).padStart(2, '0')
 }
 
-export function nowInBerlin(): Date {
-  const parts = BERLIN_PARTS.formatToParts(new Date())
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? '00'
-  const hour = get('hour') === '24' ? '00' : get('hour')
-  return new Date(Date.UTC(
-    Number(get('year')), Number(get('month')) - 1, Number(get('day')),
-    Number(hour), Number(get('minute')), Number(get('second')),
-  ))
+export function nowWallClockFrame(timeZone: string): Date {
+  return wallClockFrame(nowLocalDateTime(timeZone))
 }
 
 export function dayKeyOf(value: string): string {
@@ -70,8 +53,8 @@ export function startOfWeek(date: Date): Date {
   return new Date(date.getTime() - weekdayIndexOf(date) * 86400000)
 }
 
-export function todayKey(): string {
-  return toDayKey(nowInBerlin())
+export function todayKey(timeZone: string): string {
+  return todayLocalDate(timeZone)
 }
 
 function buildDay(date: Date, currentMonth: number, today: string): CalendarDay {
@@ -99,8 +82,7 @@ export function isoWeekNumber(date: Date): number {
   return 1 + Math.round((day.getTime() - firstThursday.getTime()) / (7 * 86400000))
 }
 
-export function buildMonthMatrix(anchor: Date): CalendarDay[][] {
-  const today = todayKey()
+export function buildMonthMatrix(anchor: Date, today: string): CalendarDay[][] {
   const first = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1))
   const gridStart = startOfWeek(first)
 
@@ -115,8 +97,7 @@ export function buildMonthMatrix(anchor: Date): CalendarDay[][] {
   return weeks
 }
 
-export function buildWeekDays(anchor: Date): CalendarDay[] {
-  const today = todayKey()
+export function buildWeekDays(anchor: Date, today: string): CalendarDay[] {
   const start = startOfWeek(anchor)
 
   return Array.from({ length: 7 }, (_, index) =>
@@ -135,7 +116,7 @@ export function windowForView(anchor: Date, mode: CalendarViewMode): { from: str
     return { from: `${toDayKey(start)} 00:00:00`, to: `${toDayKey(end)} 23:59:59` }
   }
 
-  const matrix = buildMonthMatrix(anchor)
+  const matrix = buildMonthMatrix(anchor, '')
   const firstDay = matrix[0]?.[0]
   const lastWeek = matrix[matrix.length - 1]
   const lastDay = lastWeek?.[lastWeek.length - 1]

@@ -2,27 +2,24 @@ import { ref, computed } from 'vue'
 import { useToast } from '~/composables/useToast'
 import type { AuditFilters, AuditGroup } from '~/types/audit'
 import type { GetAuditLogResponse } from '~/server/api/audit/index.get'
+import { startOfLocalDate, todayLocalDate } from '~/shared/time'
+import { useAppTimeZone } from '~/composables/useAppTimeZone'
 
 export interface AuditQuickRange {
   key: 'today' | '7d' | '30d' | 'all'
 }
 
-function quickRangeFrom(key: AuditQuickRange['key']): string | undefined {
+function quickRangeFrom(key: AuditQuickRange['key'], timeZone: string): string | undefined {
   if (key === 'all') return undefined
   const now = new Date()
-  const from = new Date(now)
-  if (key === 'today') {
-    from.setHours(0, 0, 0, 0)
-  } else if (key === '7d') {
-    from.setDate(from.getDate() - 7)
-  } else if (key === '30d') {
-    from.setDate(from.getDate() - 30)
-  }
-  return from.toISOString().slice(0, 19).replace('T', ' ')
+  if (key === 'today') return startOfLocalDate(todayLocalDate(timeZone, now), timeZone).toISOString()
+  const days = key === '7d' ? 7 : 30
+  return new Date(now.getTime() - days * 86400000).toISOString()
 }
 
 export function useAuditLog() {
   const toast = useToast()
+  const { timeZone } = useAppTimeZone()
 
   const groups = ref<AuditGroup[]>([])
   const loading = ref(false)
@@ -40,7 +37,7 @@ export function useAuditLog() {
 
   function buildFilters(): AuditFilters {
     return {
-      from: quickRangeFrom(quickRange.value),
+      from: quickRangeFrom(quickRange.value, timeZone.value),
       userIds: userFilter.value.length ? [...userFilter.value] : undefined,
       tables: tableFilter.value.length ? tableFilter.value : undefined,
       domains: domainFilter.value.length ? domainFilter.value : undefined,

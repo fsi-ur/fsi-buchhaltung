@@ -121,6 +121,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import { downloadMemberListExport, type MemberExportFormat } from '~/utils/memberExportDownload'
 import { MemberStatus, type MemberExportColumn, type MemberExportConfig, type MemberExportDataColumnKey } from '~/types/member'
+const { today: appToday } = useAppTimeZone()
 
 const props = defineProps<{
   modelValue: boolean
@@ -167,9 +168,8 @@ const dataColumnOptions = computed<Array<{ key: MemberExportDataColumnKey, label
 ])
 
 function formattedToday() {
-  const today = new Date()
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${pad(today.getDate())}.${pad(today.getMonth() + 1)}.${today.getFullYear()}`
+  const today = appToday()
+  return `${today.slice(8, 10)}.${today.slice(5, 7)}.${today.slice(0, 4)}`
 }
 
 function applyAttendancePreset() {

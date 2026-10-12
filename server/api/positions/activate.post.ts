@@ -3,6 +3,7 @@ import type { ActivateResponse } from '~/types/activate'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toggleActiveRecord } from '~/server/utils/api/toggle'
 import { query, withAuditTransaction } from '~/server/utils/db'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface PositionActivateBody {
   id: number
@@ -28,14 +29,6 @@ interface PositionAssignmentRow {
 function isValidDate(value: string | null | undefined) {
   if (!value) return false
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
-}
-
-function todayValue() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 export default defineEventHandler(async (event): Promise<ActivateResponse> => {
@@ -99,7 +92,7 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       if (!assignments.length) return { ok: true as const }
 
       const effectiveEndDate = assignment_until?.trim() || null
-      const futureCutoff = effectiveEndDate || todayValue()
+      const futureCutoff = effectiveEndDate || await appTodayLocalDate(conn)
 
       if (effectiveEndDate) {
         const assignmentsToClose = assignments.filter(assignment => (

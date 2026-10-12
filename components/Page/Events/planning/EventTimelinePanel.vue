@@ -210,6 +210,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { EventTimelineItem, EventTimelineKind, EventPlanningTabKey } from './types'
+import { diffLocalDates } from '~/shared/time'
+const { today: appToday } = useAppTimeZone()
 
 const props = defineProps<{
   items: EventTimelineItem[]
@@ -275,8 +277,7 @@ const kindFilters = computed<{ kind: FilterKind; label: string; icon: string; co
 ])
 
 function todayDateKey(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return appToday()
 }
 
 function rawToDateKey(raw: string): string {
@@ -440,7 +441,7 @@ function buildGroup(dateKey: string, today: string, items: EventTimelineItem[]):
     dateLabel = dateKey
   }
 
-  const daysFromToday = Math.round((Date.parse(dateKey) - Date.parse(today)) / 86400000)
+  const daysFromToday = diffLocalDates(today, dateKey)
 
   return {
     dateKey,

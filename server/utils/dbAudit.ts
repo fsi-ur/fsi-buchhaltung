@@ -16,6 +16,7 @@ interface TableColumnRow {
   TABLE_NAME: string
   COLUMN_NAME: string
   ORDINAL_POSITION: number
+  DATA_TYPE: string
 }
 
 interface TablePrimaryKeyRow {
@@ -28,6 +29,7 @@ export interface AuditedTableMetadata {
   name: string
   columns: string[]
   primaryKeyColumns: string[]
+  timestampColumns: string[]
 }
 
 const EXCLUDED_AUDIT_TABLES = new Set([
@@ -68,7 +70,7 @@ async function loadAuditedTableMetadata(conn: mariadb.PoolConnection) {
 
   const [columnRows, primaryKeyRows] = await Promise.all([
     conn.query<TableColumnRow[]>(
-      `SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION
+      `SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, DATA_TYPE
        FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = ?
        ORDER BY TABLE_NAME ASC, ORDINAL_POSITION ASC`,
@@ -97,8 +99,10 @@ async function loadAuditedTableMetadata(conn: mariadb.PoolConnection) {
       name: row.TABLE_NAME,
       columns: [],
       primaryKeyColumns: [],
+      timestampColumns: [],
     }
     table.columns.push(row.COLUMN_NAME)
+    if (String(row.DATA_TYPE).toLowerCase() === 'timestamp') table.timestampColumns.push(row.COLUMN_NAME)
     metadata.set(row.TABLE_NAME, table)
   }
 

@@ -1,5 +1,6 @@
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { applyMemberLeftStatusActions } from '~/server/utils/members'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 interface DueMemberRow {
   id: number
@@ -10,11 +11,12 @@ interface DueMemberRow {
 }
 
 async function findDueMembers() {
+  const today = await appTodayLocalDate()
   return query<DueMemberRow[]>(
     `SELECT m.id, m.account, m.first_name, m.last_name, m.left_at
      FROM members m
      WHERE m.status = 'left'
-       AND m.left_at < CURDATE()
+       AND m.left_at < ?
        AND (
          (m.account IS NOT NULL AND EXISTS (
            SELECT 1 FROM users u WHERE u.id = m.account AND u.is_active = 1
@@ -32,6 +34,7 @@ async function findDueMembers() {
              AND mp.since > m.left_at
          )
        )`,
+    [today],
   )
 }
 

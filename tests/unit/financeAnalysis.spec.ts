@@ -252,13 +252,13 @@ describe('detectPeriodShortcut', () => {
 
 describe('currentSemesterPeriod', () => {
   it('maps April to September onto the summer semester of that year', () => {
-    expect(currentSemesterPeriod(new Date(2025, 3, 1))).toEqual({ year: 2025, semester: 'summer' })
-    expect(currentSemesterPeriod(new Date(2025, 8, 30))).toEqual({ year: 2025, semester: 'summer' })
+    expect(currentSemesterPeriod('2025-04-01')).toEqual({ year: 2025, semester: 'summer' })
+    expect(currentSemesterPeriod('2025-09-30')).toEqual({ year: 2025, semester: 'summer' })
   })
 
   it('keeps January to March on the previous winter semester', () => {
-    expect(currentSemesterPeriod(new Date(2025, 9, 1))).toEqual({ year: 2025, semester: 'winter' })
-    expect(currentSemesterPeriod(new Date(2026, 0, 15))).toEqual({ year: 2025, semester: 'winter' })
-    expect(currentSemesterPeriod(new Date(2026, 2, 31))).toEqual({ year: 2025, semester: 'winter' })
+    expect(currentSemesterPeriod('2025-10-01')).toEqual({ year: 2025, semester: 'winter' })
+    expect(currentSemesterPeriod('2026-01-15')).toEqual({ year: 2025, semester: 'winter' })
+    expect(currentSemesterPeriod('2026-03-31')).toEqual({ year: 2025, semester: 'winter' })
   })
 })

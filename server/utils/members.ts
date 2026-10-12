@@ -11,6 +11,7 @@ import {
   type MemberStatusActionSummary,
   type SaveMemberBody,
 } from '~/types/member'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 export function isMemberStatus(value: unknown): value is MemberStatus {
   return value === MemberStatus.Active
@@ -255,9 +256,8 @@ export async function applyMemberLeftStatusActions({
   }
 }
 
-function isLeftDateDue(leftAt: string) {
-  const today = new Date().toISOString().slice(0, 10)
-  return leftAt <= today
+async function isLeftDateDue(leftAt: string, conn?: mariadb.PoolConnection) {
+  return String(leftAt).slice(0, 10) <= await appTodayLocalDate(conn)
 }
 
 export async function applyMemberStatusActions({
@@ -274,7 +274,7 @@ export async function applyMemberStatusActions({
     return null
   }
 
-  if (!isLeftDateDue(leftAt)) {
+  if (!await isLeftDateDue(leftAt, conn)) {
     return null
   }
 

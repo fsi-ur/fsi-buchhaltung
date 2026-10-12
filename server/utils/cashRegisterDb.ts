@@ -1,5 +1,6 @@
 import mariadb from 'mariadb'
 import { normalizeBigInt } from '~/server/utils/normalize'
+import { castTimestampColumn, normalizeQueryParams } from '~/shared/time'
 
 // Connection to the cash register (Kassensystem) database. Only active when
 // CASH_REGISTER_MODE=connected; use the restricted read-only user created by
@@ -23,6 +24,7 @@ function getPool() {
       connectionLimit: Number(process.env.CASH_REGISTER_DB_CONN_LIMIT || 2),
       dateStrings: true,
       timezone: 'UTC',
+      typeCast: castTimestampColumn,
     })
   }
 
@@ -112,7 +114,7 @@ export async function cashRegisterQuery<T = any>(sql: string, params?: unknown[]
 
   const conn = await getPool().getConnection()
   try {
-    const result = await conn.query(sql, params)
+    const result = await conn.query(sql, normalizeQueryParams(params))
     return normalizeBigInt(result)
   } finally {
     conn.release()

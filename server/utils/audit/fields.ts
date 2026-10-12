@@ -18,8 +18,10 @@ const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/
 
 /**
  * Columns are typed by DB value shape, not a per-table schema map: DATE columns serialize from
- * JSON_OBJECT() as bare "YYYY-MM-DD" and DATETIME/TIMESTAMP as "YYYY-MM-DD HH:MM:SS", so the
- * string shape alone tells the two apart without hardcoding every column.
+ * JSON_OBJECT() as bare "YYYY-MM-DD" and DATETIME as "YYYY-MM-DD HH:MM:SS" (a wall clock in the app
+ * time zone), so the string shape alone tells them apart without hardcoding every column. TIMESTAMP
+ * values have already been turned into ISO instants with "Z" by log.ts (markInstants) — still a
+ * 'datetime' here, and the client's formatter converts them because they carry their offset.
  */
 export function fieldKind(table: string, column: string, value: unknown): FieldKind {
   const def = getAuditTableDefinition(table)

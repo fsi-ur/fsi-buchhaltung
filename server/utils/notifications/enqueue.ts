@@ -55,7 +55,7 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
   // A missing scheduledFor means "as soon as the dispatcher runs", i.e. the current local wall
   // clock — NOT the database's NOW(), which is UTC (see time.ts) and would park an immediate
   // notification an hour or two in the future.
-  const scheduledFor = args.scheduledFor ? toMysqlDatetime(args.scheduledFor) : localWallClockNow()
+  const scheduledFor = args.scheduledFor ? toMysqlDatetime(args.scheduledFor) : await localWallClockNow()
   const link = definition.link?.(args.payload) ?? null
 
   try {
@@ -70,7 +70,7 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
         // Written explicitly rather than left to the column default: CURRENT_TIMESTAMP would be
         // UTC (the pool's session time zone) while every other notification timestamp is the
         // association's local wall clock.
-        localWallClockNow(),
+        await localWallClockNow(),
         args.createdByUserId ?? null,
         JSON.stringify(args.recipients),
         args.channels?.length ? args.channels.join(',') : null,
@@ -89,7 +89,7 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
     }
 
     // Due right away? Don't make it wait for the next periodic dispatch pass.
-    if (scheduledFor <= localWallClockNow()) requestImmediateDispatch()
+    if (scheduledFor <= await localWallClockNow()) requestImmediateDispatch()
 
     return { ok: true, id }
   } catch (err: any) {
@@ -101,7 +101,7 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
 export async function cancelNotification(id: number, conn?: DbConn): Promise<{ ok: true } | { ok: false, error: string }> {
   const result = await query<{ affectedRows: number }>(
     `UPDATE notifications SET status = 'cancelled', cancelled_at = ? WHERE id = ? AND status = 'scheduled'`,
-    [localWallClockNow(), id],
+    [await localWallClockNow(), id],
     conn,
   )
   if (!result.affectedRows) return { ok: false, error: 'Benachrichtigung ist bereits versendet oder existiert nicht.' }

@@ -15,8 +15,8 @@ export interface ScheduleBounds {
  * MySQL's `NOW()` — the pool runs in UTC (see notifications/time.ts), so NOW() would reject valid
  * times and accept ones already in the past by the UTC offset.
  */
-export function getScheduleBounds(): ScheduleBounds {
-  const now = localWallClockNow()
+export async function getScheduleBounds(): Promise<ScheduleBounds> {
+  const now = await localWallClockNow()
   return {
     minAllowed: shiftWallClock(now, -1),
     maxAllowed: shiftWallClock(now, 2 * 365 * 24 * 60),

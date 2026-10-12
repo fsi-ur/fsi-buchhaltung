@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import type mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import type { FileRow, FileAttachment } from '~/types/file'
+import { utcNowSql } from '~/server/utils/time'
 
 export interface UploadedFile {
   filename?: string
@@ -124,9 +125,9 @@ export async function detachFileAttachment(
 ) {
   await query(
     `UPDATE file_attachments
-     SET detached_at = NOW(), detached_by = ?
+     SET detached_at = ?, detached_by = ?
      WHERE id = ?`,
-    [userId, attachmentId],
+    [utcNowSql(), userId, attachmentId],
     conn,
   )
 }

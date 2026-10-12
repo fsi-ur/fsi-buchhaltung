@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~/server/utils/invoices'
 import { loadMembersForExport, memberExportFileName, parseMemberExportConfig } from '~/server/utils/memberExport'
 import { buildMemberListPdf } from '~/server/utils/memberListPdf'
+import { appTodayLocalDate } from '~/server/utils/time'
 
 export default defineEventHandler(async (event) => {
   const current = await requirePermission(event, 'members.view')
@@ -24,9 +25,10 @@ export default defineEventHandler(async (event) => {
     logo = null
   }
 
-  const pdf = buildMemberListPdf({ config: parsed.config, members, association, logo })
+  const createdOn = await appTodayLocalDate()
+  const pdf = buildMemberListPdf({ config: parsed.config, members, association, logo, createdOn })
 
   setHeader(event, 'Content-Type', 'application/pdf')
-  setHeader(event, 'Content-Disposition', `attachment; filename="${memberExportFileName('pdf')}"`)
+  setHeader(event, 'Content-Disposition', `attachment; filename="${memberExportFileName('pdf', createdOn)}"`)
   return pdf
 })

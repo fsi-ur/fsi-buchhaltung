@@ -218,6 +218,7 @@ import type { CreateReimbursementBody } from '~/types/reimbursement'
 import type { MemberListItem } from '~/types/member'
 import { buildReturnTarget, useReturnTarget } from '~/composables/useReturnTarget'
 import { usePage } from '~/composables/usePage'
+const { today: appToday } = useAppTimeZone()
 
 type MemberField = 'paid_by' | 'checked_by' | 'disbursed_by'
 
@@ -556,7 +557,7 @@ watch([receipts, () => form.value.positions], () => {
 }, { immediate: true, deep: true })
 
 onMounted(() => {
-  if (!form.value.submitted_at) form.value.submitted_at = new Date().toISOString().slice(0, 10)
+  if (!form.value.submitted_at) form.value.submitted_at = appToday()
   if (!form.value.positions.length) form.value.positions.push({ receipt_id: 0 })
   loadSupportData()
 })

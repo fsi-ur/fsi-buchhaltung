@@ -1,7 +1,17 @@
-﻿import { useI18n } from '~/composables/useI18n'
+import { useI18n } from '~/composables/useI18n'
+import { useAppTimeZone } from '~/composables/useAppTimeZone'
+import {
+  localDateTimeToInstant,
+  normalizeLocalDateTime,
+  parseInstant,
+  resolveWallClock,
+  wallClockFrame,
+  weekdayOfLocalDate,
+} from '~/shared/time'
 
 export function useLocaleFormatters() {
   const { locale } = useI18n()
+  const { timeZone } = useAppTimeZone()
 
   function formatCurrency(value: number, options?: Intl.NumberFormatOptions) {
     return new Intl.NumberFormat(locale.value, {
@@ -13,67 +23,75 @@ export function useLocaleFormatters() {
     }).format(value)
   }
 
-  function parseUtcDate(value: string): Date {
-    // DB returns bare strings like "2025-06-21 14:30:45" with no timezone marker.
-    // Treat them as UTC (matching the pool's timezone: 'UTC' setting).
-    if (!/[Z+\-]\d{2}:?\d{2}$/.test(value) && !value.endsWith('Z')) {
-      const withT = value.replace(' ', 'T')
-      // Date-only strings ("YYYY-MM-DD"): append explicit midnight UTC
-      return new Date(withT.includes('T') ? withT + 'Z' : withT + 'T00:00:00Z')
-    }
-    return new Date(value)
+  function toAppWallClock(value?: string | null) {
+    return resolveWallClock(value, timeZone.value)
   }
 
   function formatDate(value?: string | null) {
-    if (!value) return ''
-    return parseUtcDate(value).toLocaleDateString(locale.value, {
+    const resolved = toAppWallClock(value)
+    if (!resolved) return ''
+    return wallClockFrame(resolved.wallClock).toLocaleDateString(locale.value, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-      timeZone: 'Europe/Berlin',
+      timeZone: 'UTC',
     })
   }
 
   function formatDateTime(value?: string | null) {
-    if (!value) return ''
-    return parseUtcDate(value).toLocaleString(locale.value, {
+    const resolved = toAppWallClock(value)
+    if (!resolved) return ''
+    if (!resolved.hasTime) return formatDate(value)
+    return wallClockFrame(resolved.wallClock).toLocaleString(locale.value, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'Europe/Berlin',
+      timeZone: 'UTC',
     })
   }
 
   function formatTime(value?: string | null) {
-    if (!value) return ''
-    return parseUtcDate(value).toLocaleTimeString(locale.value, {
+    const resolved = toAppWallClock(value)
+    if (!resolved || !resolved.hasTime) return ''
+    return wallClockFrame(resolved.wallClock).toLocaleTimeString(locale.value, {
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'Europe/Berlin',
+      timeZone: 'UTC',
     })
   }
 
-  // "YYYY-MM-DD" of the instant as seen in Berlin. Grouping by a raw UTC slice would put changes
-  // made shortly after midnight local time under the previous day's heading.
-  function berlinDayKey(value?: string | null) {
-    if (!value) return ''
-    return parseUtcDate(value).toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' })
+  /**
+   * "YYYY-MM-DD" of the value in the app time zone — for grouping by day. Grouping by a raw UTC slice
+   * would put changes made shortly after midnight local time under the previous day's heading.
+   */
+  function localDayKey(value?: string | null) {
+    return toAppWallClock(value)?.wallClock.slice(0, 10) ?? ''
   }
 
   /** "Montag, 23.08.2026" — for day headings in chronological lists. */
   function formatDayHeading(value?: string | null) {
-    if (!value) return ''
-    const date = parseUtcDate(value)
-    const weekday = date.toLocaleDateString(locale.value, { weekday: 'long', timeZone: 'Europe/Berlin' })
-    return `${weekday}, ${formatDate(value)}`
+    const day = localDayKey(value)
+    if (!day) return ''
+    const weekday = wallClockFrame(`${day} 00:00:00`).toLocaleDateString(locale.value, { weekday: 'long', timeZone: 'UTC' })
+    return `${weekday}, ${formatDate(day)}`
+  }
+
+  /** 0 = Sunday … 6 = Saturday, of the value's day in the app time zone. */
+  function weekdayOf(value?: string | null) {
+    const day = localDayKey(value)
+    return day ? weekdayOfLocalDate(day) : null
   }
 
   /** "vor 5 Minuten" / "jetzt" — locale-aware, no extra i18n keys needed. */
   function formatRelativeTime(value?: string | null) {
     if (!value) return ''
-    const diffMs = parseUtcDate(value).getTime() - Date.now()
+    const text = String(value).trim()
+    const instant = parseInstant(text)
+      ?? (normalizeLocalDateTime(text) ? localDateTimeToInstant(text, timeZone.value) : null)
+    if (!instant) return ''
+    const diffMs = instant.getTime() - Date.now()
     const rtf = new Intl.RelativeTimeFormat(locale.value, { numeric: 'auto' })
     const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
       ['year', 31536000000],
@@ -90,31 +108,14 @@ export function useLocaleFormatters() {
     return rtf.format(Math.round(diffMs / 1000), 'second')
   }
 
-  // For DATETIME columns that store Berlin-local time (e.g. event starts_at/ends_at):
-  // pure string reformat, no timezone conversion needed.
-  function formatLocalDate(value?: string | null) {
-    if (!value) return ''
-    const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (!m) return ''
-    return `${m[3]}.${m[2]}.${m[1]}`
-  }
-
-  function formatLocalDateTime(value?: string | null) {
-    if (!value) return ''
-    const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})/)
-    if (!m) return ''
-    return `${m[3]}.${m[2]}.${m[1]}, ${m[4]}:${m[5]}`
-  }
-
   return {
     formatCurrency,
     formatDate,
     formatDateTime,
     formatTime,
-    berlinDayKey,
+    localDayKey,
     formatDayHeading,
+    weekdayOf,
     formatRelativeTime,
-    formatLocalDate,
-    formatLocalDateTime,
   }
 }

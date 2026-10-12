@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { daysUntilDeadline, parseTaskDeadline, sortMyTasks, taskUrgency } from '~/utils/myTasks'
 
-// Wednesday, 14 Oct 2026, 10:00 local time.
-const NOW = new Date(2026, 9, 14, 10, 0, 0)
+// Wednesday, 14 Oct 2026, 10:00 — the app time zone's wall clock, as the widget passes it in.
+const NOW = '2026-10-14 10:00:00'
 
 describe('parseTaskDeadline', () => {
   it('reads a date-only deadline as the end of that day', () => {
-    expect(parseTaskDeadline('2026-10-14')).toEqual(new Date(2026, 9, 14, 23, 59, 59))
+    expect(parseTaskDeadline('2026-10-14')).toBe('2026-10-14 23:59:59')
   })
 
-  it('reads a datetime deadline as local wall-clock time', () => {
-    expect(parseTaskDeadline('2026-10-14 08:30')).toEqual(new Date(2026, 9, 14, 8, 30))
+  it('keeps a datetime deadline as the wall clock it is', () => {
+    expect(parseTaskDeadline('2026-10-14 08:30')).toBe('2026-10-14 08:30:00')
+    expect(parseTaskDeadline('2026-10-14T08:30')).toBe('2026-10-14 08:30:00')
   })
 
   it('returns null for missing or malformed values', () => {
