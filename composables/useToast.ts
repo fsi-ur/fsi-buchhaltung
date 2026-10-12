@@ -1,10 +1,17 @@
 export type ToastType = 'success' | 'error' | 'info'
 
+export interface ToastAction {
+  label: string
+  handler: () => void
+}
+
 export interface ToastItem {
   id: string
   message: string
   type: ToastType
   duration: number
+  /** Optional inline button; clicking it runs the handler and closes the toast. */
+  action?: ToastAction
 }
 
 const DEFAULT_DURATION = 10000
@@ -12,7 +19,7 @@ const DEFAULT_DURATION = 10000
 export function useToast() {
   const toasts = useState<ToastItem[]>('toast-items', () => [])
 
-  function show(message: string, type: ToastType = 'info', duration = DEFAULT_DURATION) {
+  function show(message: string, type: ToastType = 'info', duration = DEFAULT_DURATION, action?: ToastAction) {
     const normalizedMessage = String(message ?? '').trim()
     if (!normalizedMessage) return ''
 
@@ -21,6 +28,7 @@ export function useToast() {
       message: normalizedMessage,
       type,
       duration,
+      ...(action ? { action } : {}),
     }
 
     toasts.value = [...toasts.value, toast]

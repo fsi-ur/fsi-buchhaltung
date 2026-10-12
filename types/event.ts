@@ -125,6 +125,24 @@ export interface EventTask {
   linkedChecklistProgress: { done: number; total: number } | null
 }
 
+export type EventTaskStatus = EventTask['status']
+
+export interface MyEventTask {
+  id: number
+  eventId: number
+  eventName: string
+  title: string
+  status: Exclude<EventTaskStatus, 'done'>
+  deadline: string | null
+  /** Personally assigned (as opposed to only through a subdivision). */
+  assignedDirectly: boolean
+  /** The member's own subdivisions the task is assigned to. */
+  viaSubdivisions: EventTaskSubdivision[]
+  checklistProgress: { done: number; total: number } | null
+  /** May open the event's task tab (events.view or organizer of that event). */
+  canOpenEvent: boolean
+}
+
 export interface SaveEventTask {
   id?: number
   title: string

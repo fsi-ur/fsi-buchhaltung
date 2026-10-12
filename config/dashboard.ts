@@ -3,6 +3,7 @@ import type { PermissionKey } from '~/config/permissions'
 import CalendarWidget from '~/components/Page/Home/Widget/Calendar.vue'
 import EventsWidget from '~/components/Page/Home/Widget/Events.vue'
 import MembersWidget from '~/components/Page/Home/Widget/Members.vue'
+import MyTasksWidget from '~/components/Page/Home/Widget/MyTasks.vue'
 import WikiWidget from '~/components/Page/Home/Widget/Wiki.vue'
 
 /**
@@ -32,9 +33,11 @@ export interface DashboardWidget {
 }
 
 // Widgets render in this order; the grid packs them left to right.
+// A widget may also hide itself by emitting `update:hidden`.
 export const DASHBOARD_WIDGETS: DashboardWidget[] = [
-  { id: 'events', component: EventsWidget, size: 'medium', permissions: ['events.access'] },
+  { id: 'myTasks', component: MyTasksWidget, size: 'medium', permissions: [] },
   { id: 'calendar', component: CalendarWidget, size: 'medium', permissions: ['calendar.view'] },
+  { id: 'events', component: EventsWidget, size: 'medium', permissions: ['events.access'] },
   { id: 'members', component: MembersWidget, size: 'medium', permissions: ['members.view'] },
   { id: 'wiki', component: WikiWidget, size: 'small', permissions: ['wiki.view'] },
 ]

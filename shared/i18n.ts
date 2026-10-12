@@ -182,6 +182,21 @@ export const messages = {
         events: {
           title: 'Veranstaltungen',
         },
+        myTasks: {
+          title: 'Meine Aufgaben',
+          empty: 'Du hast keine offenen Aufgaben.',
+          openCount: '{count} offen',
+          overdueCount: '{count} überfällig',
+          noDeadline: 'Ohne Frist',
+          overdueSince: 'Überfällig · {date}',
+          via: 'über {name}',
+          changeStatus: 'Status ändern',
+          showMore: '+ {count} weitere',
+          showLess: 'Weniger anzeigen',
+          doneToast: '„{title}“ erledigt.',
+          undo: 'Rückgängig',
+          updateFailed: 'Der Status konnte nicht geändert werden.',
+        },
         calendar: {
           title: 'Nächste Termine',
           empty: 'In den nächsten 30 Tagen steht nichts an.',
@@ -3339,6 +3354,21 @@ export const messages = {
         },
         events: {
           title: 'Events',
+        },
+        myTasks: {
+          title: 'My tasks',
+          empty: 'You have no open tasks.',
+          openCount: '{count} open',
+          overdueCount: '{count} overdue',
+          noDeadline: 'No deadline',
+          overdueSince: 'Overdue · {date}',
+          via: 'via {name}',
+          changeStatus: 'Change status',
+          showMore: '+ {count} more',
+          showLess: 'Show less',
+          doneToast: '"{title}" marked as done.',
+          undo: 'Undo',
+          updateFailed: 'The status could not be changed.',
         },
         calendar: {
           title: 'Upcoming',

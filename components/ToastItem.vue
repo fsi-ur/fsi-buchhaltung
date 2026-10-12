@@ -19,6 +19,15 @@
       </p>
 
       <button
+        v-if="toast.action"
+        type="button"
+        class="shrink-0 cursor-pointer rounded-lg px-2.5 py-1 text-xs font-semibold text-accent-700 transition hover:bg-accent-50"
+        @click="runAction"
+      >
+        {{ toast.action.label }}
+      </button>
+
+      <button
         type="button"
         class="rounded-full h-6 w-6 text-base-400 transition hover:bg-base-200 hover:text-base-700 cursor-pointer flex items-center justify-center"
         :aria-label="closeLabel"
@@ -97,6 +106,12 @@ function close() {
   if (closed) return
   closed = true
   emit('close', props.toast.id)
+}
+
+function runAction() {
+  if (closed) return
+  props.toast.action?.handler()
+  close()
 }
 
 onMounted(() => {
