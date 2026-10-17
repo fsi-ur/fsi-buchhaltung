@@ -260,6 +260,18 @@ async function syncTaskSubdivisions(
   }
 }
 
+/** Ids of the event's tasks that are linked to a checklist and therefore take their status from it. */
+export async function getChecklistControlledTaskIds(eventId: number, conn?: mariadb.PoolConnection): Promise<number[]> {
+  const rows = await query<{ task_id: number }[]>(
+    `SELECT c.task_id FROM event_checklists c
+     JOIN event_tasks t ON t.id = c.task_id
+     WHERE t.event_id = ?`,
+    [eventId],
+    conn,
+  )
+  return rows.map(row => Number(row.task_id))
+}
+
 export async function replaceEventTasks({
   eventId,
   tasks,
@@ -285,6 +297,7 @@ export async function replaceEventTasks({
   const existingIds = existingRows.map(row => Number(row.id))
   const existingIdSet = new Set(existingIds)
   const existingById = new Map(existingRows.map(row => [Number(row.id), row]))
+  const checklistControlledIds = new Set(await getChecklistControlledTaskIds(eventId, conn))
   const incomingIds = tasks.flatMap(task => task.id ? [task.id] : [])
 
   if (incomingIds.some(id => !existingIdSet.has(id))) {
@@ -302,8 +315,15 @@ export async function replaceEventTasks({
     await query(`DELETE FROM event_tasks WHERE id = ? AND event_id = ?`, [id, eventId], conn)
   }
 
-  for (const task of tasks) {
-    let taskId = task.id ?? null
+  for (const incoming of tasks) {
+    let taskId = incoming.id ?? null
+
+    // A checklist-linked task's status follows the checklist's items — a list save (possibly from
+    // a stale copy) never overrides it, so keep the stored status and apply the other edits.
+    const linkedExisting = taskId && checklistControlledIds.has(taskId) ? existingById.get(taskId) : undefined
+    const task = linkedExisting
+      ? { ...incoming, status: String(linkedExisting.status) as SaveEventTask['status'] }
+      : incoming
 
     let deadlineChanged = false
 

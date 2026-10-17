@@ -4,7 +4,8 @@ import { useToast } from '~/composables/useToast'
 import type { EventTask as PersistedEventTask, SaveEventTask } from '~/types/event'
 import type { GetEventTasksResponse } from '~/server/api/events/[id]/tasks/index.get'
 import type { UpdateEventTasksResponse } from '~/server/api/events/[id]/tasks/index.put'
-import type { EventPlanningTask } from '~/components/Page/Events/planning/types'
+import type { UpdateTaskStatusResponse } from '~/server/api/tasks/[id]/status.put'
+import type { EventPlanningTask, EventPlanningTaskStatus } from '~/components/Page/Events/planning/types'
 
 export function useEventTasks(eventId: Ref<number | null>) {
   const { t } = useI18n()
@@ -15,6 +16,7 @@ export function useEventTasks(eventId: Ref<number | null>) {
   const taskLoading = ref(false)
   const taskSaving = ref(false)
   const canManageTasks = ref(false)
+  const assignedTaskIds = ref<number[]>([])
 
   function mapPersistedTaskToPanel(task: PersistedEventTask): EventPlanningTask {
     return {
@@ -51,6 +53,7 @@ export function useEventTasks(eventId: Ref<number | null>) {
 
       planningTasks.value = res.tasks.map(mapPersistedTaskToPanel)
       canManageTasks.value = resolveFlag(res.canManageTasks, 'events.edit')
+      assignedTaskIds.value = res.assignedTaskIds ?? []
     }
     catch (err: any) {
       toast.error(err?.message || t('event.planning.failedLoadTasks'))
@@ -82,9 +85,36 @@ export function useEventTasks(eventId: Ref<number | null>) {
     }
   }
 
+  /**
+   * Status-only update for assignees who may not edit the task list itself. Touches nothing but
+   * the one task, so it never overwrites anyone else's concurrent edits to the list.
+   */
+  async function changeTaskStatus(taskId: number, status: EventPlanningTaskStatus) {
+    if (taskSaving.value) return
+
+    try {
+      taskSaving.value = true
+      const res = await $fetch<UpdateTaskStatusResponse>(`/api/tasks/${taskId}/status`, {
+        method: 'PUT',
+        body: { status },
+      })
+      if (!res.ok) throw new Error(res.error)
+
+      planningTasks.value = planningTasks.value.map(task => task.id === taskId ? { ...task, status: res.status } : task)
+    }
+    catch (err: any) {
+      toast.error(err?.message || t('event.planning.failedSaveTasks'))
+      if (eventId.value) await loadEventTasks(eventId.value)
+    }
+    finally {
+      taskSaving.value = false
+    }
+  }
+
   function reset() {
     planningTasks.value = []
     canManageTasks.value = false
+    assignedTaskIds.value = []
   }
 
   return {
@@ -92,8 +122,10 @@ export function useEventTasks(eventId: Ref<number | null>) {
     taskLoading,
     taskSaving,
     canManageTasks,
+    assignedTaskIds,
     loadEventTasks,
     saveEventTasks,
+    changeTaskStatus,
     reset,
   }
 }

@@ -132,3 +132,32 @@ export async function setTaskStatus(taskId: number, status: EventTaskStatus, con
     await dropFutureReminders({ type: 'task.deadline_reminder', entityId: taskId }, conn)
   }
 }
+
+/** The event's tasks the member is assigned to, personally or through one of their subdivisions. */
+export async function getAssignedTaskIds(memberId: number, eventId: number, conn?: mariadb.PoolConnection): Promise<number[]> {
+  const rows = await query<{ id: number }[]>(
+    `SELECT t.id FROM event_tasks t
+     WHERE t.event_id = ?
+       AND (
+         t.id IN (SELECT task_id FROM event_task_members WHERE member_id = ?)
+         OR t.id IN (
+           SELECT ets.task_id FROM event_task_subdivisions ets
+           JOIN subdivision_members sm ON sm.subdivision_id = ets.subdivision_id
+           WHERE sm.member_id = ?
+         )
+       )`,
+    [eventId, memberId, memberId],
+    conn,
+  )
+  return rows.map(row => Number(row.id))
+}
+
+/** A task linked to a checklist takes its status from the checklist's items, never from a direct edit. */
+export async function isTaskChecklistControlled(taskId: number, conn?: mariadb.PoolConnection): Promise<boolean> {
+  const rows = await query<{ found: number }[]>(
+    `SELECT 1 AS found FROM event_checklists WHERE task_id = ? LIMIT 1`,
+    [taskId],
+    conn,
+  )
+  return rows.length > 0
+}

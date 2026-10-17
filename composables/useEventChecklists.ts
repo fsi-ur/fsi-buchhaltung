@@ -10,6 +10,7 @@ import type {
 import type { GetEventChecklistsResponse } from '~/server/api/events/[id]/checklists/index.get'
 import type { UpdateEventChecklistsResponse } from '~/server/api/events/[id]/checklists/index.put'
 import type { UpdateEventChecklistTemplatesResponse } from '~/server/api/events/checklist-templates/index.put'
+import type { UpdateChecklistItemDoneResponse } from '~/server/api/checklist-items/[id]/done.put'
 import type { PlanningChecklist } from '~/components/Page/Events/planning/types'
 
 export function useEventChecklists(eventId: Ref<number | null>) {
@@ -122,6 +123,36 @@ export function useEventChecklists(eventId: Ref<number | null>) {
     }
   }
 
+  /**
+   * Ticks a single item without replacing the event's checklists — for assignees of the linked
+   * task, who may not edit the checklists themselves. Resolves to the linked task's new status.
+   */
+  async function setChecklistItemDone(checklistId: number, itemId: number, done: boolean) {
+    if (checklistSaving.value) return null
+
+    try {
+      checklistSaving.value = true
+      const res = await $fetch<UpdateChecklistItemDoneResponse>(`/api/checklist-items/${itemId}/done`, {
+        method: 'PUT',
+        body: { done },
+      })
+      if (!res.ok) throw new Error(res.error)
+
+      reusableChecklists.value = reusableChecklists.value.map(checklist => checklist.id === checklistId
+        ? { ...checklist, items: checklist.items.map(item => item.id === itemId ? { ...item, done: res.done } : item) }
+        : checklist)
+      return res.task
+    }
+    catch (err: any) {
+      toast.error(err?.message || t('event.planning.failedSaveChecklists'))
+      if (eventId.value) await loadEventChecklists(eventId.value)
+      return null
+    }
+    finally {
+      checklistSaving.value = false
+    }
+  }
+
   async function saveEventChecklistTemplates(nextTemplates: PlanningChecklist[]) {
     if (!eventId.value || checklistSaving.value) return
 
@@ -158,6 +189,7 @@ export function useEventChecklists(eventId: Ref<number | null>) {
     canManageChecklists,
     loadEventChecklists,
     saveEventChecklists,
+    setChecklistItemDone,
     saveEventChecklistTemplates,
     reset,
   }

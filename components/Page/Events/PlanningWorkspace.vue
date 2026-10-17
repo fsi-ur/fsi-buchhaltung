@@ -208,13 +208,14 @@
                       <label
                         v-for="task in nextPendingTasks"
                         :key="task.id"
-                        :class="['flex items-start gap-3 rounded-lg border border-base-200 p-3 text-sm', canManagePlanning ? 'cursor-pointer' : '']"
+                        :class="['flex items-start gap-3 rounded-lg border border-base-200 p-3 text-sm', canToggleTaskDone(task) ? 'cursor-pointer' : '']"
                       >
                         <input
-                          v-if="canManagePlanning"
+                          v-if="canToggleTaskDone(task)"
                           type="checkbox"
                           class="checkbox mt-1"
                           :checked="false"
+                          :disabled="taskSaving"
                           @change="setTaskDone(task.id, ($event.target as HTMLInputElement).checked)"
                         >
                         <span class="min-w-0">
@@ -322,7 +323,9 @@
               :subdivisions="subdivisions"
               :current-member-id="currentMemberId"
               :checklists="reusableChecklists"
+              :status-only-task-ids="statusOnlyTaskIds"
               @save="saveEventTasks"
+              @change-status="changeTaskStatus($event.taskId, $event.status)"
               @link-checklist-to-task="linkChecklistToTask"
               @navigate-to-checklists="activeTab = 'checklists'"
             />
@@ -336,7 +339,9 @@
               :disabled="!canManagePlanning || checklistLoading || checklistSaving || !canManageChecklists"
               :can-save-templates="canSaveChecklistTemplates"
               :tasks="planningTasks"
+              :tick-only-checklist-ids="tickOnlyChecklistIds"
               @save-checklists="handleSaveChecklists"
+              @set-item-done="handleSetChecklistItemDone"
               @save-templates="saveEventChecklistTemplates"
               @create-task-from-checklist="createTaskFromChecklist"
               @navigate-to-tasks="activeTab = 'tasks'"
@@ -520,10 +525,19 @@ const {
   taskLoading,
   taskSaving,
   canManageTasks,
+  assignedTaskIds,
   loadEventTasks,
   saveEventTasks,
+  changeTaskStatus,
   reset: resetTasks,
 } = useEventTasks(eventIdRef)
+
+const canEditTaskList = computed(() => canManagePlanning.value && canManageTasks.value)
+
+// Assignees who can't edit the task list may still move their own tasks between the status columns.
+const statusOnlyTaskIds = computed(() =>
+  canEditTaskList.value || taskLoading.value || taskSaving.value ? [] : assignedTaskIds.value,
+)
 
 const {
   shiftSlots,
@@ -552,6 +566,7 @@ const {
   canManageChecklists,
   loadEventChecklists,
   saveEventChecklists: _saveEventChecklists,
+  setChecklistItemDone,
   saveEventChecklistTemplates,
   reset: resetChecklists,
 } = useEventChecklists(eventIdRef)
@@ -1043,12 +1058,46 @@ function linkChecklistToTask({ checklistId, taskId }: { checklistId: number; tas
   handleSaveChecklists(reusableChecklists.value)
 }
 
+function canToggleTaskDone(task: EventPlanningTask) {
+  if (task.linkedChecklistId) return false
+  return canEditTaskList.value || assignedTaskIds.value.includes(task.id)
+}
+
+const canEditChecklists = computed(() => canManagePlanning.value && canManageChecklists.value)
+
+// Assignees of a task may tick the items of the checklist linked to it, without editing checklists.
+const tickOnlyChecklistIds = computed(() => {
+  if (canEditChecklists.value || checklistLoading.value || checklistSaving.value) return []
+  return reusableChecklists.value
+    .filter(checklist => checklist.taskId !== null && assignedTaskIds.value.includes(checklist.taskId))
+    .map(checklist => checklist.id)
+})
+
+async function handleSetChecklistItemDone({ checklistId, itemId, done }: { checklistId: number; itemId: number; done: boolean }) {
+  const task = await setChecklistItemDone(checklistId, itemId, done)
+  if (!task) return
+
+  const checklist = reusableChecklists.value.find(c => c.id === checklistId)
+  const progress = checklist
+    ? { done: checklist.items.filter(item => item.done).length, total: checklist.items.length }
+    : null
+  planningTasks.value = planningTasks.value.map(t => t.id === task.id
+    ? { ...t, status: task.status, linkedChecklistProgress: progress ?? t.linkedChecklistProgress }
+    : t)
+}
+
 function setTaskDone(taskId: number, done: boolean) {
   const task = planningTasks.value.find(t => t.id === taskId)
-  if (task?.linkedChecklistId) return
+  if (!task || !canToggleTaskDone(task)) return
+
+  const status: EventPlanningTaskStatus = done ? 'done' : 'open'
+  if (!canEditTaskList.value) {
+    changeTaskStatus(taskId, status)
+    return
+  }
 
   const next = planningTasks.value.map(t =>
-    t.id === taskId ? { ...t, status: (done ? 'done' : 'open') as EventPlanningTaskStatus } : t,
+    t.id === taskId ? { ...t, status } : t,
   )
   planningTasks.value = next
   saveEventTasks(next)

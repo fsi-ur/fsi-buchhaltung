@@ -266,14 +266,14 @@
               class="flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition-colors"
               :class="[
                 item.done ? 'border-success-200 bg-success-50/50' : 'border-base-200',
-                disabled ? 'cursor-default' : 'cursor-pointer hover:bg-base-50',
+                canTickItems(checklist) ? 'cursor-pointer hover:bg-base-50' : 'cursor-default',
               ]"
             >
               <input
                 type="checkbox"
                 class="checkbox"
                 :checked="item.done"
-                :disabled="disabled"
+                :disabled="!canTickItems(checklist)"
                 @change="setChecklistItemDone(checklist.id, item.id, ($event.target as HTMLInputElement).checked)"
               >
               <span :class="item.done ? 'line-through text-base-400' : 'text-base-700'">{{ item.label }}</span>
@@ -390,6 +390,7 @@ const props = defineProps<{
   canSaveTemplates?: boolean
   eventId?: number | null
   tasks?: EventPlanningTask[]
+  tickOnlyChecklistIds?: number[]
 }>()
 
 const checklists = defineModel<PlanningChecklist[]>('checklists', { required: true })
@@ -399,6 +400,7 @@ const emit = defineEmits<{
   (e: 'save-templates', value: PlanningChecklist[]): void
   (e: 'create-task-from-checklist', value: { checklistId: number; title: string; deadline: string | null }): void
   (e: 'navigate-to-tasks'): void
+  (e: 'set-item-done', value: { checklistId: number; itemId: number; done: boolean }): void
 }>()
 const { t } = useI18n()
 
@@ -695,7 +697,16 @@ function removeChecklist(checklistId: number) {
   if (editingChecklistId.value === checklistId) resetDraft()
 }
 
+function canTickItems(checklist: PlanningChecklist) {
+  return !props.disabled || (props.tickOnlyChecklistIds ?? []).includes(checklist.id)
+}
+
 function setChecklistItemDone(checklistId: number, itemId: number, done: boolean) {
+  if (props.disabled) {
+    if ((props.tickOnlyChecklistIds ?? []).includes(checklistId)) emit('set-item-done', { checklistId, itemId, done })
+    return
+  }
+
   persistChecklists(checklists.value.map((checklist) => {
     if (checklist.id !== checklistId) return checklist
     return {

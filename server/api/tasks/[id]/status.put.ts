@@ -4,7 +4,7 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { getMemberIdForUser } from '~/server/utils/appointments/visibility'
 import { withAuditTransaction } from '~/server/utils/db'
 import { isEventOrganizer } from '~/server/utils/events'
-import { getTaskEventId, isTaskAssignee, normalizeTaskStatus, setTaskStatus } from '~/server/utils/myTasks'
+import { getTaskEventId, isTaskAssignee, isTaskChecklistControlled, normalizeTaskStatus, setTaskStatus } from '~/server/utils/myTasks'
 import type { EventTaskStatus } from '~/types/event'
 
 interface UpdateTaskStatusSuccess {
@@ -22,7 +22,8 @@ export type UpdateTaskStatusResponse = UpdateTaskStatusSuccess | UpdateTaskStatu
 /**
  * Status-only update for a single task. Unlike PUT /api/events/:id/tasks (organizers and
  * events.edit only, replaces the whole list) this is open to the task's assignees — personally
- * or through a subdivision — and touches nothing but the status.
+ * or through a subdivision — and touches nothing but the status. A task linked to a checklist is
+ * refused: its status follows the checklist's items, exactly as the planner's board locks it.
  */
 export default defineEventHandler(async (event): Promise<UpdateTaskStatusResponse> => {
   const current = await requireAuth(event)
@@ -45,6 +46,10 @@ export default defineEventHandler(async (event): Promise<UpdateTaskStatusRespons
         || hasPermission(current.user, 'events.edit')
         || await isEventOrganizer(current.user.id, eventId, conn)
       if (!allowed) return { ok: false, error: 'Keine Berechtigung' }
+
+      if (await isTaskChecklistControlled(taskId, conn)) {
+        return { ok: false, error: 'Der Status dieser Aufgabe wird durch die verknüpfte Checkliste gesteuert' }
+      }
 
       await setTaskStatus(taskId, status, conn)
       return { ok: true, status }

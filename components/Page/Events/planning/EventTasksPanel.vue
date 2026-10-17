@@ -175,22 +175,22 @@
             v-for="task in tasksByStatus[column.status]"
             :key="task.id"
             :data-task-id="task.id"
-            :draggable="!disabled && !task.linkedChecklistId"
+            :draggable="canDragTask(task)"
             class="rounded-lg border border-base-200 border-l-4 bg-base-50 p-3 transition-all"
             :class="[
               draggedTaskId === task.id ? 'opacity-40' : '',
               dragOverTaskId === task.id ? 'ring-2 ring-inset ring-accent-400' : '',
               deadlineBorderClass(task),
             ]"
-            @dragstart="!task.linkedChecklistId && onDragStart(task.id, $event)"
-            @dragover.prevent="!disabled && !task.linkedChecklistId && onDragOver(task.id)"
+            @dragstart="canDragTask(task) && onDragStart(task.id, $event)"
+            @dragover.prevent="canDropOnTask(task) && onDragOver(task.id)"
             @dragleave="onTaskDragLeave(task.id, $event)"
-            @drop.prevent.stop="!disabled && !task.linkedChecklistId && onDrop(task.id, column.status)"
+            @drop.prevent.stop="canDropOnTask(task) && onDrop(task.id, column.status)"
             @dragend="onDragEnd"
           >
             <div class="flex items-start gap-2">
               <span
-                v-if="!disabled"
+                v-if="!disabled || isStatusOnlyTask(task)"
                 class="mt-0.5 shrink-0 touch-none"
                 :class="task.linkedChecklistId ? 'cursor-default' : 'cursor-grab'"
                 @touchstart.prevent="!task.linkedChecklistId && startTaskCardTouchDrag(task.id, $event)"
@@ -355,17 +355,17 @@
             v-if="draggedTaskId !== null && tasksByStatus[column.status].length > 0"
             class="h-8 rounded-md border-2 border-dashed transition-colors"
             :class="dragOverColumnStatus === column.status ? 'border-accent-400 bg-accent-50' : 'border-transparent'"
-            @dragover.prevent="!disabled && onDragOverColumn(column.status)"
+            @dragover.prevent="canDropDraggedTask && onDragOverColumn(column.status)"
             @dragleave="onColumnDragLeave($event)"
-            @drop.prevent="!disabled && onDrop(null, column.status)"
+            @drop.prevent="canDropDraggedTask && onDrop(null, column.status)"
           />
           <div
             v-if="tasksByStatus[column.status].length === 0"
             class="min-h-28 rounded-lg border border-dashed p-3 text-sm transition-colors"
             :class="dragOverColumnStatus === column.status ? 'border-accent-400 bg-accent-50 text-accent-600' : 'border-base-300 bg-base-50 text-base-500'"
-            @dragover.prevent="!disabled && onDragOverColumn(column.status)"
+            @dragover.prevent="canDropDraggedTask && onDragOverColumn(column.status)"
             @dragleave="onColumnDragLeave($event)"
-            @drop.prevent="!disabled && onDrop(null, column.status)"
+            @drop.prevent="canDropDraggedTask && onDrop(null, column.status)"
           >
             {{ t('event.planning.noTasksInColumn') }}
           </div>
@@ -394,12 +394,18 @@ const props = defineProps<{
   subdivisions: EventSubdivisionOption[]
   currentMemberId?: number | null
   checklists?: PlanningChecklist[]
+  /**
+   * Tasks whose status the user may change although they can't edit the list (they are assigned
+   * to them). Moving one of these emits `change-status` instead of editing the list locally.
+   */
+  statusOnlyTaskIds?: number[]
 }>()
 
 const emit = defineEmits<{
   (e: 'save', tasks: EventPlanningTask[]): void
   (e: 'link-checklist-to-task', value: { checklistId: number; taskId: number }): void
   (e: 'navigate-to-checklists'): void
+  (e: 'change-status', value: { taskId: number; status: EventPlanningTaskStatus }): void
 }>()
 
 const tasks = defineModel<EventPlanningTask[]>('tasks', { required: true })
@@ -769,6 +775,27 @@ function selectChecklistForTask(taskId: number, checklist: unknown) {
 
 // ---- Drag: block for checklist-linked tasks ----
 
+/** Only status changes are allowed for this task — the rest of the list is read-only to the user. */
+function isStatusOnlyTask(task: EventPlanningTask) {
+  return props.disabled && (props.statusOnlyTaskIds ?? []).includes(task.id)
+}
+
+function canDragTask(task: EventPlanningTask) {
+  return !task.linkedChecklistId && (!props.disabled || isStatusOnlyTask(task))
+}
+
+const canDropDraggedTask = computed(() => {
+  if (draggedTaskId.value === null) return false
+  if (!props.disabled) return true
+  const dragged = tasks.value.find(t => t.id === draggedTaskId.value)
+  return Boolean(dragged && isStatusOnlyTask(dragged))
+})
+
+// A status-only drop only picks the column, so any card may serve as the target there.
+function canDropOnTask(task: EventPlanningTask) {
+  return canDropDraggedTask.value && (props.disabled || !task.linkedChecklistId)
+}
+
 function onDrop(targetTaskId: number | null, targetStatus: EventPlanningTaskStatus) {
   const sourceId = draggedTaskId.value
   onDragEnd()
@@ -778,6 +805,13 @@ function onDrop(targetTaskId: number | null, targetStatus: EventPlanningTaskStat
   if (!source) return
 
   if (source.linkedChecklistId) return
+
+  if (props.disabled) {
+    if (isStatusOnlyTask(source) && source.status !== targetStatus) {
+      emit('change-status', { taskId: source.id, status: targetStatus })
+    }
+    return
+  }
 
   const updated = normalizeTask({ ...source, status: targetStatus })
   const without = tasks.value.filter(t => t.id !== sourceId)

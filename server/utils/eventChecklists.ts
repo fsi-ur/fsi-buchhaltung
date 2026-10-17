@@ -1,5 +1,6 @@
 import type mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
+import { dropFutureReminders } from '~/server/utils/notifications/enqueue'
 import type {
   EventChecklist,
   EventChecklistItem,
@@ -356,9 +357,11 @@ export interface AffectedTaskStatus {
   status: 'open' | 'in_progress' | 'done'
 }
 
+/** Derives each linked task's status from its checklist; `onlyTaskId` limits this to one task. */
 export async function syncLinkedTaskStatuses(
   eventId: number,
   conn: mariadb.PoolConnection,
+  onlyTaskId?: number,
 ): Promise<AffectedTaskStatus[]> {
   const rows = await query<{ task_id: number; total: number; done: number }[]>(
     `SELECT c.task_id,
@@ -366,9 +369,9 @@ export async function syncLinkedTaskStatuses(
             COALESCE(SUM(ci.is_done), 0) AS done
      FROM event_checklists c
      LEFT JOIN event_checklist_items ci ON ci.checklist_id = c.id
-     WHERE c.event_id = ? AND c.task_id IS NOT NULL
+     WHERE c.event_id = ? AND c.task_id IS NOT NULL${onlyTaskId ? ' AND c.task_id = ?' : ''}
      GROUP BY c.task_id`,
-    [eventId],
+    onlyTaskId ? [eventId, onlyTaskId] : [eventId],
     conn,
   )
 
@@ -387,11 +390,57 @@ export async function syncLinkedTaskStatuses(
       [status, Number(row.task_id), eventId],
       conn,
     )
+    // Same as a direct status change: a finished task must not remind anyone of its deadline.
+    if (status === 'done') {
+      await dropFutureReminders({ type: 'task.deadline_reminder', entityId: Number(row.task_id) }, conn)
+    }
 
     affected.push({ id: Number(row.task_id), status })
   }
 
   return affected
+}
+
+export interface ChecklistItemContext {
+  checklistId: number
+  eventId: number
+  /** The task the checklist is linked to, if any. */
+  taskId: number | null
+}
+
+export async function getChecklistItemContext(itemId: number, conn?: mariadb.PoolConnection): Promise<ChecklistItemContext | null> {
+  const rows = await query<{ checklist_id: number; event_id: number; task_id: number | null }[]>(
+    `SELECT ci.checklist_id, c.event_id, c.task_id
+     FROM event_checklist_items ci
+     JOIN event_checklists c ON c.id = ci.checklist_id
+     WHERE ci.id = ?`,
+    [itemId],
+    conn,
+  )
+  const row = rows[0]
+  if (!row) return null
+  return {
+    checklistId: Number(row.checklist_id),
+    eventId: Number(row.event_id),
+    taskId: row.task_id !== null && row.task_id !== undefined ? Number(row.task_id) : null,
+  }
+}
+
+/**
+ * Ticks or unticks one item and re-derives the linked task's status from the checklist, exactly
+ * like a full checklist save does. Returns the task's new status (null without a linked task).
+ */
+export async function setChecklistItemDone(
+  itemId: number,
+  done: boolean,
+  context: ChecklistItemContext,
+  conn: mariadb.PoolConnection,
+): Promise<AffectedTaskStatus | null> {
+  await query(`UPDATE event_checklist_items SET is_done = ? WHERE id = ?`, [done ? 1 : 0, itemId], conn)
+  if (context.taskId === null) return null
+
+  const [affected] = await syncLinkedTaskStatuses(context.eventId, conn, context.taskId)
+  return affected ?? null
 }
 
 export async function replaceEventChecklists({

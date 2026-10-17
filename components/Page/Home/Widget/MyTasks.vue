@@ -29,8 +29,20 @@
           :class="[urgencyBorderClass(task), statusMenuId === task.id ? 'bg-base-50' : 'hover:bg-base-50']"
         >
           <div class="flex items-start gap-2.5">
-            <!-- Status -->
+            <!-- Status (a checklist-linked task follows its checklist, like on the planner's board) -->
+            <span
+              v-if="isChecklistControlled(task)"
+              class="relative mt-px flex h-7 w-7 shrink-0 cursor-not-allowed items-center justify-center rounded-full"
+              :title="t('event.planning.checklistControlled')"
+              :aria-label="t('event.planning.checklistControlled')"
+            >
+              <Icon :name="STATUS_META[task.status].icon" class="text-xl opacity-50" :class="STATUS_META[task.status].iconClass" />
+              <span class="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white ring-1 ring-base-200">
+                <Icon name="material-symbols:lock" class="text-[10px] text-info-500" />
+              </span>
+            </span>
             <button
+              v-else
               type="button"
               class="mt-px flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition"
               :class="savingId === task.id ? 'cursor-wait opacity-60' : 'cursor-pointer hover:bg-base-200'"
@@ -81,7 +93,11 @@
                   <Icon name="material-symbols:groups-rounded" class="text-sm" />
                   {{ t('home.widgets.myTasks.via', { name: task.viaSubdivisions.map(s => s.code).join(', ') }) }}
                 </span>
-                <span v-if="task.checklistProgress?.total" class="inline-flex items-center gap-0.5 text-base-400">
+                <span
+                  v-if="task.checklistProgress?.total"
+                  class="inline-flex items-center gap-0.5 text-info-600"
+                  :title="t('event.planning.checklistControlled')"
+                >
                   <Icon name="material-symbols:checklist-rounded" class="text-sm" />
                   {{ task.checklistProgress.done }}/{{ task.checklistProgress.total }}
                 </span>
@@ -97,7 +113,7 @@
 
           <!-- Inline status menu (inline rather than a popover: the widget frame clips overflow) -->
           <div
-            v-if="statusMenuId === task.id"
+            v-if="statusMenuId === task.id && !isChecklistControlled(task)"
             class="mt-2.5 grid grid-cols-3 gap-1 rounded-lg bg-base-100 p-1 text-xs font-medium"
             role="menu"
           >
@@ -225,6 +241,10 @@ function openTask(task: MyEventTask) {
   })
 }
 
+function isChecklistControlled(task: MyEventTask) {
+  return task.checklistProgress !== null
+}
+
 function toggleStatusMenu(taskId: number) {
   statusMenuId.value = statusMenuId.value === taskId ? null : taskId
 }
@@ -247,7 +267,7 @@ function putBack(task: MyEventTask) {
 
 async function changeStatus(task: MyEventTask, status: EventTaskStatus) {
   statusMenuId.value = null
-  if (status === task.status || savingId.value !== null) return
+  if (status === task.status || savingId.value !== null || isChecklistControlled(task)) return
 
   const previous = { ...task }
   savingId.value = task.id

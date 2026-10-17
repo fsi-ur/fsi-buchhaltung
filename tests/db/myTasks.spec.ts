@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { query, withAuditTransaction } from '~/server/utils/db'
-import { isTaskAssignee, loadMyOpenTasks, setTaskStatus } from '~/server/utils/myTasks'
+import { getAssignedTaskIds, isTaskAssignee, isTaskChecklistControlled, loadMyOpenTasks, setTaskStatus } from '~/server/utils/myTasks'
 import { resetDatabase } from '../helpers/db'
 import { createEvent, createMember, createUser, resetFixtureCounter } from '../helpers/fixtures'
 
@@ -88,6 +88,27 @@ describe('my open tasks', () => {
     expect(await isTaskAssignee(memberId, direct)).toBe(true)
     expect(await isTaskAssignee(memberId, viaGroup)).toBe(true)
     expect(await isTaskAssignee(memberId, foreign)).toBe(false)
+  })
+
+  it('lists the event’s tasks the member is assigned to, personally or through a subdivision', async () => {
+    const direct = await createTask(eventId, 'Direkt', { status: 'done' })
+    const viaGroup = await createTask(eventId, 'Gruppe')
+    const foreign = await createTask(eventId, 'Fremd')
+    const otherEventId = await createEvent({ name: 'Winterfest' })
+    const otherEventTask = await createTask(otherEventId, 'Anderes Event')
+    await query('INSERT INTO event_task_members (task_id, member_id) VALUES (?, ?), (?, ?), (?, ?)', [direct, memberId, foreign, otherMemberId, otherEventTask, memberId])
+    await query('INSERT INTO event_task_subdivisions (task_id, subdivision_id) VALUES (?, ?)', [viaGroup, subdivisionId])
+
+    expect((await getAssignedTaskIds(memberId, eventId)).sort((a, b) => a - b)).toEqual([direct, viaGroup].sort((a, b) => a - b))
+  })
+
+  it('recognises tasks whose status is controlled by a linked checklist', async () => {
+    const linked = await createTask(eventId, 'Mit Checkliste')
+    const free = await createTask(eventId, 'Ohne Checkliste')
+    await query('INSERT INTO event_checklists (event_id, task_id, title, description) VALUES (?, ?, ?, ?)', [eventId, linked, 'Liste', ''])
+
+    expect(await isTaskChecklistControlled(linked)).toBe(true)
+    expect(await isTaskChecklistControlled(free)).toBe(false)
   })
 
   it('sets the status and drops pending deadline reminders once done', async () => {
