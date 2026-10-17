@@ -20,9 +20,9 @@ describe('cash register SQL expressions', () => {
     expect(expr).not.toContain('ignored')
   })
 
-  it('restrict item statistics to item lines and leave sold vouchers out of item counts', () => {
+  it('restrict item statistics to item lines and leave sold vouchers and deposit returns out of item counts', () => {
     expect(cashRegisterItemLineFilter(true)).toBe(` AND oi.line_kind = 'item'`)
-    expect(cashRegisterQuantityExpr(true)).toBe(`IF(oi.line_kind = 'voucher_sale', 0, oi.quantity)`)
+    expect(cashRegisterQuantityExpr(true)).toBe(`IF(oi.line_kind IN ('voucher_sale', 'deposit_return'), 0, oi.quantity)`)
   })
 })
 

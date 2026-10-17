@@ -15,9 +15,12 @@ export function cashRegisterItemLineFilter(vouchers: boolean) {
   return vouchers ? ` AND oi.line_kind = 'item'` : ''
 }
 
-/** Units of an order line that count as handed-out items (a sold voucher is not an item). */
+/**
+ * Units of an order line that count as handed-out items: a sold voucher and a
+ * deposit return are not.
+ */
 export function cashRegisterQuantityExpr(vouchers: boolean) {
-  return vouchers ? `IF(oi.line_kind = 'voucher_sale', 0, oi.quantity)` : 'oi.quantity'
+  return vouchers ? `IF(oi.line_kind IN ('voucher_sale', 'deposit_return'), 0, oi.quantity)` : 'oi.quantity'
 }
 
 export interface CashRegisterVoucherBatchSale {

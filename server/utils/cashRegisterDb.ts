@@ -107,6 +107,24 @@ export async function hasCashRegisterVoucherTables(): Promise<boolean> {
   return voucherTableSupport
 }
 
+let depositReturnSupport = false
+
+export async function hasCashRegisterDepositReturns(): Promise<boolean> {
+  if (depositReturnSupport) return true
+
+  const rows = await cashRegisterQuery<Array<{ column_type: unknown }>>(
+    `SELECT COLUMN_TYPE AS column_type
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'order_items'
+        AND COLUMN_NAME = 'line_kind'
+      LIMIT 1`,
+  )
+
+  depositReturnSupport = String(rows[0]?.column_type ?? '').includes(`'deposit_return'`)
+  return depositReturnSupport
+}
+
 export async function cashRegisterQuery<T = any>(sql: string, params?: unknown[]): Promise<T> {
   if (!isCashRegisterConnected()) {
     throw new Error('Cash register connection is not configured')

@@ -299,6 +299,62 @@
           </div>
         </div>
       </div>
+
+      <div v-if="deposits" class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info-50 text-info-600">
+            <Icon name="material-symbols:recycling-rounded" class="text-base" />
+          </span>
+          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.depositsTitle') }}</h2>
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-2">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
+                <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.depositsAmount') }}</th>
+                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.depositsIssued') }}</th>
+                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.depositsReturned') }}</th>
+                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.depositsOpen') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in deposits.amounts" :key="row.amount" class="border-b border-base-100">
+                <td class="py-2 pr-3 text-base-700">{{ formatCurrency(row.amount) }}</td>
+                <td class="py-2 text-right text-base-500">{{ row.issued }}</td>
+                <td class="py-2 text-right text-base-500">{{ row.returned }}</td>
+                <td class="py-2 text-right font-medium text-base-800">{{ row.issued - row.returned }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div>
+            <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+              <dt class="text-base-500">{{ t('event.cashRegister.depositsIssuedValue') }}</dt>
+              <dd class="text-right text-base-700">{{ formatCurrency(deposits.issuedValue) }}</dd>
+              <!-- Only worth splitting when vouchers covered part of it -->
+              <template v-if="deposits.coveredValue > 0">
+                <dt class="pl-4 text-base-400">{{ t('event.cashRegister.depositsCovered') }}</dt>
+                <dd class="text-right text-base-500">{{ formatCurrency(deposits.coveredValue) }}</dd>
+                <dt class="pl-4 text-base-400">{{ t('event.cashRegister.depositsTaken') }}</dt>
+                <dd class="text-right text-base-500">{{ formatCurrency(deposits.issuedValue - deposits.coveredValue) }}</dd>
+              </template>
+              <dt class="text-base-500">{{ t('event.cashRegister.depositsPaidBack') }}</dt>
+              <dd class="text-right text-base-700">{{ formatCurrency(-deposits.returnedValue) }}</dd>
+              <dt class="font-semibold text-base-700">{{ t('event.cashRegister.depositsNetCash') }}</dt>
+              <dd class="text-right font-semibold text-base-900">{{ formatCurrency(deposits.netCash) }}</dd>
+              <dt class="font-semibold text-info-700">{{ t('event.cashRegister.depositsOpenValue') }}</dt>
+              <dd class="text-right font-semibold text-info-700">{{ formatCurrency(deposits.openValue) }}</dd>
+            </dl>
+            <p v-if="deposits.returnRate !== null" class="mt-2 text-sm text-base-600">
+              {{ t('event.cashRegister.depositsReturnRate', { rate: Math.round(deposits.returnRate * 100) }) }}
+            </p>
+            <p class="mt-3 text-xs text-base-400">
+              {{ t(standFilterActive ? 'event.cashRegister.depositsStandNotice' : 'event.cashRegister.depositsNotice') }}
+            </p>
+          </div>
+        </div>
+      </div>
     </template>
   </section>
 </template>
@@ -333,6 +389,11 @@ const standStats = computed<CashRegisterStandStat[]>(() => overview.value?.stand
 const vouchers = computed(() => {
   const stats = overview.value?.vouchers
   return stats && (stats.sold.count > 0 || stats.redeemed.totalQuantity > 0) ? stats : null
+})
+// Only shown once containers with a deposit went out or came back.
+const deposits = computed(() => {
+  const stats = overview.value?.deposits
+  return stats && stats.amounts.length > 0 ? stats : null
 })
 const hasStands = computed(() => standStats.value.some(stand => stand.id != null))
 const standFilterActive = computed(() => hasStands.value && overview.value?.standFilter !== 'all')

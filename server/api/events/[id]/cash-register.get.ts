@@ -2,6 +2,7 @@ import { defineEventHandler, getQuery, getRouterParam } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import {
   cashRegisterQuery,
+  hasCashRegisterDepositReturns,
   hasCashRegisterPriceSnapshots,
   hasCashRegisterStands,
   hasCashRegisterVoucherLines,
@@ -15,6 +16,11 @@ import {
   cashRegisterQuantityExpr,
   type CashRegisterVoucherStats,
 } from '~/server/utils/cashRegisterVouchers'
+import {
+  buildCashRegisterDepositStats,
+  CASH_REGISTER_DEPOSIT_SELECT,
+  type CashRegisterDepositStats,
+} from '~/server/utils/cashRegisterDeposits'
 import {
   buildCashRegisterStandStats,
   noCashRegisterStandFilter,
@@ -69,6 +75,8 @@ export interface CashRegisterOverview {
   stands: CashRegisterStandStat[]
   /** Absent against a kassensystem without vouchers. */
   vouchers?: CashRegisterVoucherStats
+  /** Absent against a kassensystem without deposit returns. */
+  deposits?: CashRegisterDepositStats
 }
 
 export type EventCashRegisterResponse =
@@ -310,6 +318,16 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
     vouchers = buildCashRegisterVoucherStats(voucherSaleRows, redemptionRows)
   }
 
+  let deposits: CashRegisterDepositStats | undefined
+  if (voucherLines && await hasCashRegisterDepositReturns()) {
+    const depositRows = await cashRegisterQuery<Array<{ amount: unknown, issued: unknown, covered: unknown, returned: unknown }>>(`
+      ${CASH_REGISTER_DEPOSIT_SELECT}
+        AND o.event_id = ?${stand.orders}
+      GROUP BY ABS(oi.unit_deposit)
+    `, [cashRegisterEventId, ...stand.params])
+    deposits = buildCashRegisterDepositStats(depositRows)
+  }
+
   const toItem = (row: { id: number, name: string, quantity: unknown, amount: unknown }): CashRegisterOverviewItem => ({
     id: Number(row.id),
     name: String(row.name),
@@ -362,6 +380,7 @@ export default defineEventHandler(async (event): Promise<EventCashRegisterRespon
       standFilter: stand.value,
       stands,
       vouchers,
+      deposits,
     },
   }
 })
