@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { hasPermission, requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
+import { copyAppointmentWebsiteSettings } from '~/server/utils/appointmentWebsite'
 import { validateAppointment, normalizeAllDayRange, normalizeIdList } from '~/server/utils/appointments/validate'
 import {
   canEditAppointment,
@@ -241,6 +242,7 @@ async function splitSeries(args: OccurrenceEditArgs): Promise<UpdateAppointmentR
   await truncateSeriesBefore(appointment.id, occurrenceDate, conn)
 
   const newId = await insertAppointment(body, appointment.created_by ?? args.userId, conn)
+  await copyAppointmentWebsiteSettings(appointment.id, newId, conn)
 
   if (body.subdivision_ids !== undefined || body.member_ids !== undefined) {
     await syncAppointmentScope(newId, body, conn)

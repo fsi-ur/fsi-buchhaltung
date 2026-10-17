@@ -575,6 +575,17 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     restricted: true,
     references: { user_id: USER_REF },
   },
+  api_keys: {
+    table: 'api_keys',
+    labelKey: 'audit.entities.apiKey',
+    domain: 'security',
+    viewPermissions: ['settings.apiKeys.manage'],
+    restricted: true,
+    references: { created_by: USER_REF },
+    redactedColumns: ['key_hash'],
+    ignoredColumns: ['last_used_at'],
+    describe: state => state.name ?? null,
+  },
   app_settings: {
     table: 'app_settings',
     labelKey: 'audit.entities.appSetting',

@@ -48,6 +48,32 @@ export interface Event extends EventRow {
   cost_centre_splits: EventCostCentreSplit[]
 }
 
+/** Controls whether and how an event appears on the public website (GET /api/public/events). */
+export interface EventWebsiteSettings {
+  published: boolean
+  /** Wall clock in the app time zone; null = visible as soon as published. */
+  visible_from: string | null
+  /** Overrides the internal name on the website; null = use the name. */
+  title: string | null
+  /** Markdown source, rendered by the website. */
+  description: string | null
+}
+
+/** One event as the public API returns it. */
+export interface PublicEvent {
+  id: number
+  title: string
+  description: string | null
+  /** ISO 8601 with UTC offset, e.g. "2026-11-03T19:00:00+01:00". */
+  startsAt: string
+  endsAt: string
+  /** Wall clock in the app time zone, "YYYY-MM-DD HH:mm:ss". */
+  startsAtLocal: string
+  endsAtLocal: string
+  location: string | null
+  organizers: Array<{ code: string, name: string }>
+}
+
 export interface EventPlanningSummary {
   readiness: number
   tasks: { total: number; done: number; open: number }

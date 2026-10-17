@@ -35,6 +35,8 @@ const COMPARISON_IGNORED_COLUMNS = ['updated_at']
 // status and owner changes that matter still produce entries as usual.
 const TABLE_COMPARISON_IGNORED_COLUMNS = new Map([
   ['wiki_articles', ['draft_md', 'draft_updated_at', 'draft_updated_by']],
+  // Refreshed by every website request authenticated with the key.
+  ['api_keys', ['last_used_at']],
 ])
 
 function buildComparisonColumns(table) {

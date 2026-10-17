@@ -136,3 +136,29 @@ export interface CalendarEntry {
   eventId: number | null
   eventTab: string | null
 }
+
+/** Whether a series appears on the public website (GET /api/public/appointments). Applies to every occurrence. */
+export interface AppointmentWebsiteSettings {
+  published: boolean
+  /** Wall clock in the app time zone; null = visible as soon as published. */
+  visible_from: string | null
+}
+
+/** One occurrence as the public API returns it. */
+export interface PublicAppointment {
+  /** Stable per occurrence: "<appointmentId>-<YYYYMMDDHHmm of the scheduled start>". */
+  id: string
+  appointmentId: number
+  recurring: boolean
+  title: string
+  /** ISO 8601 with UTC offset, e.g. "2026-11-03T19:00:00+01:00". */
+  startsAt: string
+  endsAt: string
+  /** Wall clock in the app time zone, "YYYY-MM-DD HH:mm:ss". */
+  startsAtLocal: string
+  endsAtLocal: string
+  /** Whole days; then the local fields span 00:00:00 to 23:59:59. */
+  allDay: boolean
+  location: string | null
+  cancelled: boolean
+}

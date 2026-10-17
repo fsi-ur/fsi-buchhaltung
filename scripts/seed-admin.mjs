@@ -52,6 +52,7 @@ const ALL_PERMISSION_KEYS = [
   'events.view',
   'events.shifts.signup',
   'events.edit',
+  'events.publish',
   'companies.view',
   'companies.edit',
   'spheres.view',
@@ -66,6 +67,7 @@ const ALL_PERMISSION_KEYS = [
   'settings.viewAs',
   'settings.app.access',
   'settings.app.snapshots.manage',
+  'settings.apiKeys.manage',
   'permissions.manage',
   'files.view',
   'users.view',
@@ -86,6 +88,7 @@ const ALL_PERMISSION_KEYS = [
   'calendar.view',
   'calendar.create',
   'calendar.manage',
+  'calendar.publish',
 ]
 
 const DEFAULT_ROLE_PERMISSIONS = {

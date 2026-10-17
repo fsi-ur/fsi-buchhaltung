@@ -24,6 +24,7 @@ export type PermissionKey =
   | 'events.view'
   | 'events.shifts.signup'
   | 'events.edit'
+  | 'events.publish'
   | 'companies.view'
   | 'companies.edit'
   | 'spheres.view'
@@ -38,6 +39,7 @@ export type PermissionKey =
   | 'settings.viewAs'
   | 'settings.app.access'
   | 'settings.app.snapshots.manage'
+  | 'settings.apiKeys.manage'
   | 'permissions.manage'
   | 'files.view'
   | 'users.view'
@@ -58,6 +60,7 @@ export type PermissionKey =
   | 'calendar.view'
   | 'calendar.create'
   | 'calendar.manage'
+  | 'calendar.publish'
 
 export interface PermissionDefinition {
   key: PermissionKey
@@ -92,6 +95,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'events.view', labelKey: 'permissions.items.eventsView', categoryKey: 'permissions.categories.events' },
   { key: 'events.shifts.signup', labelKey: 'permissions.items.eventsShiftsSignup', categoryKey: 'permissions.categories.events' },
   { key: 'events.edit', labelKey: 'permissions.items.eventsEdit', categoryKey: 'permissions.categories.events' },
+  { key: 'events.publish', labelKey: 'permissions.items.eventsPublish', categoryKey: 'permissions.categories.events' },
   { key: 'companies.view', labelKey: 'permissions.items.companiesView', categoryKey: 'permissions.categories.companies' },
   { key: 'companies.edit', labelKey: 'permissions.items.companiesEdit', categoryKey: 'permissions.categories.companies' },
   { key: 'spheres.view', labelKey: 'permissions.items.spheresView', categoryKey: 'permissions.categories.settings' },
@@ -106,6 +110,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'settings.viewAs', labelKey: 'permissions.items.settingsViewAs', categoryKey: 'permissions.categories.settings' },
   { key: 'settings.app.access', labelKey: 'permissions.items.settingsAppAccess', categoryKey: 'permissions.categories.settings' },
   { key: 'settings.app.snapshots.manage', labelKey: 'permissions.items.settingsAppSnapshotsManage', categoryKey: 'permissions.categories.settings' },
+  { key: 'settings.apiKeys.manage', labelKey: 'permissions.items.settingsApiKeysManage', categoryKey: 'permissions.categories.settings' },
   { key: 'permissions.manage', labelKey: 'permissions.items.permissionsManage', categoryKey: 'permissions.categories.settings' },
   { key: 'files.view', labelKey: 'permissions.items.filesView', categoryKey: 'permissions.categories.files' },
   { key: 'users.view', labelKey: 'permissions.items.usersView', categoryKey: 'permissions.categories.users' },
@@ -126,6 +131,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'calendar.view', labelKey: 'permissions.items.calendarView', categoryKey: 'permissions.categories.calendar' },
   { key: 'calendar.create', labelKey: 'permissions.items.calendarCreate', categoryKey: 'permissions.categories.calendar' },
   { key: 'calendar.manage', labelKey: 'permissions.items.calendarManage', categoryKey: 'permissions.categories.calendar' },
+  { key: 'calendar.publish', labelKey: 'permissions.items.calendarPublish', categoryKey: 'permissions.categories.calendar' },
 ]
 
 export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
@@ -140,6 +146,7 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'events.view': ['events.access'],
   'events.shifts.signup': ['events.access'],
   'events.edit': ['events.view', 'events.access'],
+  'events.publish': ['events.view', 'events.access'],
   'companies.edit': ['companies.view'],
   'settings.association.manage': ['settings.access'],
   'subjects.edit': ['subjects.view'],
@@ -150,6 +157,7 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'settings.viewAs': ['settings.access'],
   'settings.app.access': ['settings.access'],
   'settings.app.snapshots.manage': ['settings.app.access'],
+  'settings.apiKeys.manage': ['settings.app.access'],
   'permissions.manage': ['settings.access', 'users.view'],
   'users.manage': ['users.view'],
   'bank_statements.edit': ['bank_statements.view'],
@@ -162,4 +170,5 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'audit.viewAll': ['audit.view'],
   'calendar.create': ['calendar.view'],
   'calendar.manage': ['calendar.create', 'calendar.view'],
+  'calendar.publish': ['calendar.view'],
 }

@@ -1,5 +1,5 @@
 // Navigation / UI
-export type EventPlanningTabKey = 'overview' | 'timeline' | 'tasks' | 'checklists' | 'shifts' | 'details' | 'cashRegister'
+export type EventPlanningTabKey = 'overview' | 'timeline' | 'tasks' | 'checklists' | 'shifts' | 'details' | 'cashRegister' | 'website'
 export type EventShiftPermissionMode = 'own' | 'manage'
 
 // Task types

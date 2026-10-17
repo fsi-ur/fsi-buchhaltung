@@ -18,4 +18,6 @@ export const MIGRATION_SCRIPTS = [
   'migrate-association-documents.mjs',
   'migrate-invoice-recipient-attention.mjs',
   'migrate-explicit-time-zones.mjs',
+  'migrate-website-events.mjs',
+  'migrate-website-appointments.mjs',
 ]

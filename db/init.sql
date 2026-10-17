@@ -295,7 +295,24 @@ CREATE TABLE IF NOT EXISTS events (
   starts_at DATETIME NOT NULL,
   ends_at DATETIME NOT NULL,
   location VARCHAR(255) NULL,
-  expected_guests MEDIUMINT UNSIGNED NULL
+  expected_guests MEDIUMINT UNSIGNED NULL,
+  website_published TINYINT(1) NOT NULL DEFAULT 0,
+  website_visible_from DATETIME NULL,
+  website_title VARCHAR(255) NULL,
+  website_description TEXT NULL
+);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(127) NOT NULL,
+  key_prefix VARCHAR(16) NOT NULL,
+  key_hash CHAR(64) NOT NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TIMESTAMP NULL DEFAULT NULL,
+  revoked_at TIMESTAMP NULL DEFAULT NULL,
+  UNIQUE KEY unique_api_key_hash (key_hash),
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS event_member_organizers (
@@ -877,6 +894,8 @@ CREATE TABLE IF NOT EXISTS appointments (
   notify_on_change TINYINT(1) NOT NULL DEFAULT 1,
   notify_reminder TINYINT(1) NOT NULL DEFAULT 1,
   reminder_lead_minutes VARCHAR(64) NULL,
+  website_published TINYINT(1) NOT NULL DEFAULT 0,
+  website_visible_from DATETIME NULL,
   created_by BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

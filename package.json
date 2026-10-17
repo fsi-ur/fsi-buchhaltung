@@ -35,6 +35,8 @@
     "setup:migrate:association-documents": "node --env-file=.env scripts/migrate-association-documents.mjs",
     "setup:migrate:invoice-recipient-attention": "node --env-file=.env scripts/migrate-invoice-recipient-attention.mjs",
     "setup:migrate:explicit-time-zones": "node --env-file=.env scripts/migrate-explicit-time-zones.mjs",
+    "setup:migrate:website-events": "node --env-file=.env scripts/migrate-website-events.mjs",
+    "setup:migrate:website-appointments": "node --env-file=.env scripts/migrate-website-appointments.mjs",
     "setup:seed:wiki-content": "node --env-file=.env scripts/migrate-wiki.mjs --seed-content",
     "setup:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "setup:audit": "node --env-file=.env scripts/ensure-audit-infrastructure.mjs",

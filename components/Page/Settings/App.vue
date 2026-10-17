@@ -182,6 +182,8 @@
     <p class="text-xs text-base-400">{{ t('audit.retention.pruneHint') }}</p>
   </CommonCard>
 
+  <PageSettingsApiKeysSection v-if="canManageApiKeys" />
+
   <CommonCard
     v-if="canManageSnapshots"
     :title="t('settings.app.snapshotTitle')"
@@ -373,6 +375,7 @@ const { hasPermission, fetchSession } = useAuth()
 const toast = useToast()
 
 const canManageSnapshots = computed(() => hasPermission('settings.app.snapshots.manage'))
+const canManageApiKeys = computed(() => hasPermission('settings.apiKeys.manage'))
 const isDownloadingSnapshot = ref(false)
 const isDownloadingFiles = ref(false)
 const isPreviewing = ref(false)

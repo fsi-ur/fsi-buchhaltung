@@ -31,7 +31,7 @@
             </button>
 
             <button
-              v-if="canEdit"
+              v-if="canEdit || canPublish"
               type="button"
               class="btn-primary"
               :class="isSaving ? 'cursor-not-allowed opacity-70' : ''"
@@ -69,6 +69,14 @@
               :existing-type-id="existingTypeId"
               :disabled="!canEdit"
             />
+
+            <PageCalendarWebsiteField
+              v-if="showWebsite"
+              v-model="website"
+              class="border-t border-base-200 pt-6"
+              :restricted="Boolean(form.restricted)"
+              :disabled="!canPublish"
+            />
           </template>
         </div>
       </section>
@@ -83,7 +91,9 @@ import { useToast } from '~/composables/useToast'
 import type { AppointmentFormValue } from '~/components/Page/Calendar/Form.vue'
 import type { GetAppointmentResponse } from '~/server/api/appointments/[id].get'
 import type { GetAppointmentOptionsResponse, AppointmentMemberOption, AppointmentSubdivisionOption } from '~/server/api/appointments/options.get'
-import type { AppointmentEditScope, AppointmentTypeRow, SaveAppointmentBody } from '~/types/appointment'
+import type { GetAppointmentWebsiteResponse } from '~/server/api/appointments/[id]/website.get'
+import type { UpdateAppointmentWebsiteResponse } from '~/server/api/appointments/[id]/website.put'
+import type { AppointmentEditScope, AppointmentTypeRow, AppointmentWebsiteSettings, SaveAppointmentBody } from '~/types/appointment'
 import { nowWallClockFrame } from '~/composables/useCalendarView'
 const { timeZone } = useAppTimeZone()
 
@@ -92,7 +102,7 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { hasPermission } = useAuth()
+const { hasPermission, resolveFlag } = useAuth()
 const toast = useToast()
 const { pageMeta } = usePage()
 const { goToReturnTarget } = useReturnTarget('Calendar')
@@ -125,6 +135,16 @@ const isHeaderStuck = ref(false)
 let headerStickyObserver: IntersectionObserver | null = null
 
 const form = ref<AppointmentFormValue>(emptyForm())
+
+// Publishing on the website belongs to the whole series, so a single-occurrence edit doesn't offer it.
+const emptyWebsite = (): AppointmentWebsiteSettings => ({ published: false, visible_from: null })
+const website = ref<AppointmentWebsiteSettings>(emptyWebsite())
+const savedWebsite = ref<AppointmentWebsiteSettings>(emptyWebsite())
+const canPublish = ref(hasPermission('calendar.publish'))
+const showWebsite = computed(() => scope.value !== 'occurrence' && (canPublish.value || savedWebsite.value.published))
+const websiteDirty = computed(() =>
+  website.value.published !== savedWebsite.value.published
+  || (website.value.visible_from || null) !== (savedWebsite.value.visible_from || null))
 
 const scopeLabel = computed(() => {
   if (!appointmentId.value) return ''
@@ -192,6 +212,9 @@ async function loadAppointment() {
     form.value = emptyForm()
     canEdit.value = true
     existingTypeId.value = null
+    canPublish.value = hasPermission('calendar.publish')
+    website.value = emptyWebsite()
+    savedWebsite.value = emptyWebsite()
     return
   }
 
@@ -244,12 +267,28 @@ async function loadAppointment() {
       member_ids: [...appointment.member_ids],
       restricted: Boolean(appointment.subdivision_ids.length || appointment.member_ids.length),
     }
+
+    await loadWebsite(id)
   } catch {
     errors.value = [t('calendar.detail.loadFailed')]
     canEdit.value = false
   } finally {
     isLoading.value = false
   }
+}
+
+async function loadWebsite(id: number) {
+  const res = await $fetch<GetAppointmentWebsiteResponse>(`/api/appointments/${id}/website`)
+    .catch(() => ({ ok: false as const, error: '' }))
+  if (!res.ok) {
+    canPublish.value = false
+    website.value = emptyWebsite()
+    savedWebsite.value = emptyWebsite()
+    return
+  }
+  canPublish.value = resolveFlag(res.canPublish, 'calendar.publish')
+  website.value = { ...res.website }
+  savedWebsite.value = { ...res.website }
 }
 
 function wallClockMs(value: string): number {
@@ -290,28 +329,47 @@ function validate(): string[] {
 }
 
 async function save() {
-  if (isSaving.value || !canEdit.value) return
+  if (isSaving.value || (!canEdit.value && !canPublish.value)) return
 
-  errors.value = validate()
+  errors.value = canEdit.value ? validate() : []
   if (errors.value.length) return
 
   isSaving.value = true
   try {
-    const body: SaveAppointmentBody = { ...form.value }
+    // A publisher who may not edit the appointment itself only saves the website settings.
+    let savedId = appointmentId.value
+    if (canEdit.value) {
+      const body: SaveAppointmentBody = { ...form.value }
 
-    const res = appointmentId.value
-      ? await $fetch<{ ok: boolean, error?: string }>(`/api/appointments/${appointmentId.value}`, {
+      const res = appointmentId.value
+        ? await $fetch<{ ok: boolean, id?: number, error?: string }>(`/api/appointments/${appointmentId.value}`, {
+          method: 'PUT',
+          body: { ...body, scope: scope.value, occurrenceDate: occurrenceDate.value },
+        })
+        : await $fetch<{ ok: boolean, id?: number, error?: string }>('/api/appointments/create', {
+          method: 'POST',
+          body,
+        })
+
+      if (!res.ok) {
+        errors.value = [res.error || t('calendar.form.saveFailed')]
+        return
+      }
+      // "This and following" answers with the id of the new series.
+      savedId = res.id ?? savedId
+    }
+
+    if (showWebsite.value && canPublish.value && websiteDirty.value && savedId) {
+      const websiteRes = await $fetch<UpdateAppointmentWebsiteResponse>(`/api/appointments/${savedId}/website`, {
         method: 'PUT',
-        body: { ...body, scope: scope.value, occurrenceDate: occurrenceDate.value },
-      })
-      : await $fetch<{ ok: boolean, error?: string }>('/api/appointments/create', {
-        method: 'POST',
-        body,
-      })
-
-    if (!res.ok) {
-      errors.value = [res.error || t('calendar.form.saveFailed')]
-      return
+        body: website.value,
+      }).catch(() => ({ ok: false as const, error: '' }))
+      if (!websiteRes.ok) {
+        // The appointment itself is saved by now — staying here would let a retry create it twice.
+        toast.error(websiteRes.error || t('calendar.website.saveFailed'))
+        goToReturnTarget()
+        return
+      }
     }
 
     toast.success(t('calendar.form.saved'))

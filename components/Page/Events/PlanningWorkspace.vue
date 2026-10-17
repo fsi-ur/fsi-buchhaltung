@@ -60,7 +60,7 @@
             <nav
               v-if="eventId && planningTabs.length > 1"
               class="grid grid-cols-2 gap-2 border-b border-base-200 bg-base-200 px-3 py-3 sm:grid-cols-3"
-              :class="planningTabs.length > 6 ? 'lg:grid-cols-7' : 'lg:grid-cols-6'"
+              :class="planningTabs.length > 7 ? 'lg:grid-cols-8' : planningTabs.length > 6 ? 'lg:grid-cols-7' : 'lg:grid-cols-6'"
             >
               <button
                 v-for="tab in planningTabs"
@@ -376,6 +376,13 @@
               :event-id="eventId"
             />
 
+            <EventWebsitePanel
+              v-else-if="activeTab === 'website' && canViewAll && websiteTabAvailable"
+              :event-id="eventId"
+              :event-name="savedFormSnapshot?.name || form.name"
+              :ends-at="savedFormSnapshot?.ends_at || form.ends_at"
+            />
+
             <EventDetailsPanel
               v-else-if="activeTab === 'details' && canViewAll"
               v-model="form"
@@ -438,6 +445,7 @@ import EventChecklistsPanel from './planning/EventChecklistsPanel.vue'
 import EventShiftsPanel from './planning/EventShiftsPanel.vue'
 import EventTasksPanel from './planning/EventTasksPanel.vue'
 import EventTimelinePanel from './planning/EventTimelinePanel.vue'
+import EventWebsitePanel from './planning/EventWebsitePanel.vue'
 import type {
   EventPlanningTabKey,
   EventPlanningTask,
@@ -466,6 +474,8 @@ const effectiveIsOrganizer = computed(() => !isSimulating() && isOrganizer.value
 const canManagePlanning = computed(() => canEdit.value || effectiveIsOrganizer.value)
 const canSaveChecklistTemplates = computed(() => canEdit.value)
 const canUseShiftPlanning = computed(() => canEdit.value || hasPermission('events.shifts.signup') || effectiveIsOrganizer.value)
+
+const websiteTabAvailable = computed(() => hasPermission(['events.view', 'events.publish']))
 
 const runtimeConfig = useRuntimeConfig()
 const cashRegisterAvailable = computed(() =>
@@ -720,6 +730,10 @@ const planningTabs = computed(() => {
 
   if (cashRegisterAvailable.value) {
     all.push({ key: 'cashRegister', label: t('event.planning.tabs.cashRegister'), icon: 'material-symbols:point-of-sale-rounded' })
+  }
+
+  if (websiteTabAvailable.value) {
+    all.push({ key: 'website', label: t('event.planning.tabs.website'), icon: 'material-symbols:public' })
   }
 
   all.push({ key: 'details', label: t('event.planning.tabs.details'), icon: 'material-symbols:tune-rounded' })

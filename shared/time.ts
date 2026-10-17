@@ -187,6 +187,19 @@ export function localDateTimeToInstant(value: LocalDateTime, timeZone: string): 
   return new Date(candidate)
 }
 
+/**
+ * A wall clock in `timeZone` as ISO 8601 with its UTC offset ("2026-11-03T19:00:00+01:00"), for
+ * consumers outside the app that cannot know the zone. Follows `localDateTimeToInstant` in the DST
+ * gap, so the result always names a moment that exists.
+ */
+export function localDateTimeToOffsetIso(value: LocalDateTime, timeZone: string): string {
+  const instant = localDateTimeToInstant(value, timeZone)
+  const offset = timeZoneOffsetMinutes(instant, timeZone)
+  const sign = offset < 0 ? '-' : '+'
+  const abs = Math.abs(offset)
+  return `${instantToLocalDateTime(instant, timeZone).replace(' ', 'T')}${sign}${pad2(Math.floor(abs / 60))}:${pad2(abs % 60)}`
+}
+
 /** Midnight of that calendar day in `timeZone`, as an instant. */
 export function startOfLocalDate(value: LocalDate, timeZone: string): Date {
   return localDateTimeToInstant(`${value} 00:00:00`, timeZone)
