@@ -5,6 +5,7 @@ import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~
 import { getWikiAccess } from '~/server/utils/wiki/access'
 import { buildVisibleTree, loadSpaceRows, loadTreeArticleRows } from '~/server/utils/wiki/articles'
 import { loadChecklistDefinitions } from '~/server/utils/wiki/checklists'
+import { loadArticleImageData } from '~/server/utils/wiki/images'
 import { buildWikiSpacePdf, wikiPdfFileName, type WikiPdfArticle } from '~/server/utils/wiki/exportPdf'
 import type { WikiTreeArticle } from '~/types/wiki'
 
@@ -69,12 +70,15 @@ export default defineEventHandler(async (event) => {
     logo = null
   }
 
+  const images = await loadArticleImageData(articles.map(article => article.id))
+
   const pdf = buildWikiSpacePdf({
     spaceTitle: space.title,
     spaceDescription: space.description,
     articles,
     association,
     logo,
+    images,
   })
 
   setHeader(event, 'Content-Type', 'application/pdf')

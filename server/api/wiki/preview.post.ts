@@ -1,11 +1,15 @@
 import { defineEventHandler, readBody } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { renderArticle } from '~/server/utils/wiki/render'
+import { canReadArticle, getWikiAccess } from '~/server/utils/wiki/access'
+import { loadArticleImageIds } from '~/server/utils/wiki/images'
 import type { WikiHeading } from '~/server/utils/wiki/render'
 
 interface PreviewBody {
   markdown?: string
   knownChecklists?: string[]
+  /** The article being edited; its uploaded images are the only ones `bild:<id>` may reference. */
+  articleId?: number
 }
 
 export type PreviewResponse =
@@ -23,7 +27,14 @@ export default defineEventHandler(async (event): Promise<PreviewResponse> => {
     ? body.knownChecklists.filter((entry): entry is string => typeof entry === 'string')
     : undefined
 
-  const rendered = renderArticle(markdown, { knownChecklists })
+  const articleId = Number(body?.articleId)
+  let knownImages: number[] = []
+  if (Number.isInteger(articleId) && articleId > 0) {
+    const { index, subjects } = await getWikiAccess(event, current.user)
+    if (canReadArticle(index, subjects, articleId)) knownImages = await loadArticleImageIds(articleId)
+  }
+
+  const rendered = renderArticle(markdown, { knownChecklists, knownImages })
   if (!rendered.ok) return rendered
 
   return { ok: true, html: rendered.html, headings: rendered.headings }

@@ -33,7 +33,7 @@ async function mayReadAsWikiAttachment(event: H3Event, user: User, fileId: numbe
   const rows = await query<Array<{ entity_id: number }>>(
     `SELECT entity_id
      FROM file_attachments
-     WHERE file_id = ? AND entity_type = 'wiki_article' AND detached_at IS NULL
+     WHERE file_id = ? AND entity_type IN ('wiki_article', 'wiki_article_image') AND detached_at IS NULL
      UNION
      -- An article may also carry a document from the association library; what it hands out is the
      -- file currently behind that document, so the article — not the upload — decides who may read it.

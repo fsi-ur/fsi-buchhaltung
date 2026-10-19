@@ -66,6 +66,11 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const { setPage } = usePage()
+const appBaseUrl = useRuntimeConfig().app.baseURL || '/'
+
+function fileUrl(fileId: string) {
+  return `${appBaseUrl.replace(/\/+$/, '')}/api/files/${fileId}`
+}
 
 interface ToolMount {
   id: number
@@ -138,6 +143,13 @@ function hydrateArticleLinks(container: HTMLElement) {
     anchor.setAttribute('data-wiki-target', String(target.id))
     anchor.setAttribute('title', t('wiki.article.linkTitle'))
     if (!label) anchor.textContent = target.title
+  }
+}
+
+function hydrateImages(container: HTMLElement) {
+  for (const image of container.querySelectorAll<HTMLImageElement>('img[data-wiki-image]')) {
+    const url = fileUrl(image.getAttribute('data-wiki-image') ?? '')
+    if (image.getAttribute('src') !== url) image.setAttribute('src', url)
   }
 }
 
@@ -236,11 +248,18 @@ async function hydrate() {
   if (!container) return
 
   hydrateArticleLinks(container)
+  hydrateImages(container)
   collectMounts(container)
   await resolveEmbeds()
 }
 
 function onClick(event: MouseEvent) {
+  const image = (event.target as HTMLElement | null)?.closest<HTMLImageElement>('img[data-wiki-image]')
+  if (image) {
+    window.open(fileUrl(image.getAttribute('data-wiki-image') ?? ''), '_blank', 'noopener')
+    return
+  }
+
   const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[data-wiki-article]')
   if (!anchor) return
 

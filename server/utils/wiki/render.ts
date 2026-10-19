@@ -35,6 +35,8 @@ export interface WikiRenderResult {
   articleLinks: WikiArticleLinkRef[]
   glossaryTerms: string[]
   headings: WikiHeading[]
+  /** File ids of the `bild:<id>` images in the article. */
+  images: number[]
 }
 
 export type WikiRenderOutcome =
@@ -44,6 +46,8 @@ export type WikiRenderOutcome =
 export interface WikiRenderOptions {
   /** `key_slug`s of the checklists defined on the article, so `:::checklist{id="…"}` can be verified. */
   knownChecklists?: string[]
+  //File ids of the images uploaded into the article
+  knownImages?: number[]
 }
 
 interface RenderEnv {
@@ -54,7 +58,9 @@ interface RenderEnv {
   articleLinks: WikiArticleLinkRef[]
   glossaryTerms: string[]
   headings: WikiHeading[]
+  images: number[]
   knownChecklists: string[] | null
+  knownImages: number[] | null
 }
 
 const CALLOUT_NAMES = ['hinweis', 'warnung', 'tipp'] as const
@@ -289,6 +295,42 @@ function wikiReferenceRule(state: any, silent: boolean) {
   return true
 }
 
+export function parseWikiImageRef(src: string): number | null {
+  const match = /^bild:(\d+)$/i.exec(String(src ?? '').trim())
+  if (!match) return null
+  const id = Number(match[1])
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
+/** Resolves every `bild:<id>` image to its file id; runs after inline parsing so errors stop the render. */
+function wikiImagesRule(state: any) {
+  const env = state.env.wiki as RenderEnv | undefined
+  if (!env) return
+
+  const visit = (tokens: any[]) => {
+    for (const token of tokens) {
+      if (token.children) visit(token.children)
+      if (token.type !== 'image') continue
+
+      const src = String(token.attrGet('src') ?? '')
+      if (!/^bild:/i.test(src)) continue
+
+      const fileId = parseWikiImageRef(src)
+      if (fileId === null) {
+        env.errors.push(`Der Bildverweis „${src}" ist ungültig. Bilder bitte über „Bild einfügen" hochladen.`)
+        continue
+      }
+      if (env.knownImages && !env.knownImages.includes(fileId)) {
+        env.errors.push(`Das Bild „${src}" gehört nicht zu diesem Artikel oder wurde gelöscht. Bitte das Bild in diesem Artikel hochladen.`)
+        continue
+      }
+      token.meta = { ...(token.meta ?? {}), wikiImageId: fileId }
+      if (!env.images.includes(fileId)) env.images.push(fileId)
+    }
+  }
+  visit(state.tokens)
+}
+
 function createRenderer() {
   const md = new MarkdownIt({ html: false, linkify: true, breaks: false, typographer: false })
 
@@ -317,8 +359,21 @@ function createRenderer() {
 
   md.block.ruler.before('fence', 'wiki_directive', directiveRule, { alt: ['paragraph', 'blockquote', 'list'] })
   md.inline.ruler.before('link', 'wiki_reference', wikiReferenceRule)
+  md.core.ruler.push('wiki_images', wikiImagesRule)
 
   const escape = md.utils.escapeHtml
+
+  const defaultImage = md.renderer.rules.image!
+  md.renderer.rules.image = (tokens: any[], index: number, options: any, env: any, self: any) => {
+    const token = tokens[index]
+    const fileId = token.meta?.wikiImageId
+    if (!fileId) return defaultImage(tokens, index, options, env, self)
+
+    // `src` is root-relative like every other /api/files link; ArticleBody prefixes the app base URL.
+    const alt = self.renderInlineAsText(token.children ?? [], options, env)
+    const title = token.attrGet('title')
+    return `<img class="wiki-image" src="/api/files/${fileId}" data-wiki-image="${fileId}" alt="${escape(alt)}"${title ? ` title="${escape(title)}"` : ''} loading="lazy">`
+  }
 
   md.renderer.rules.wiki_directive = (tokens: any[], index: number) => {
     const { name, embed, tool, checklist } = tokens[index].meta
@@ -357,9 +412,9 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     'span', 'div',
   ],
   allowedAttributes: {
-    '*': ['class', 'id', 'data-wiki-embed', 'data-wiki-args', 'data-wiki-tool', 'data-wiki-tool-meta', 'data-wiki-checklist', 'data-wiki-article', 'data-wiki-glossary', 'data-wiki-callout', 'data-wiki-label'],
+    '*': ['class', 'id', 'data-wiki-image', 'data-wiki-embed', 'data-wiki-args', 'data-wiki-tool', 'data-wiki-tool-meta', 'data-wiki-checklist', 'data-wiki-article', 'data-wiki-glossary', 'data-wiki-callout', 'data-wiki-label'],
     a: ['href', 'title', 'rel', 'target'],
-    img: ['src', 'alt', 'title'],
+    img: ['src', 'alt', 'title', 'loading'],
     th: ['colspan', 'rowspan', 'scope'],
     td: ['colspan', 'rowspan'],
   },
@@ -386,6 +441,8 @@ function collectText(tokens: any[], parts: string[]) {
       parts.push(token.meta.label || token.meta.term || `${token.meta.spaceSlug}/${token.meta.slug}`)
     } else if (token.type === 'softbreak' || token.type === 'hardbreak') {
       parts.push(' ')
+    } else if (token.type === 'image' && token.children) {
+      collectText(token.children, parts)
     }
   }
 }
@@ -412,7 +469,9 @@ export function renderArticle(markdown: string, options: WikiRenderOptions = {})
     articleLinks: [],
     glossaryTerms: [],
     headings: [],
+    images: [],
     knownChecklists: options.knownChecklists ?? null,
+    knownImages: options.knownImages ?? null,
   }
 
   const source = markdown ?? ''
@@ -440,6 +499,7 @@ export function renderArticle(markdown: string, options: WikiRenderOptions = {})
     articleLinks: env.articleLinks,
     glossaryTerms: env.glossaryTerms,
     headings: env.headings,
+    images: env.images,
   }
 }
 
@@ -452,7 +512,9 @@ export function parseArticleTokens(markdown: string, options: WikiRenderOptions 
     articleLinks: [],
     glossaryTerms: [],
     headings: [],
+    images: [],
     knownChecklists: options.knownChecklists ?? null,
+    knownImages: options.knownImages ?? null,
   }
 
   return renderer.parse(markdown ?? '', { wiki: env })

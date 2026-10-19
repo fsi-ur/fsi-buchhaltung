@@ -530,22 +530,32 @@ function readJpegSize(data: Buffer) {
   return null
 }
 
+const PNG_CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }
+const PNG_BIT_DEPTHS: Record<number, number[]> = { 0: [8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] }
+
+/**
+ * Decodes a non-interlaced PNG (truecolor, grayscale, palette — with or without alpha, 8 or 16 bit) into
+ * an 8-bit color stream plus an optional soft mask. Screenshots run through an optimizer often come out
+ * as palette images, so those matter as much as plain RGB(A).
+ */
 function buildPngImageObject(data: Buffer): PdfImageObject | null {
-  const signature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
-  if (data.length < 33 || !data.subarray(0, 8).equals(signature)) return null
+  if (data.length < 33 || !data.subarray(0, 8).equals(PNG_SIGNATURE)) return null
 
   const width = data.readUInt32BE(16)
   const height = data.readUInt32BE(20)
-  const bitDepth = data[24]
-  const colorType = data[25]
+  const bitDepth = data[24]!
+  const colorType = data[25]!
   const compression = data[26]
   const filter = data[27]
   const interlace = data[28]
 
-  if (!width || !height || bitDepth !== 8 || compression !== 0 || filter !== 0 || interlace !== 0) return null
-  if (colorType !== 2 && colorType !== 6) return null
+  if (!width || !height || compression !== 0 || filter !== 0 || interlace !== 0) return null
+  const channels = PNG_CHANNELS[colorType]
+  if (!channels || !PNG_BIT_DEPTHS[colorType]!.includes(bitDepth)) return null
 
   const idatChunks: Buffer[] = []
+  let palette: Buffer | null = null
+  let transparency: Buffer | null = null
   let offset = 8
   while (offset + 8 <= data.length) {
     const length = data.readUInt32BE(offset)
@@ -554,66 +564,94 @@ function buildPngImageObject(data: Buffer): PdfImageObject | null {
     const chunkEnd = chunkStart + length
     if (chunkEnd + 4 > data.length) return null
     if (type === 'IDAT') idatChunks.push(data.subarray(chunkStart, chunkEnd))
+    if (type === 'PLTE') palette = data.subarray(chunkStart, chunkEnd)
+    if (type === 'tRNS') transparency = data.subarray(chunkStart, chunkEnd)
     if (type === 'IEND') break
     offset = chunkEnd + 4
   }
 
   if (!idatChunks.length) return null
+  if (colorType === 3 && !palette) return null
 
-  const compressedData = Buffer.concat(idatChunks)
-  const inflated = inflateSync(compressedData)
-  const bytesPerPixel = colorType === 6 ? 4 : 3
-  const stride = width * bytesPerPixel
-  const expectedLength = (stride + 1) * height
-  if (inflated.length !== expectedLength) return null
+  let inflated: Buffer
+  try {
+    inflated = inflateSync(Buffer.concat(idatChunks))
+  } catch {
+    return null
+  }
 
-  const rgbaRows = unfilterPngScanlines(inflated, width, height, bytesPerPixel)
-  if (!rgbaRows) return null
+  const bitsPerPixel = channels * bitDepth
+  const bytesPerPixel = Math.max(1, Math.ceil(bitsPerPixel / 8))
+  const stride = Math.ceil((width * bitsPerPixel) / 8)
+  if (inflated.length < (stride + 1) * height) return null
 
-  const rgbRows: Buffer[] = []
+  const rows = unfilterPngScanlines(inflated, stride, height, bytesPerPixel)
+  if (!rows) return null
+
+  const gray = colorType === 0 || colorType === 4
+  const outColors = gray ? 1 : 3
+  const hasAlpha = colorType === 4 || colorType === 6 || (colorType === 3 && !!transparency?.length)
+  const maxSample = (1 << bitDepth) - 1
+
+  const sample = (row: Buffer, pixel: number, channel: number) => {
+    const index = (pixel * channels) + channel
+    if (bitDepth === 8) return row[index]!
+    if (bitDepth === 16) return row[index * 2]!
+    const bitOffset = index * bitDepth
+    const byte = row[bitOffset >> 3]!
+    return (byte >> (8 - bitDepth - (bitOffset & 7))) & maxSample
+  }
+
+  const colorRows: Buffer[] = []
   const alphaRows: Buffer[] = []
 
-  for (let rowIndex = 0; rowIndex < rgbaRows.length; rowIndex += 1) {
-    const row = rgbaRows[rowIndex]!
-    const rgb = Buffer.alloc(1 + (width * 3))
-    rgb[0] = 0
-    const alpha = colorType === 6 ? Buffer.alloc(1 + width) : null
-    if (alpha) alpha[0] = 0
+  for (const row of rows) {
+    // Leading 0 = PNG "None" filter per row, which is what Predictor 15 expects.
+    const color = Buffer.alloc(1 + (width * outColors))
+    const alpha = hasAlpha ? Buffer.alloc(1 + width) : null
 
     for (let pixel = 0; pixel < width; pixel += 1) {
-      const sourceOffset = pixel * bytesPerPixel
-      const rgbOffset = 1 + (pixel * 3)
-      rgb[rgbOffset] = row[sourceOffset]!
-      rgb[rgbOffset + 1] = row[sourceOffset + 1]!
-      rgb[rgbOffset + 2] = row[sourceOffset + 2]!
-      if (alpha) alpha[1 + pixel] = row[sourceOffset + 3]!
+      const target = 1 + (pixel * outColors)
+      if (colorType === 3) {
+        const entry = sample(row, pixel, 0)
+        color[target] = palette![entry * 3] ?? 0
+        color[target + 1] = palette![(entry * 3) + 1] ?? 0
+        color[target + 2] = palette![(entry * 3) + 2] ?? 0
+        if (alpha) alpha[1 + pixel] = transparency![entry] ?? 255
+        continue
+      }
+
+      for (let channel = 0; channel < outColors; channel += 1) color[target + channel] = sample(row, pixel, channel)
+      if (alpha) alpha[1 + pixel] = sample(row, pixel, outColors)
     }
 
-    rgbRows.push(rgb)
+    colorRows.push(color)
     if (alpha) alphaRows.push(alpha)
   }
 
-  const rgbData = deflateSync(Buffer.concat(rgbRows))
+  const colorData = deflateSync(Buffer.concat(colorRows))
   const alphaData = alphaRows.length ? deflateSync(Buffer.concat(alphaRows)) : null
+  const colorSpace = gray ? '/DeviceGray' : '/DeviceRGB'
 
   return {
     width,
     height,
-    imageObject: `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns ${width} >> /Length ${rgbData.length} >> stream\n${rgbData.toString('binary')}\nendstream`,
+    imageObject: `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace ${colorSpace} /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors ${outColors} /BitsPerComponent 8 /Columns ${width} >> /Length ${colorData.length} >> stream\n${colorData.toString('binary')}\nendstream`,
     softMaskObject: alphaData
       ? `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 8 /Columns ${width} >> /Length ${alphaData.length} >> stream\n${alphaData.toString('binary')}\nendstream`
       : undefined,
-    contentBounds: bytesPerPixel === 4 ? computeAlphaContentBounds(rgbaRows, width, bytesPerPixel) : undefined,
+    contentBounds: alphaRows.length ? computeAlphaContentBounds(alphaRows, width) : undefined,
   }
 }
 
-function computeAlphaContentBounds(rows: Buffer[], width: number, bytesPerPixel: number) {
+/** `rows` are soft-mask rows: a filter byte followed by one alpha byte per pixel. */
+function computeAlphaContentBounds(rows: Buffer[], width: number) {
   const ALPHA_THRESHOLD = 16
   let minCol = -1
   let maxCol = -1
 
   for (let pixel = 0; pixel < width; pixel += 1) {
-    const columnHasContent = rows.some(row => (row[(pixel * bytesPerPixel) + 3] ?? 0) > ALPHA_THRESHOLD)
+    const columnHasContent = rows.some(row => (row[1 + pixel] ?? 0) > ALPHA_THRESHOLD)
     if (!columnHasContent) continue
     if (minCol === -1) minCol = pixel
     maxCol = pixel
@@ -627,8 +665,7 @@ function computeAlphaContentBounds(rows: Buffer[], width: number, bytesPerPixel:
   }
 }
 
-function unfilterPngScanlines(data: Buffer, width: number, height: number, bytesPerPixel: number) {
-  const stride = width * bytesPerPixel
+function unfilterPngScanlines(data: Buffer, stride: number, height: number, bytesPerPixel: number) {
   const rows: Buffer[] = []
   let offset = 0
 
@@ -687,14 +724,27 @@ function paethPredictor(left: number, up: number, upLeft: number) {
   return upLeft
 }
 
+export interface PdfNamedImage {
+  /** Resource name the content streams use (`/Im2 Do`); `Im1` is reserved for `imageObject`. */
+  name: string
+  object: PdfImageObject
+}
+
 export function buildPdfDocument(params: {
   pages: string[]
+  /** The document's logo, available to the content streams as `/Im1`. */
   imageObject?: PdfImageObject | null
+  /** Further images, e.g. pictures inside a wiki article. */
+  images?: PdfNamedImage[]
   /** Internal jump targets per page, parallel to `pages`. */
   links?: PdfLink[][]
 }) {
   const { imageObject = null, links = [] } = params
   const pages = params.pages.length ? params.pages : ['']
+  const images: PdfNamedImage[] = [
+    ...(imageObject ? [{ name: 'Im1', object: imageObject }] : []),
+    ...(params.images ?? []),
+  ]
 
   const firstPageObjectId = 3
   const pageObjectId = (index: number) => firstPageObjectId + (index * 2)
@@ -704,10 +754,17 @@ export function buildPdfDocument(params: {
   const fontItalicId = fontRegularId + 2
   const fontMonoId = fontRegularId + 3
   const fontBoldItalicId = fontRegularId + 4
-  const imageObjectId = imageObject ? fontBoldItalicId + 1 : null
-  const softMaskObjectId = imageObject?.softMaskObject ? fontBoldItalicId + 2 : null
 
-  const xObjectPart = imageObjectId ? ` /XObject << /Im1 ${imageObjectId} 0 R >>` : ''
+  // Objects are emitted in id order — the xref table is written assuming position N holds object N + 1.
+  let nextObjectId = fontBoldItalicId + 1
+  const imageIds = images.map(image => ({
+    imageId: nextObjectId++,
+    softMaskId: image.object.softMaskObject ? nextObjectId++ : null,
+  }))
+
+  const xObjectPart = images.length
+    ? ` /XObject << ${images.map((image, index) => `/${image.name} ${imageIds[index]!.imageId} 0 R`).join(' ')} >>`
+    : ''
   const resources = `<< /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R /F3 ${fontItalicId} 0 R /F4 ${fontMonoId} 0 R /F5 ${fontBoldItalicId} 0 R >>${xObjectPart} >>`
   const kids = pages.map((_, index) => `${pageObjectId(index)} 0 R`).join(' ')
 
@@ -716,9 +773,7 @@ export function buildPdfDocument(params: {
     `2 0 obj << /Type /Pages /Kids [${kids}] /Count ${pages.length} >> endobj`,
   ]
 
-  // Annotation objects trail the rest of the file, so their ids stay contiguous with everything
-  // already emitted — the xref table is written assuming position N holds object N + 1.
-  let nextObjectId = (softMaskObjectId ?? imageObjectId ?? fontBoldItalicId) + 1
+  // Annotation objects trail the rest of the file, so their ids stay contiguous with everything already emitted.
   const annotationIds = pages.map((_, index) => (links[index] ?? []).map(() => nextObjectId++))
 
   pages.forEach((content, index) => {
@@ -737,13 +792,12 @@ export function buildPdfDocument(params: {
   objects.push(`${fontMonoId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >> endobj`)
   objects.push(`${fontBoldItalicId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >> endobj`)
 
-  if (imageObject && imageObjectId) {
-    const smaskReference = softMaskObjectId ? ` /SMask ${softMaskObjectId} 0 R` : ''
-    objects.push(`${imageObjectId} 0 obj ${imageObject.imageObject.replace('>> stream', `${smaskReference} >> stream`)} endobj`)
-  }
-  if (imageObject?.softMaskObject && softMaskObjectId) {
-    objects.push(`${softMaskObjectId} 0 obj ${imageObject.softMaskObject} endobj`)
-  }
+  images.forEach((image, index) => {
+    const { imageId, softMaskId } = imageIds[index]!
+    const smaskReference = softMaskId ? ` /SMask ${softMaskId} 0 R` : ''
+    objects.push(`${imageId} 0 obj ${image.object.imageObject.replace('>> stream', `${smaskReference} >> stream`)} endobj`)
+    if (softMaskId) objects.push(`${softMaskId} 0 obj ${image.object.softMaskObject} endobj`)
+  })
 
   pages.forEach((_, index) => {
     (links[index] ?? []).forEach((link, linkIndex) => {

@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { levelAtLeast, requireArticleWrite } from '~/server/utils/wiki/access'
 import { renderArticle } from '~/server/utils/wiki/render'
+import { loadArticleImageIds } from '~/server/utils/wiki/images'
 
 export type PublishWikiArticleResponse =
   | { ok: true }
@@ -47,7 +48,10 @@ export default defineEventHandler(async (event): Promise<PublishWikiArticleRespo
     [articleId],
   )
 
-  const rendered = renderArticle(markdown, { knownChecklists: checklistRows.map(row => row.key_slug) })
+  const rendered = renderArticle(markdown, {
+    knownChecklists: checklistRows.map(row => row.key_slug),
+    knownImages: await loadArticleImageIds(articleId),
+  })
   if (!rendered.ok) return rendered
 
   const changeNote = String((await readBody(event))?.changeNote ?? '').trim().slice(0, 300)

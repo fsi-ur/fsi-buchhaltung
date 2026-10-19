@@ -20,7 +20,8 @@ import {
   trackArticleView,
 } from '~/server/utils/wiki/articles'
 import { loadArticleChecklists } from '~/server/utils/wiki/checklists'
-import type { WikiAccessLevel, WikiArticle, WikiArticleLink, WikiChecklistView, WikiSpace } from '~/types/wiki'
+import { loadArticleImages } from '~/server/utils/wiki/images'
+import type { WikiAccessLevel, WikiArticle, WikiArticleLink, WikiChecklistView, WikiImage, WikiSpace } from '~/types/wiki'
 import type { WikiHeading } from '~/server/utils/wiki/render'
 
 export type WikiLinkResolution = Record<string, { id: number, title: string } | null>
@@ -48,6 +49,7 @@ export interface WikiArticleDetailPayload {
   tags: Awaited<ReturnType<typeof loadTags>>
   attachments: Awaited<ReturnType<typeof loadAttachments>>
   attachmentSelection: AttachmentSelection
+  images: WikiImage[]
   owner: Awaited<ReturnType<typeof loadOwner>>
   links: WikiLinkResolution
   checklists: WikiChecklistView[]
@@ -117,7 +119,7 @@ export async function loadArticleDetail(
   const prev = prevNode ? toLink(prevNode, space.slug) : null
   const next = nextNode ? toLink(nextNode, space.slug) : null
 
-  const [tags, attachmentSelection, owner, checklists] = await Promise.all([
+  const [tags, attachmentSelection, owner, checklists, images] = await Promise.all([
     loadTags(articleId),
     loadAttachmentSelectionForArticle(articleId),
     loadOwner(
@@ -125,6 +127,8 @@ export async function loadArticleDetail(
       article.owner_subdivision_id === null ? null : Number(article.owner_subdivision_id),
     ),
     loadArticleChecklists(articleId, subjects.userId, includeDrafts),
+    // Only the editor needs the list (to re-insert an earlier upload); readers get the images through the HTML.
+    levelAtLeast(level, 'write') ? loadArticleImages(articleId) : Promise.resolve([]),
   ])
 
   const attachments = await loadAttachmentItems(attachmentSelection)
@@ -181,6 +185,7 @@ export async function loadArticleDetail(
       tags,
       attachments,
       attachmentSelection,
+      images,
       owner,
       links,
       checklists,

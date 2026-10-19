@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~/server/utils/invoices'
 import { canReadArticle, getWikiAccess } from '~/server/utils/wiki/access'
 import { loadChecklistDefinitions } from '~/server/utils/wiki/checklists'
+import { loadArticleImageData } from '~/server/utils/wiki/images'
 import { buildWikiArticlePdf, wikiPdfFileName } from '~/server/utils/wiki/exportPdf'
 
 const NOT_FOUND = 'Der Artikel wurde nicht gefunden.'
@@ -47,6 +48,8 @@ export default defineEventHandler(async (event) => {
     logo = null
   }
 
+  const images = await loadArticleImageData([articleId])
+
   const pdf = buildWikiArticlePdf({
     article: {
       id: articleId,
@@ -61,6 +64,7 @@ export default defineEventHandler(async (event) => {
     spaceTitle: row.space_title,
     association,
     logo,
+    images,
   })
 
   setHeader(event, 'Content-Type', 'application/pdf')

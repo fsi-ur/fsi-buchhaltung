@@ -357,6 +357,25 @@ export interface WikiArticleLink {
 
 export type WikiAttachment = AttachmentItem
 
+/** An image uploaded into an article body and referenced there as `![Alt](bild:<fileId>)`. */
+export interface WikiImage {
+  fileId: number
+  fileName: string
+  mimeType: string
+  fileSize: number
+  usage: WikiImageUsage
+}
+
+/** Where an article image is still referenced — decides whether it may be deleted. */
+export interface WikiImageUsage {
+  /** In the saved draft. */
+  draft: boolean
+  /** In the version readers currently see. */
+  published: boolean
+  /** Number of older published versions (revisions) that show it. */
+  revisions: number
+}
+
 /** Everything the reader view of one article needs. */
 export interface WikiArticleDetail {
   id: number
@@ -380,6 +399,7 @@ export interface WikiArticleDetail {
   tags: WikiTag[]
   attachments: WikiAttachment[]
   attachmentSelection: AttachmentSelection
+  images: WikiImage[]
   owner: WikiOwner
   accessLevel: WikiAccessLevel
   hasDraft: boolean

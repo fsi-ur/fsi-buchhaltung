@@ -29,6 +29,24 @@
         <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.table')" :aria-label="t('wiki.editor.toolbar.table')" @click="insertBlock(TABLE_SNIPPET)">
           <Icon name="material-symbols:table-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
+        <button
+          type="button"
+          class="wiki-toolbar-btn disabled:cursor-not-allowed disabled:opacity-40"
+          :title="articleId ? t('wiki.editor.toolbar.image') : t('wiki.editor.toolbar.imageSaveFirst')"
+          :aria-label="t('wiki.editor.toolbar.image')"
+          :disabled="!articleId || uploadingImages > 0"
+          @click="imageInputRef?.click()"
+        >
+          <Icon name="material-symbols:add-photo-alternate-outline-rounded" class="h-5 w-5" aria-hidden="true" />
+        </button>
+        <input
+          ref="imageInputRef"
+          type="file"
+          accept="image/png,image/jpeg"
+          multiple
+          class="hidden"
+          @change="onImageInputChange"
+        />
       </div>
 
       <div class="wiki-toolbar-group">
@@ -154,7 +172,15 @@
           class="input min-h-104 flex-1 font-mono text-sm leading-relaxed"
           spellcheck="false"
           @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+          @paste="onPaste"
+          @dragover="onDragOver"
+          @drop="onDrop"
         ></textarea>
+        <p class="mt-1 text-xs text-base-400">
+          <template v-if="uploadingImages > 0">{{ t('wiki.editor.toolbar.imageUploading') }}</template>
+          <template v-else-if="articleId">{{ t('wiki.editor.toolbar.imageHint') }}</template>
+          <template v-else>{{ t('wiki.editor.toolbar.imageSaveFirst') }}</template>
+        </p>
       </div>
 
       <div class="flex flex-col" :class="mobileView === 'editor' ? 'hidden xl:flex' : ''">
@@ -165,11 +191,22 @@
             :errors="[previewError]"
             :title="t('common.validationBlocked')"
           />
-          <PageWikiArticleBody v-else-if="previewHtml" :html="previewHtml" :checklists="checklists" preview />
+          <PageWikiArticleBody v-else-if="previewHtml" :html="previewHtml" :checklists="checklists" :article-id="articleId" preview />
           <p v-else class="text-sm text-base-400">{{ t('wiki.editor.previewEmpty') }}</p>
         </div>
       </div>
     </div>
+
+    <PageWikiArticleImageGallery
+      v-if="articleId"
+      :article-id="articleId"
+      :images="images"
+      :markdown="modelValue"
+      :disabled="uploadingImages > 0"
+      :before-delete="beforeImageDelete"
+      @insert="chooseImage"
+      @deleted="fileId => $emit('imageDeleted', fileId)"
+    />
 
     <CommonModal v-model="eventTabModalOpen" :title="t('wiki.editor.eventTabLink.title')">
       <div class="field">
@@ -230,33 +267,48 @@ import { EVENT_PLANNING_TABS } from '~/config/eventPlanningTabs'
 import { useAuth } from '~/composables/useAuth'
 import { useWikiGlossary } from '~/composables/useWikiGlossary'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
+import { useToast } from '~/composables/useToast'
 import type { PreviewResponse } from '~/server/api/wiki/preview.post'
+import type { UploadWikiImageResponse } from '~/server/api/wiki/articles/[id]/images.post'
 import type { GetEventsResponse } from '~/server/api/events/index.get'
 import type { GlossaryTermView } from '~/server/utils/wiki/glossary'
 import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
 import type { Event } from '~/types/event'
-import type { WikiChecklistView } from '~/types/wiki'
+import type { WikiChecklistView, WikiImage } from '~/types/wiki'
 
 const props = withDefaults(defineProps<{
   modelValue: string
   checklists?: WikiChecklistView[]
+  /** The saved article; images can only be uploaded once it exists. */
+  articleId?: number | null
+  /** Images already uploaded into the article, offered for re-insertion. */
+  images?: WikiImage[]
+  /** Flushes pending edits before an image is deleted, so the server sees the current text. */
+  beforeImageDelete?: () => Promise<void>
 }>(), {
   checklists: () => [],
+  articleId: null,
+  images: () => [],
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'imageUploaded', image: WikiImage): void
+  (e: 'imageDeleted', fileId: number): void
 }>()
 
 const { t } = useI18n()
 const { hasPermission } = useAuth()
 const { loadGlossary } = useWikiGlossary()
 const { formatDateTime } = useLocaleFormatters()
+const toast = useToast()
 
 const TABLE_SNIPPET = '| Spalte | Spalte |\n| --- | --- |\n| Wert | Wert |'
 
 const textareaId = useId()
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const uploadingImages = ref(0)
 const mobileView = ref<'editor' | 'preview'>('editor')
 const openInsertMenu = ref<string | null>(null)
 const previewHtml = ref('')
@@ -407,6 +459,85 @@ function chooseInsert(value: string) {
   insertBlock(`:::embed{widget="${key}"}`)
 }
 
+/** Puts an image on a line of its own at the cursor, so it renders as its own picture rather than mid-sentence. */
+function insertImageMarkdown(markdown: string) {
+  const textarea = textareaRef.value
+  const start = textarea ? textarea.selectionStart : props.modelValue.length
+  const before = props.modelValue.slice(0, start)
+  const prefix = !before || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n'
+  replaceSelection(() => ({ text: `${prefix}${markdown}\n\n` }))
+}
+
+function chooseImage(image: WikiImage) {  const alt = image.fileName.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').replace(/[[\]]/g, '').trim()
+  insertImageMarkdown(`![${alt}](bild:${image.fileId})`)
+}
+
+function imageFiles(list: FileList | DataTransferItemList | null | undefined): File[] {
+  if (!list) return []
+  const files: File[] = []
+  for (const entry of Array.from(list as ArrayLike<File | DataTransferItem>)) {
+    const file = entry instanceof File ? entry : entry.kind === 'file' ? entry.getAsFile() : null
+    if (file && /^image\//.test(file.type)) files.push(file)
+  }
+  return files
+}
+
+async function uploadImages(files: File[]) {
+  if (!props.articleId) {
+    toast.error(t('wiki.editor.toolbar.imageSaveFirst'))
+    return
+  }
+
+  // One after another, so several dropped images land in the order they were picked.
+  for (const file of files) {
+    uploadingImages.value += 1
+    try {
+      const formData = new FormData()
+      formData.append('file', file, file.name || 'bild.png')
+      const res = await $fetch<UploadWikiImageResponse>(`/api/wiki/articles/${props.articleId}/images`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        toast.error(res.error)
+        continue
+      }
+      emit('imageUploaded', res.image)
+      insertImageMarkdown(res.markdown)
+    } catch {
+      toast.error(t('wiki.editor.toolbar.imageUploadFailed'))
+    } finally {
+      uploadingImages.value -= 1
+    }
+  }
+}
+
+function onImageInputChange(event: globalThis.Event) {
+  const input = event.target as HTMLInputElement
+  const files = imageFiles(input.files)
+  input.value = ''
+  if (files.length) uploadImages(files)
+}
+
+function onPaste(event: ClipboardEvent) {
+  const files = imageFiles(event.clipboardData?.items)
+  if (!files.length) return
+  event.preventDefault()
+  uploadImages(files)
+}
+
+function onDragOver(event: DragEvent) {
+  if (Array.from(event.dataTransfer?.items ?? []).some(item => item.kind === 'file')) event.preventDefault()
+}
+
+function onDrop(event: DragEvent) {
+  const files = imageFiles(event.dataTransfer?.files)
+  if (!files.length) return
+  event.preventDefault()
+  textareaRef.value?.focus()
+  uploadImages(files)
+}
+
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 
 async function refreshPreview() {
@@ -418,7 +549,11 @@ async function refreshPreview() {
 
   const res = await $fetch<PreviewResponse>('/api/wiki/preview', {
     method: 'POST',
-    body: { markdown: props.modelValue, knownChecklists: props.checklists.map(entry => entry.keySlug) },
+    body: {
+      markdown: props.modelValue,
+      knownChecklists: props.checklists.map(entry => entry.keySlug),
+      articleId: props.articleId ?? undefined,
+    },
   })
 
   if (res.ok) {
@@ -430,7 +565,7 @@ async function refreshPreview() {
 }
 
 watch(
-  () => [props.modelValue, props.checklists.map(entry => entry.keySlug).join(',')],
+  () => [props.modelValue, props.checklists.map(entry => entry.keySlug).join(','), props.images.length],
   () => {
     if (previewTimer) clearTimeout(previewTimer)
     previewTimer = setTimeout(refreshPreview, 400)

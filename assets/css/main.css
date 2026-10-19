@@ -418,6 +418,10 @@ body > #hiddenCopyElement,
         @apply my-4 max-w-full rounded-lg border border-base-200;
     }
 
+    .wiki-article-body img.wiki-image {
+        @apply block h-auto cursor-zoom-in;
+    }
+
     .wiki-article-body table {
         @apply mb-4 block w-max max-w-full overflow-x-auto border-collapse text-left text-sm;
     }

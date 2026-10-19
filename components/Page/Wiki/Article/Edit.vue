@@ -95,7 +95,15 @@
               </div>
             </div>
 
-            <PageWikiArticleEditorMarkdown v-model="form.markdown" :checklists="checklists" />
+            <PageWikiArticleEditorMarkdown
+              v-model="form.markdown"
+              :checklists="checklists"
+              :article-id="readOnly ? null : articleId"
+              :images="images"
+              :before-image-delete="() => saveDraft(false)"
+              @image-uploaded="image => images.unshift(image)"
+              @image-deleted="fileId => { images = images.filter(image => image.fileId !== fileId) }"
+            />
 
             <p v-if="draftStateLabel" class="flex items-center gap-1.5 text-xs text-base-500">
               <span
@@ -391,7 +399,7 @@ import type { SaveWikiAttachmentsResponse } from '~/server/api/wiki/articles/[id
 import type { WikiSubjectOptionsResponse } from '~/server/api/wiki/access/subject-options.get'
 import type { WikiTagsResponse } from '~/server/api/wiki/tags/index.get'
 import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
-import type { WikiAttachment, WikiChecklistView, WikiTag, WikiTreeArticle, WikiTreeSpace } from '~/types/wiki'
+import type { WikiAttachment, WikiChecklistView, WikiImage, WikiTag, WikiTreeArticle, WikiTreeSpace } from '~/types/wiki'
 import type { AttachmentSelection } from '~/types/attachment'
 
 defineEmits<{
@@ -420,6 +428,7 @@ const attachments = ref<WikiAttachment[]>([])
 const attachmentSelection = ref<AttachmentSelection>({ documentIds: [], fileIds: [] })
 const attachmentsSaving = ref(false)
 const checklists = ref<WikiChecklistView[]>([])
+const images = ref<WikiImage[]>([])
 const spaces = ref<WikiTreeSpace[]>([])
 const status = ref<string>('draft')
 const requiresReview = ref(false)
@@ -495,7 +504,7 @@ const tabs = computed<TabOverviewItem[]>(() => [
 // One history button for the whole editor, showing exactly what the visible tab edits — the tab
 // components deliberately don't render their own so there is never a second button on screen.
 const HISTORY_TABLES_BY_TAB: Record<string, string[]> = {
-  content: ['wiki_articles:id'],
+  content: ['wiki_articles:id', 'file_attachments:entity_id;entity_type=wiki_article_image'],
   settings: ['wiki_articles:id', 'wiki_article_tags'],
   checklists: [
     'wiki_checklists',
@@ -644,6 +653,7 @@ async function loadArticle() {
     fileIds: [...article.attachmentSelection.fileIds],
   }
   checklists.value = article.checklists
+  images.value = article.images
   status.value = article.status
   requiresReview.value = article.requiresReview
   accessLevel.value = article.accessLevel

@@ -1,4 +1,4 @@
-import { estimateTextWidth, wrapTextByWidth, type PdfColor, type PdfFontName } from '~/server/utils/pdf'
+import { estimateTextWidth, wrapTextByWidth, type PdfColor, type PdfFontName, type PdfNamedImage } from '~/server/utils/pdf'
 import { createPdfDocumentLayout, PDF_LAYOUT, type PdfDocumentLayout } from '~/server/utils/pdfLayout'
 import { parseArticleTokens } from '~/server/utils/wiki/render'
 import { WIKI_EMBEDS_BY_KEY } from '~/config/wikiEmbeds'
@@ -17,11 +17,17 @@ export interface WikiPdfArticle {
   publishedAt: string | null
 }
 
+/** File contents of the `bild:<id>` images, keyed by file id; images without an entry print as a placeholder. */
+export type WikiPdfImages = Map<number, { mimeType: string, data: Buffer }>
+
 const { contentLeft, contentRight } = PDF_LAYOUT
 
 const BODY_SIZE = 10
 const LIST_INDENT = 16
 const BLOCK_PADDING = 9
+/** Screen pixels → points (96 dpi), so a screenshot prints about as large as it looked; capped to the column. */
+const IMAGE_PX_TO_PT = 0.75
+const MAX_IMAGE_HEIGHT = 420
 
 /** Roughly the app's Tailwind palette, so a printed article reads like the screen version. */
 const COLOR = {
@@ -381,6 +387,73 @@ function block(layout: PdfDocumentLayout, runs: TextRun[], context: BlockContext
   })
 }
 
+type BlockOptions = NonNullable<Parameters<typeof block>[3]>
+
+function bodyImage(layout: PdfDocumentLayout, image: PdfNamedImage, left: number) {
+  const maxWidth = contentRight - left
+  let width = Math.min(image.object.width * IMAGE_PX_TO_PT, maxWidth)
+  let height = (width * image.object.height) / image.object.width
+  if (height > MAX_IMAGE_HEIGHT) {
+    height = MAX_IMAGE_HEIGHT
+    width = (height * image.object.width) / image.object.height
+  }
+
+  layout.y -= 4
+  layout.ensureSpace(height + 4)
+  layout.page.images.push({ x: left, y: layout.y - height, width, height, objectName: image.name })
+  layout.y -= height + 8
+}
+
+/**
+ * An inline token whose `bild:<id>` images are drawn as pictures between the text around them. The first
+ * text segment carries `hanging` (a list marker); everything after it lines up with that segment's text.
+ */
+function inlineWithImages(
+  layout: PdfDocumentLayout,
+  inline: any,
+  context: BlockContext,
+  images: WikiPdfImages,
+  hanging: BlockOptions = {},
+) {
+  const children: any[] = inline?.children ?? []
+  const embedded = children.map((child) => {
+    const fileId = child.type === 'image' ? Number(child.meta?.wikiImageId) : 0
+    const source = fileId ? images.get(fileId) : undefined
+    return source ? layout.addImage(`wiki-image:${fileId}`, source) : null
+  })
+
+  if (!embedded.some(Boolean)) {
+    block(layout, inline ? inlineRuns(inline) : [], context, hanging)
+    return
+  }
+
+  const labelWidth = hanging.hangingLabel
+    ? estimateTextWidth(hanging.hangingLabel, BODY_SIZE, false, hanging.hangingFont) + 5
+    : 0
+  const innerContext: BlockContext = { left: context.left + labelWidth }
+
+  let pending: any[] = []
+  let first = true
+  const flush = () => {
+    if (pending.length || (first && hanging.hangingLabel)) {
+      block(layout, inlineRuns({ children: pending }), first ? context : innerContext, first ? hanging : {})
+    }
+    pending = []
+    first = false
+  }
+
+  children.forEach((child, position) => {
+    const image = embedded[position]
+    if (!image) {
+      pending.push(child)
+      return
+    }
+    flush()
+    bodyImage(layout, image, innerContext.left)
+  })
+  if (pending.length) flush()
+}
+
 function paragraph(layout: PdfDocumentLayout, text: string, context: BlockContext, style: RunStyle = {}) {
   block(layout, plainRuns(text, style), context, { size: style.size })
 }
@@ -654,7 +727,7 @@ function collectParagraphs(tokens: any[], from: number, closeType: string) {
   return { paragraphs, cursor }
 }
 
-function renderMarkdown(layout: PdfDocumentLayout, article: WikiPdfArticle) {
+function renderMarkdown(layout: PdfDocumentLayout, article: WikiPdfArticle, images: WikiPdfImages) {
   let tokens: any[]
   try {
     tokens = parseArticleTokens(article.markdown, {
@@ -682,8 +755,7 @@ function renderMarkdown(layout: PdfDocumentLayout, article: WikiPdfArticle) {
     }
 
     if (token.type === 'paragraph_open') {
-      const inline = tokens[index + 1]
-      block(layout, inline ? inlineRuns(inline) : [], context)
+      inlineWithImages(layout, tokens[index + 1], context, images)
       layout.y -= 5
       index += 3
       continue
@@ -710,8 +782,7 @@ function renderMarkdown(layout: PdfDocumentLayout, article: WikiPdfArticle) {
       if (list) list.counter += 1
       // The item's first paragraph carries the marker, so it is rendered here and then skipped.
       const inlineIndex = tokens[index + 1]?.type === 'paragraph_open' ? index + 2 : -1
-      const runs = inlineIndex >= 0 ? inlineRuns(tokens[inlineIndex]) : []
-      block(layout, runs, context, {
+      inlineWithImages(layout, inlineIndex >= 0 ? tokens[inlineIndex] : null, context, images, {
         hangingLabel: list?.ordered ? `${list.counter}.` : '•',
         hangingColor: COLOR.faint,
         hangingFont: list?.ordered ? 'F2' : 'F1',
@@ -831,8 +902,9 @@ export function buildWikiArticlePdf(params: {
   spaceTitle: string
   association: AssociationProfileRow | null
   logo?: { mimeType: string, data: Buffer } | null
+  images?: WikiPdfImages
 }) {
-  const { article, spaceTitle, association, logo = null } = params
+  const { article, spaceTitle, association, logo = null, images = new Map() } = params
   const layout = createPdfDocumentLayout({ logo })
 
   const hasLogo = layout.drawCenteredBrand(association)
@@ -846,7 +918,7 @@ export function buildWikiArticlePdf(params: {
   }
   drawArticleMeta(layout, article)
 
-  renderMarkdown(layout, article)
+  renderMarkdown(layout, article, images)
 
   return layout.finish(footerLabel(association, article.title))
 }
@@ -857,8 +929,9 @@ export function buildWikiSpacePdf(params: {
   articles: WikiPdfArticle[]
   association: AssociationProfileRow | null
   logo?: { mimeType: string, data: Buffer } | null
+  images?: WikiPdfImages
 }) {
-  const { spaceTitle, spaceDescription, articles, association, logo = null } = params
+  const { spaceTitle, spaceDescription, articles, association, logo = null, images = new Map() } = params
   const layout = createPdfDocumentLayout({ logo })
 
   const hasLogo = layout.drawCenteredBrand(association)
@@ -893,7 +966,7 @@ export function buildWikiSpacePdf(params: {
       layout.y -= 4
     }
     drawArticleMeta(layout, article)
-    renderMarkdown(layout, article)
+    renderMarkdown(layout, article, images)
   }
 
   return layout.finish(footerLabel(association, spaceTitle))

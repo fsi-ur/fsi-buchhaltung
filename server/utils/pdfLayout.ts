@@ -13,6 +13,7 @@ import {
   type PdfColor,
   type PdfLine,
   type PdfLink,
+  type PdfNamedImage,
   type PdfRect,
   type PdfText,
 } from '~/server/utils/pdf'
@@ -56,6 +57,8 @@ export function createPdfDocumentLayout(params: {
   pageBuffers.push(page)
   let y = 0
   let continuationHeader: (() => void) | null = null
+  const extraImages: PdfNamedImage[] = []
+  const extraImagesByKey = new Map<string, PdfNamedImage | null>()
 
   const layout = {
     imageObject,
@@ -77,6 +80,25 @@ export function createPdfDocumentLayout(params: {
       const inserted: PdfPageBuffer[] = Array.from({ length: count }, () => ({ texts: [], lines: [], rects: [], images: [], links: [] }))
       pageBuffers.splice(atIndex, 0, ...inserted)
       return inserted
+    },
+
+    /**
+     * Registers a further image (decoded once per `key`) and returns its resource name and size, or null
+     * when the format cannot be embedded (the caller then draws a placeholder instead).
+     */
+    addImage(key: string, source: { mimeType: string, data: Buffer }) {
+      if (!extraImagesByKey.has(key)) {
+        let object: PdfImageObject | null = null
+        try {
+          object = buildImageObject(source)
+        } catch {
+          object = null
+        }
+        const entry = object ? { name: `Im${extraImages.length + 2}`, object } : null
+        if (entry) extraImages.push(entry)
+        extraImagesByKey.set(key, entry)
+      }
+      return extraImagesByKey.get(key) ?? null
     },
 
     /** Drawn at the top of every continuation page (usually the repeated table header). */
@@ -189,7 +211,7 @@ export function createPdfDocumentLayout(params: {
         ...drawText(buffer.texts),
       ].join('\n'))
 
-      return buildPdfDocument({ pages, imageObject, links: pageBuffers.map(buffer => buffer.links) })
+      return buildPdfDocument({ pages, imageObject, images: extraImages, links: pageBuffers.map(buffer => buffer.links) })
     },
   }
 
