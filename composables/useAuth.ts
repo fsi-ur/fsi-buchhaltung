@@ -17,7 +17,7 @@ export const useAuth = () => {
 
   async function fetchSession() {
     try {
-      const data = await $fetch<SessionResponse>('/api/auth/session')
+      const data = await apiFetch<SessionResponse>('/api/auth/session')
       if (data.ok) {
         user.value = data.user
         return user.value
@@ -33,7 +33,7 @@ export const useAuth = () => {
 
   async function login(username: string, password: string): Promise<LoginResponse> {
     try {
-      const res = await $fetch<LoginResponse>('/api/auth/login', {
+      const res = await apiFetch<LoginResponse>('/api/auth/login', {
         method: 'POST',
         body: { username, password }
       })
@@ -53,7 +53,7 @@ export const useAuth = () => {
   }
 
   async function logout() {
-    await $fetch('/api/auth/logout', { method: 'POST' })
+    await apiFetch('/api/auth/logout', { method: 'POST' })
     redirectToLogin()
   }
 

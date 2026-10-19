@@ -146,7 +146,7 @@ function selectTag(slug: string) {
 }
 
 async function loadTags() {
-  const res = await $fetch<WikiTagsResponse>('/api/wiki/tags')
+  const res = await apiFetch<WikiTagsResponse>('/api/wiki/tags')
   tags.value = res.ok ? res.tags.filter(tag => tag.articleCount > 0) : []
 }
 
@@ -202,7 +202,7 @@ async function run() {
 
   searching.value = true
   try {
-    const res = await $fetch<WikiSearchResponse>('/api/wiki/search', {
+    const res = await apiFetch<WikiSearchResponse>('/api/wiki/search', {
       query: {
         q: query,
         spaceId: spaceId.value || undefined,

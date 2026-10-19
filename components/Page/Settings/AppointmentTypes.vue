@@ -165,7 +165,7 @@ const columns = computed<AdvancedTableColumn<AppointmentTypeRow>[]>(() => ([
 
 async function loadItems() {
   try {
-    const res = await $fetch<GetAppointmentTypesResponse>('/api/appointment-types')
+    const res = await apiFetch<GetAppointmentTypesResponse>('/api/appointment-types')
     items.value = res.ok ? res.appointmentTypes : []
   } catch {
     items.value = []
@@ -212,7 +212,7 @@ async function saveItem() {
   error.value = ''
 
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>('/api/appointment-types/save', {
+    const res = await apiFetch<{ ok: boolean, error?: string }>('/api/appointment-types/save', {
       method: 'POST',
       body: editingItem.value,
     })
@@ -233,7 +233,7 @@ async function saveItem() {
 
 async function toggleActive(item: AppointmentTypeRow) {
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>('/api/appointment-types/activate', {
+    const res = await apiFetch<{ ok: boolean, error?: string }>('/api/appointment-types/activate', {
       method: 'POST',
       body: { id: item.id, is_active: !item.is_active },
     })

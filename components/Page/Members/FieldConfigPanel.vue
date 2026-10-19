@@ -187,7 +187,7 @@ onMounted(async () => {
 async function loadConfig() {
   loadingConfig.value = true
   try {
-    const res = await $fetch<GetMemberFieldConfigResponse>('/api/members/field-config')
+    const res = await apiFetch<GetMemberFieldConfigResponse>('/api/members/field-config')
     if (res.ok) config.value = res.config
   } finally {
     loadingConfig.value = false
@@ -198,8 +198,8 @@ async function loadPendingChanges() {
   loadingPending.value = true
   try {
     const [res, subjectsRes] = await Promise.all([
-      $fetch<GetPendingChangesResponse>('/api/members/pending-changes'),
-      $fetch<{ ok: boolean, subjects?: SubjectRow[] }>('/api/members/self/subjects'),
+      apiFetch<GetPendingChangesResponse>('/api/members/pending-changes'),
+      apiFetch<{ ok: boolean, subjects?: SubjectRow[] }>('/api/members/self/subjects'),
     ])
     if (res.ok) pendingChanges.value = res.changes
     if (subjectsRes.ok && subjectsRes.subjects) subjects.value = subjectsRes.subjects
@@ -213,7 +213,7 @@ async function saveConfig() {
   savingConfig.value = true
   try {
     const body = SELF_EDIT_ELIGIBLE_FIELDS.map(field => ({ field_name: field, mode: config.value[field] }))
-    const res = await $fetch<{ ok: boolean, error?: string }>('/api/members/field-config/update', {
+    const res = await apiFetch<{ ok: boolean, error?: string }>('/api/members/field-config/update', {
       method: 'POST',
       body,
     })
@@ -233,7 +233,7 @@ async function saveConfig() {
 
 async function resolveChange(id: number, action: 'approve' | 'reject') {
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/members/pending-changes/${id}`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/members/pending-changes/${id}`, {
       method: 'POST',
       body: { action },
     })

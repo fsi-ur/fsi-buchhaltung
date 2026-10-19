@@ -130,7 +130,7 @@ const columns = computed<AdvancedTableColumn<Event>[]>(() => [
 
 onMounted(async () => {
   try {
-    const res = await $fetch('/api/events')
+    const res = await apiFetch<ApiResponse<'/api/events'>>('/api/events')
     if (res.ok) {
       events.value = res.events
       canOpenAll.value = resolveFlag(res.canOpenAll, ['events.view', 'events.edit', 'events.shifts.signup'])

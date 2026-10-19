@@ -125,7 +125,7 @@ const columns = computed<AdvancedTableColumn<BudgetListItem>[]>(() => [
 
 onMounted(async () => {
   try {
-    const response = await $fetch<{ ok: boolean, budgets?: BudgetListItem[], error?: string }>('/api/finances/budgets')
+    const response = await apiFetch<{ ok: boolean, budgets?: BudgetListItem[], error?: string }>('/api/finances/budgets')
     if (response.ok && response.budgets) {
       budgets.value = response.budgets
     }

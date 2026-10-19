@@ -208,7 +208,7 @@ const hasUnappliedChanges = computed(() => (
 ))
 
 async function fetchAnalysisRange(periodStartDate: string, periodEndDate: string) {
-  const response = await $fetch<FinanceAnalysisResponse>('/api/finances/analysis', {
+  const response = await apiFetch<FinanceAnalysisResponse>('/api/finances/analysis', {
     query: {
       startDate: periodStartDate,
       endDate: periodEndDate,

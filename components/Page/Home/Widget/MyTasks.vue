@@ -251,7 +251,7 @@ function toggleStatusMenu(taskId: number) {
 
 async function saveStatus(taskId: number, status: EventTaskStatus) {
   try {
-    const res = await $fetch<UpdateTaskStatusResponse>(`/api/tasks/${taskId}/status`, {
+    const res = await apiFetch<UpdateTaskStatusResponse>(`/api/tasks/${taskId}/status`, {
       method: 'PUT',
       body: { status },
     })
@@ -330,7 +330,7 @@ watch(statusMenuId, (id) => {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetMyTasksResponse>('/api/tasks/mine')
+    const res = await apiFetch<GetMyTasksResponse>('/api/tasks/mine')
     tasks.value = res.ok ? sortMyTasks(res.tasks) : []
   } catch {
     tasks.value = []

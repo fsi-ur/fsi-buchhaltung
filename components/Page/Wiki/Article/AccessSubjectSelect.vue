@@ -135,7 +135,7 @@ function label(option: WikiSubjectOption) {
 }
 
 async function load() {
-  const res = await $fetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', {
+  const res = await apiFetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', {
     query: { type: subjectType.value, q: queryText.value },
   })
   options.value = res.ok

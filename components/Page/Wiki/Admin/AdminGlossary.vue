@@ -168,7 +168,7 @@ function edit(entry: GlossaryTermView) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiGlossaryResponse>('/api/wiki/glossary')
+    const res = await apiFetch<WikiGlossaryResponse>('/api/wiki/glossary')
     if (!res.ok) {
       errors.value = [res.error]
       return
@@ -196,8 +196,8 @@ async function save() {
 
   try {
     const res = editingId.value
-      ? await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/glossary/${editingId.value}`, { method: 'PUT', body })
-      : await $fetch<{ ok: boolean, error?: string }>('/api/wiki/glossary/create', { method: 'POST', body })
+      ? await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/glossary/${editingId.value}`, { method: 'PUT', body })
+      : await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/glossary/create', { method: 'POST', body })
 
     if (!res.ok) {
       errors.value = [res.error ?? t('wiki.errors.saveFailed')]
@@ -224,7 +224,7 @@ async function remove() {
 
   saving.value = true
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/glossary/${entry.id}`, { method: 'DELETE' })
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/glossary/${entry.id}`, { method: 'DELETE' })
 
     if (!res.ok) {
       errors.value = [res.error ?? t('wiki.errors.saveFailed')]

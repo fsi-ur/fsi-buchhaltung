@@ -153,7 +153,7 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
     if (!hasBudgetAccess.value) return
 
     try {
-      const response = await $fetch<{ ok: true, budgets: BudgetListItem[] } | { ok: false, error: string }>('/api/finances/budgets')
+      const response = await apiFetch<{ ok: true, budgets: BudgetListItem[] } | { ok: false, error: string }>('/api/finances/budgets')
       budgets.value = response.ok ? response.budgets : []
     } catch {
       budgets.value = []
@@ -164,7 +164,7 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
     if (!exportIncludesBudgetComparison.value || !coveringBudgets.value?.length) return []
 
     const responses = await Promise.all(
-      coveringBudgets.value.map(budget => $fetch<GetBudgetResponse>(`/api/finances/budgets/${budget.id}`)),
+      coveringBudgets.value.map(budget => apiFetch<GetBudgetResponse>(`/api/finances/budgets/${budget.id}`)),
     )
 
     return responses

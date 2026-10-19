@@ -220,11 +220,11 @@ async function toggle(item: WikiChecklistItemView, done: boolean) {
   }
 
   const res = shared && run
-    ? await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/checklists/runs/${run.id}/state`, {
+    ? await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/checklists/runs/${run.id}/state`, {
       method: 'POST',
       body: { itemId: item.id, done },
     })
-    : await $fetch<{ ok: boolean, error?: string }>('/api/wiki/checklists/personal', {
+    : await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/checklists/personal', {
       method: 'POST',
       body: { checklistId: props.checklist.id, itemId: item.id, done },
     })
@@ -245,7 +245,7 @@ async function createRun() {
 
   creatingRun.value = true
   try {
-    const res = await $fetch<CreateWikiChecklistRunResponse>('/api/wiki/checklists/runs/create', {
+    const res = await apiFetch<CreateWikiChecklistRunResponse>('/api/wiki/checklists/runs/create', {
       method: 'POST',
       body: { checklistId: props.checklist.id, title, dueDate: runDraft.dueDate },
     })
@@ -278,7 +278,7 @@ async function setClosed(closed: boolean) {
   const run = activeRun.value
   if (!run) return
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/checklists/runs/${run.id}/close`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/checklists/runs/${run.id}/close`, {
     method: 'POST',
     body: { closed },
   })

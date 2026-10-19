@@ -71,7 +71,7 @@ onMounted(async () => {
 
   isEditMode.value = true
 
-  const res = await $fetch<GetCashCountResponse>(String(`/api/cash_counts/${cashCountId.value}`), { method: 'GET' })
+  const res = await apiFetch<GetCashCountResponse>(String(`/api/cash_counts/${cashCountId.value}`), { method: 'GET' })
   if (!res.ok) {
     isEditMode.value = false
     return
@@ -199,13 +199,13 @@ async function submit() {
     isSaving.value = true
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
-      const updateRes = await $fetch<{ ok: boolean, error?: string }>(String(`/api/cash_counts/${cashCountId.value}`), {
+      const updateRes = await apiFetch<{ ok: boolean, error?: string }>(String(`/api/cash_counts/${cashCountId.value}`), {
         method: 'PUT',
         body,
       })
       if (!updateRes.ok) throw new Error(updateRes.error || t('cashCount.saved.failedUpdate'))
     } else {
-      const createRes = await $fetch<{ ok: boolean, error?: string }>('/api/cash_counts/create', {
+      const createRes = await apiFetch<{ ok: boolean, error?: string }>('/api/cash_counts/create', {
         method: 'POST',
         body,
       })

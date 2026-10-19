@@ -145,7 +145,7 @@ onMounted(async () => {
 })
 
 async function applyInvoiceDefaults() {
-  const res = await $fetch<{ ok: boolean, settings?: InvoiceTextSettings }>('/api/settings/app/invoice-texts')
+  const res = await apiFetch<{ ok: boolean, settings?: InvoiceTextSettings }>('/api/settings/app/invoice-texts')
   if (!res.ok || !res.settings?.is_kleinunternehmer_default) return
 
   form.value = {
@@ -195,7 +195,7 @@ async function saveInvoice(exit: boolean) {
   try {
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
-      const res = await $fetch<{ ok: boolean, error?: string }>(`/api/invoices/${invoiceId.value}`, {
+      const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/invoices/${invoiceId.value}`, {
         method: 'PUT',
         body,
       })
@@ -203,7 +203,7 @@ async function saveInvoice(exit: boolean) {
       if (invoiceId.value) await loadInvoice(invoiceId.value)
       toast.success(t('invoice.saved.updated'))
     } else {
-      const res = await $fetch<{ ok: boolean, invoiceId?: number, error?: string }>('/api/invoices/create', {
+      const res = await apiFetch<{ ok: boolean, invoiceId?: number, error?: string }>('/api/invoices/create', {
         method: 'POST',
         body,
       })
@@ -234,7 +234,7 @@ function cancel() {
 }
 
 async function loadInvoice(id: number) {
-  const res = await $fetch<GetInvoiceResponse>(`/api/invoices/${id}`)
+  const res = await apiFetch<GetInvoiceResponse>(`/api/invoices/${id}`)
   if (!res.ok) {
     isEditMode.value = false
     persistedStatus.value = null

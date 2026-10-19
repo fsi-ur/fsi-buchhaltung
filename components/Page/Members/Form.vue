@@ -532,19 +532,19 @@ watch(
 )
 
 async function loadSubjects() {
-  const res = await $fetch<{ ok: boolean, subjects?: SubjectRow[] }>('/api/subjects')
+  const res = await apiFetch<{ ok: boolean, subjects?: SubjectRow[] }>('/api/subjects')
   if (res.ok && res.subjects) subjects.value = res.subjects
 }
 
 async function loadPositions() {
-  const res = await $fetch<{ ok: boolean, positions?: PositionRow[] }>('/api/positions')
+  const res = await apiFetch<{ ok: boolean, positions?: PositionRow[] }>('/api/positions')
   if (res.ok && res.positions) {
     positions.value = res.positions
   }
 }
 
 async function loadSubdivisions() {
-  const res = await $fetch('/api/subdivisions/options')
+  const res = await apiFetch<ApiResponse<'/api/subdivisions/options'>>('/api/subdivisions/options')
   if (res.ok) {
     subdivisions.value = res.subdivisions
   }
@@ -555,7 +555,7 @@ async function createSubjectFromQuery() {
   const name = subjectQuery.value.trim()
   if (!name) return
 
-  const res = await $fetch<{ ok: boolean, id?: number }>('/api/subjects/create', {
+  const res = await apiFetch<{ ok: boolean, id?: number }>('/api/subjects/create', {
     method: 'POST',
     body: { name },
   })
@@ -598,7 +598,7 @@ async function confirmRenameSubject() {
 
   renamingSubjectSaving.value = true
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/subjects/${subject.id}`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/subjects/${subject.id}`, {
       method: 'PUT',
       body: { name },
     })

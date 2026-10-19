@@ -34,7 +34,7 @@ export interface FinanceAnalysisPdfExportPayload {
 export async function downloadFinanceAnalysisPdf(
   payload: FinanceAnalysisPdfExportPayload,
 ): Promise<{ ok: true } | { ok: false, error?: string }> {
-  const response = await $fetch.raw<Blob>('/api/finances/analysis/export/pdf', {
+  const response = await apiFetch.raw<Blob>('/api/finances/analysis/export/pdf', {
     method: 'POST',
     body: payload,
     responseType: 'blob',

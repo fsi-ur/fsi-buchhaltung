@@ -268,7 +268,7 @@ async function toggleSubdivision(
   removeMemberAssignments: boolean,
   reload: () => Promise<void>,
 ) {
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/subdivisions/activate', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/subdivisions/activate', {
     method: 'POST',
     body: {
       id: item.id,
@@ -300,7 +300,7 @@ async function confirmDeactivate() {
 
 async function loadMemberOptions() {
   try {
-    const res = await $fetch<{ ok: boolean, members?: SubdivisionMemberOption[], error?: string }>('/api/subdivisions/member-options')
+    const res = await apiFetch<{ ok: boolean, members?: SubdivisionMemberOption[], error?: string }>('/api/subdivisions/member-options')
     if (!res.ok) {
       toast.error(res.error || t('settings.subdivisions.loadFailed'))
       return

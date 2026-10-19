@@ -302,12 +302,12 @@ function groupByCategory(defs: PermissionDefinition[]) {
 }
 
 async function loadDefinitions() {
-  const res = await $fetch('/api/permissions/definitions')
+  const res = await apiFetch<ApiResponse<'/api/permissions/definitions'>>('/api/permissions/definitions')
   if (res.ok) permissions.value = res.permissions
 }
 
 async function loadOptions() {
-  const res = await $fetch('/api/permissions/view-as-options')
+  const res = await apiFetch<ApiResponse<'/api/permissions/view-as-options'>>('/api/permissions/view-as-options')
   if (res.ok) {
     roles.value = res.roles
     positions.value = res.positions

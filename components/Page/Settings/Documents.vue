@@ -217,7 +217,7 @@ function openFile(fileId: number) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<ListDocumentsResponse>('/api/documents')
+    const res = await apiFetch<ListDocumentsResponse>('/api/documents')
     if (res.ok) documents.value = res.documents
     else toast.error(res.error)
   } catch {
@@ -286,7 +286,7 @@ async function saveDocument() {
     }))
     if (selectedFile.value) formData.append('file', selectedFile.value)
 
-    const res = await $fetch<SaveDocumentResponse>('/api/documents/save', { method: 'POST', body: formData })
+    const res = await apiFetch<SaveDocumentResponse>('/api/documents/save', { method: 'POST', body: formData })
     if (!res.ok) {
       errors.value = [res.error]
       return
@@ -312,7 +312,7 @@ async function confirmDelete() {
 
   deletingBusy.value = true
   try {
-    const res = await $fetch<DeleteDocumentResponse>(`/api/documents/${deleting.value.id}`, { method: 'DELETE' })
+    const res = await apiFetch<DeleteDocumentResponse>(`/api/documents/${deleting.value.id}`, { method: 'DELETE' })
     if (!res.ok) {
       toast.error(res.error)
       return

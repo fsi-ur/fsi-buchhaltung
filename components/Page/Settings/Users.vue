@@ -344,12 +344,12 @@ function selectEditMember(value: unknown) {
 }
 
 async function loadUsers() {
-  const res = await $fetch<{ ok: boolean, users?: UserListRow[], error?: string }>('/api/auth/users')
+  const res = await apiFetch<{ ok: boolean, users?: UserListRow[], error?: string }>('/api/auth/users')
   if (res.ok && res.users) users.value = res.users
 }
 
 async function loadMemberOptions() {
-  const res = await $fetch<{ ok: boolean, members?: MemberOptionRow[], error?: string }>('/api/auth/member-options')
+  const res = await apiFetch<{ ok: boolean, members?: MemberOptionRow[], error?: string }>('/api/auth/member-options')
   if (res.ok && res.members) memberOptions.value = res.members
 }
 
@@ -376,7 +376,7 @@ async function createUser() {
 
   try {
     isCreatingUser.value = true
-    const res = await $fetch<{ ok: boolean, error?: string }>('/api/auth/register', {
+    const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/register', {
       method: 'POST',
       body: payload,
     })
@@ -435,7 +435,7 @@ async function saveUserEdit() {
     isSavingUserEdit.value = true
 
     if (newUsername !== editingUser.value.username) {
-      const res = await $fetch<{ ok: boolean, error?: string }>('/api/auth/change-username', {
+      const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/change-username', {
         method: 'POST',
         body: { user_id: editingUser.value.id, username: newUsername },
       })
@@ -450,7 +450,7 @@ async function saveUserEdit() {
     }
 
     if (editingPasswordNew.value) {
-      const res = await $fetch<{ ok: boolean, error?: string }>('/api/auth/admin-set-password', {
+      const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/admin-set-password', {
         method: 'POST',
         body: {
           user_id: editingUser.value.id,
@@ -464,7 +464,7 @@ async function saveUserEdit() {
       }
     }
 
-    const memberRes = await $fetch<{ ok: boolean, error?: string }>('/api/auth/link-member', {
+    const memberRes = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/link-member', {
       method: 'POST',
       body: {
         user_id: editingUser.value.id,
@@ -494,7 +494,7 @@ async function saveUserEdit() {
 }
 
 async function toggleUserActive(user: UserListRow) {
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/auth/activate', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/activate', {
     method: 'POST',
     body: {
       id: user.id,
@@ -511,7 +511,7 @@ async function toggleUserActive(user: UserListRow) {
 }
 
 async function requirePasswordChange(user: UserListRow) {
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/auth/require-password-change', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/require-password-change', {
     method: 'POST',
     body: {
       user_id: user.id,

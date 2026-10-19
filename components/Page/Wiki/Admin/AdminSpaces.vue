@@ -123,7 +123,7 @@ function openEdit(space: WikiSpaceAdminView) {
 async function save(space: WikiSpaceAdminView, changes: Partial<WikiSpaceAdminView>) {
   const merged = { ...space, ...changes }
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/spaces/${space.id}`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/spaces/${space.id}`, {
     method: 'PUT',
     body: {
       title: merged.title,
@@ -163,7 +163,7 @@ async function move(position: number, direction: -1 | 1) {
   order.splice(target, 0, moved!)
 
   error.value = ''
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/wiki/spaces/reorder', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/spaces/reorder', {
     method: 'POST',
     body: { spaceIds: order },
   })
@@ -182,7 +182,7 @@ async function remove() {
   if (!space) return
 
   error.value = ''
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/spaces/${space.id}`, { method: 'DELETE' })
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/spaces/${space.id}`, { method: 'DELETE' })
 
   if (!res.ok) {
     error.value = res.error ?? t('wiki.space.saveFailed')
@@ -196,7 +196,7 @@ async function remove() {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiSpaceListResponse>('/api/wiki/spaces')
+    const res = await apiFetch<WikiSpaceListResponse>('/api/wiki/spaces')
     if (!res.ok) {
       error.value = res.error
       return

@@ -11,7 +11,7 @@ export async function downloadMemberListExport(
   format: MemberExportFormat,
   config: MemberExportConfig,
 ): Promise<{ ok: true } | { ok: false, error?: string }> {
-  const response = await $fetch.raw<Blob>(`/api/members/export/${format}`, {
+  const response = await apiFetch.raw<Blob>(`/api/members/export/${format}`, {
     method: 'POST',
     body: config,
     responseType: 'blob',

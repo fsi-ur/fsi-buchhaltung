@@ -186,8 +186,8 @@ async function load() {
   loading.value = true
   try {
     const [selfRes, subjectsRes] = await Promise.all([
-      $fetch<GetMemberSelfResponse>('/api/members/self'),
-      $fetch<{ ok: boolean, subjects?: SubjectRow[] }>('/api/members/self/subjects'),
+      apiFetch<GetMemberSelfResponse>('/api/members/self'),
+      apiFetch<{ ok: boolean, subjects?: SubjectRow[] }>('/api/members/self/subjects'),
     ])
 
     if (subjectsRes.ok && subjectsRes.subjects) subjects.value = subjectsRes.subjects
@@ -234,7 +234,7 @@ async function submit() {
 
   saving.value = true
   try {
-    const res = await $fetch<UpdateMemberSelfResponse>('/api/members/self/update', {
+    const res = await apiFetch<UpdateMemberSelfResponse>('/api/members/self/update', {
       method: 'POST',
       body: patch,
     })

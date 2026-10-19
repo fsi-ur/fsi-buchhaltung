@@ -284,17 +284,17 @@ const openTaxIndex = ref<number | null>(null)
 const showCompanyDrawer = ref(false)
 
 async function loadSpheres() {
-  const res = await $fetch('/api/spheres', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/spheres'>>('/api/spheres', { method: 'GET' })
   if (res.ok) spheres.value = res.spheres
 }
 
 async function loadCostCentres() {
-  const res = await $fetch('/api/cost_centres', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/cost_centres'>>('/api/cost_centres', { method: 'GET' })
   if (res.ok) costCentres.value = res.costCentres
 }
 
 async function loadCompanies() {
-  const res = await $fetch('/api/companies', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/companies'>>('/api/companies', { method: 'GET' })
   if (res.ok) companies.value = res.companies
 }
 
@@ -312,7 +312,7 @@ async function createCompanyFromQuery() {
   if (!canEditCompany.value) return
   const newCompanyName = companyQuery.value.trim()
   if (newCompanyName.length > 0) {
-    const res = await $fetch('/api/companies/create', {
+    const res = await apiFetch<ApiResponse<'/api/companies/create', 'post'>>('/api/companies/create', {
       method: 'POST',
       body: { name: newCompanyName },
     })

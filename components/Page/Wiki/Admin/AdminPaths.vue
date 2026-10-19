@@ -404,7 +404,7 @@ function flatten(nodes: WikiTreeArticle[], spaceTitle: string, into: Array<{ id:
 }
 
 async function loadArticles() {
-  const res = await $fetch<WikiTreeResponse>('/api/wiki/tree', { query: { includeDrafts: '1' } })
+  const res = await apiFetch<WikiTreeResponse>('/api/wiki/tree', { query: { includeDrafts: '1' } })
   if (!res.ok) return
   const collected: Array<{ id: number, title: string, spaceTitle: string }> = []
   for (const space of res.spaces) flatten(space.articles, space.title, collected)
@@ -413,7 +413,7 @@ async function loadArticles() {
 
 async function loadAudienceOptions() {
   for (const [type, target] of [['position', positionOptions], ['subdivision', subdivisionOptions]] as const) {
-    const res = await $fetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', { query: { type, q: '' } })
+    const res = await apiFetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', { query: { type, q: '' } })
     target.value = res.ok ? res.options.map(option => ({ id: option.id, label: option.label })) : []
   }
 }
@@ -444,8 +444,8 @@ async function submit() {
   saving.value = true
   try {
     const res = editingId.value === null
-      ? await $fetch<CreateWikiPathResponse>('/api/wiki/paths/create', { method: 'POST', body: body() })
-      : await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${editingId.value}`, { method: 'PUT', body: body() })
+      ? await apiFetch<CreateWikiPathResponse>('/api/wiki/paths/create', { method: 'POST', body: body() })
+      : await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${editingId.value}`, { method: 'PUT', body: body() })
 
     if (!res.ok) {
       formError.value = res.error ?? t('wiki.errors.saveFailed')
@@ -471,7 +471,7 @@ async function move(position: number, direction: -1 | 1) {
   order.splice(target, 0, moved!)
 
   error.value = ''
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/wiki/paths/reorder', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/paths/reorder', {
     method: 'POST',
     body: { pathIds: order },
   })
@@ -490,7 +490,7 @@ async function remove() {
   if (!path) return
 
   error.value = ''
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${path.id}`, { method: 'DELETE' })
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${path.id}`, { method: 'DELETE' })
 
   if (!res.ok) {
     error.value = res.error ?? t('wiki.errors.saveFailed')
@@ -504,7 +504,7 @@ async function remove() {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiPathManageResponse>('/api/wiki/paths/manage')
+    const res = await apiFetch<WikiPathManageResponse>('/api/wiki/paths/manage')
     if (!res.ok) {
       error.value = res.error
       return

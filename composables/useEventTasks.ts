@@ -48,7 +48,7 @@ export function useEventTasks(eventId: Ref<number | null>) {
 
     try {
       taskLoading.value = true
-      const res = await $fetch<GetEventTasksResponse>(`/api/events/${id}/tasks`)
+      const res = await apiFetch<GetEventTasksResponse>(`/api/events/${id}/tasks`)
       if (!res.ok) throw new Error(res.error)
 
       planningTasks.value = res.tasks.map(mapPersistedTaskToPanel)
@@ -68,7 +68,7 @@ export function useEventTasks(eventId: Ref<number | null>) {
 
     try {
       taskSaving.value = true
-      const res = await $fetch<UpdateEventTasksResponse>(`/api/events/${eventId.value}/tasks`, {
+      const res = await apiFetch<UpdateEventTasksResponse>(`/api/events/${eventId.value}/tasks`, {
         method: 'PUT',
         body: { tasks: nextTasks.map((task, i) => mapPanelTaskToPayload(task, i)) },
       })
@@ -94,7 +94,7 @@ export function useEventTasks(eventId: Ref<number | null>) {
 
     try {
       taskSaving.value = true
-      const res = await $fetch<UpdateTaskStatusResponse>(`/api/tasks/${taskId}/status`, {
+      const res = await apiFetch<UpdateTaskStatusResponse>(`/api/tasks/${taskId}/status`, {
         method: 'PUT',
         body: { status },
       })

@@ -136,7 +136,7 @@ const columns = computed<AdvancedTableColumn<InvoiceRow>[]>(() => [
 
 onMounted(async () => {
   try {
-    const res = await $fetch<{ ok: boolean, invoices?: InvoiceRow[], error?: string }>('/api/invoices')
+    const res = await apiFetch<{ ok: boolean, invoices?: InvoiceRow[], error?: string }>('/api/invoices')
     if (res.ok && res.invoices) invoices.value = res.invoices
   } finally {
     loading.value = false

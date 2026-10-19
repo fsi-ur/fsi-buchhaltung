@@ -118,7 +118,7 @@ async function changePassword() {
 
   isChangingPassword.value = true
   try {
-    const res = await $fetch<ChangePasswordResponse>('/api/auth/change-password', {
+    const res = await apiFetch<ChangePasswordResponse>('/api/auth/change-password', {
       method: 'POST',
       body: {
         currentPassword: passwordForm.value.currentPassword,

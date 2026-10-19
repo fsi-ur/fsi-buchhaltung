@@ -394,7 +394,7 @@ watch([quickRange, domainFilter, tableFilter, operationFilter, userFilter], () =
 
 onMounted(async () => {
   load()
-  const res = await $fetch<GetAuditFiltersResponse>('/api/audit/filters')
+  const res = await apiFetch<GetAuditFiltersResponse>('/api/audit/filters')
   if (res.ok) {
     filterOptions.value = res
     // Labels only resolve once the options arrive; seed the inputs for a preset/restored filter.

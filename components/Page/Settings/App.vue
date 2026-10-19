@@ -470,7 +470,7 @@ useAppRefresh().onRefresh(loadInvoiceTexts)
 
 async function loadTimeZone() {
   try {
-    const res = await $fetch<GetAppTimeZoneResponse>('/api/settings/app/time-zone')
+    const res = await apiFetch<GetAppTimeZoneResponse>('/api/settings/app/time-zone')
     savedTimeZone.value = res.timeZone
     selectedTimeZone.value = res.timeZone
     timeZoneQuery.value = res.timeZone
@@ -491,7 +491,7 @@ async function saveTimeZone() {
 
   isSavingTimeZone.value = true
   try {
-    const res = await $fetch<{ ok: boolean, timeZone?: string, error?: string }>('/api/settings/app/time-zone.save', {
+    const res = await apiFetch<{ ok: boolean, timeZone?: string, error?: string }>('/api/settings/app/time-zone.save', {
       method: 'POST',
       body: { timeZone: selectedTimeZone.value },
     })
@@ -512,7 +512,7 @@ async function saveTimeZone() {
 }
 
 async function loadAuditRetention() {
-  const res = await $fetch<GetAuditSettingsResponse>('/api/audit/settings')
+  const res = await apiFetch<GetAuditSettingsResponse>('/api/audit/settings')
   if (!res.ok) {
     toast.error(res.error)
     return
@@ -525,7 +525,7 @@ async function loadAuditRetention() {
 async function saveAuditRetention() {
   isSavingAuditRetention.value = true
   try {
-    const res = await $fetch<SaveAuditSettingsResponse>('/api/audit/settings.save', {
+    const res = await apiFetch<SaveAuditSettingsResponse>('/api/audit/settings.save', {
       method: 'POST',
       body: auditRetentionForm.value,
     })
@@ -543,7 +543,7 @@ async function saveAuditRetention() {
 }
 
 async function loadInvoiceTexts() {
-  const res = await $fetch<{ ok: boolean, settings?: InvoiceTextSettings, variables?: InvoiceTextVariable[], error?: string }>('/api/settings/app/invoice-texts')
+  const res = await apiFetch<{ ok: boolean, settings?: InvoiceTextSettings, variables?: InvoiceTextVariable[], error?: string }>('/api/settings/app/invoice-texts')
   if (!res.ok || !res.settings) {
     toast.error(res.error || t('settings.app.invoiceTextsLoadFailed'))
     return
@@ -556,7 +556,7 @@ async function loadInvoiceTexts() {
 async function saveInvoiceTexts() {
   isSavingInvoiceTexts.value = true
   try {
-    const res = await $fetch<{ ok: boolean, settings?: InvoiceTextSettings, error?: string }>('/api/settings/app/invoice-texts.save', {
+    const res = await apiFetch<{ ok: boolean, settings?: InvoiceTextSettings, error?: string }>('/api/settings/app/invoice-texts.save', {
       method: 'POST',
       body: invoiceTextForm.value,
     })

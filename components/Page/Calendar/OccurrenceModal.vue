@@ -357,7 +357,7 @@ async function loadDetail() {
   applyToSeries.value = false
 
   try {
-    const res = await $fetch<GetAppointmentResponse>(`/api/appointments/${entry.id}`)
+    const res = await apiFetch<GetAppointmentResponse>(`/api/appointments/${entry.id}`)
     if (res.ok) {
       detail.value = res
       return
@@ -379,7 +379,7 @@ async function respond(response: AppointmentResponseValue) {
   isResponding.value = true
   pendingResponse.value = response
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/respond`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/respond`, {
       method: 'POST',
       body: {
         occurrenceDate: entry.occurrenceDate,
@@ -425,7 +425,7 @@ async function reactivate() {
 
   isTogglingCancel.value = true
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/cancel`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/cancel`, {
       method: 'POST',
       body: { cancelled: false },
     })

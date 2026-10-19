@@ -131,7 +131,7 @@ const visibleBirthdays = computed(() => birthdays.value.slice(0, MAX_VISIBLE_BIR
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetMemberSpotlightResponse>('/api/members/spotlight')
+    const res = await apiFetch<GetMemberSpotlightResponse>('/api/members/spotlight')
     if (res.ok) {
       stats.value = res.stats
       birthdays.value = res.birthdays

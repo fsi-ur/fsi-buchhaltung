@@ -55,7 +55,7 @@ export function usePushSubscription() {
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
       })
 
-      await $fetch('/api/notifications/push-subscribe', { method: 'POST', body: subscription.toJSON() })
+      await apiFetch('/api/notifications/push-subscribe', { method: 'POST', body: subscription.toJSON() })
       subscribed.value = true
       return { ok: true }
     } catch {
@@ -73,7 +73,7 @@ export function usePushSubscription() {
       const registration = await getRegistration()
       const subscription = await registration?.pushManager.getSubscription()
       if (subscription) {
-        await $fetch('/api/notifications/push-unsubscribe', { method: 'POST', body: { endpoint: subscription.endpoint } })
+        await apiFetch('/api/notifications/push-unsubscribe', { method: 'POST', body: { endpoint: subscription.endpoint } })
         await subscription.unsubscribe()
       }
       subscribed.value = false

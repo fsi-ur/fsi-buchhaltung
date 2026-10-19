@@ -445,12 +445,12 @@ function onCheckedBySelect(value: unknown) {
 }
 
 async function loadMembers() {
-  const res = await $fetch('/api/members', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/members'>>('/api/members', { method: 'GET' })
   if (res.ok) members.value = res.members
 }
 
 async function loadEvents() {
-  const res = await $fetch('/api/cash_counts/event-options', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/cash_counts/event-options'>>('/api/cash_counts/event-options', { method: 'GET' })
   if (res.ok) events.value = res.events
 }
 

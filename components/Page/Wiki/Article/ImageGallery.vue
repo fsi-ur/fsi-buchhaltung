@@ -154,7 +154,7 @@ async function confirmDelete() {
   deleting.value = true
   try {
     await props.beforeDelete?.()
-    const res = await $fetch<DeleteWikiImageResponse>(`/api/wiki/articles/${props.articleId}/images`, {
+    const res = await apiFetch<DeleteWikiImageResponse>(`/api/wiki/articles/${props.articleId}/images`, {
       method: 'DELETE',
       query: { fileId: image.fileId },
     })

@@ -703,7 +703,7 @@ function semesterButtonClass(value: BudgetSemester) {
 }
 
 async function loadCostCentres() {
-  const response = await $fetch<{ ok: boolean, costCentres?: CostCentreRow[], error?: string }>('/api/cost_centres')
+  const response = await apiFetch<{ ok: boolean, costCentres?: CostCentreRow[], error?: string }>('/api/cost_centres')
   if (!response.ok || !response.costCentres) {
     toast.error(response.error || t('budget.loadFailed'))
     return
@@ -720,7 +720,7 @@ async function loadBudget(budgetId: number) {
   isLoadingBudget.value = true
 
   try {
-    const response = await $fetch<GetBudgetResponse>(`/api/finances/budgets/${budgetId}`)
+    const response = await apiFetch<GetBudgetResponse>(`/api/finances/budgets/${budgetId}`)
     if (!response.ok) {
       toast.error(response.error || t('budget.loadFailed'))
       return
@@ -763,7 +763,7 @@ async function saveBudget(exit: boolean) {
       })),
     }
 
-    const response = await $fetch<{ ok: boolean, id?: number, error?: string }>('/api/finances/budgets/save', {
+    const response = await apiFetch<{ ok: boolean, id?: number, error?: string }>('/api/finances/budgets/save', {
       method: 'POST',
       body: payload,
     })

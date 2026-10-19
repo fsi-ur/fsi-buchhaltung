@@ -216,7 +216,7 @@ function clearArticle() {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiPageHelpAdminResponse>('/api/wiki/page-help/admin')
+    const res = await apiFetch<WikiPageHelpAdminResponse>('/api/wiki/page-help/admin')
     if (!res.ok) {
       errors.value = [res.error]
       return
@@ -236,7 +236,7 @@ async function addEntry() {
   errors.value = []
 
   try {
-    const res = await $fetch<CreateWikiPageHelpResponse>('/api/wiki/page-help/create', {
+    const res = await apiFetch<CreateWikiPageHelpResponse>('/api/wiki/page-help/create', {
       method: 'POST',
       body: {
         pageName: selectedPage.value,
@@ -272,7 +272,7 @@ async function removeEntry() {
   errors.value = []
 
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/page-help/${entry.id}`, { method: 'DELETE' })
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/page-help/${entry.id}`, { method: 'DELETE' })
 
     if (!res.ok) {
       errors.value = [res.error ?? t('wiki.errors.saveFailed')]

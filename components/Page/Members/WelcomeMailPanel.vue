@@ -152,7 +152,7 @@ async function load() {
   if (!props.memberId) return
 
   try {
-    const res = await $fetch<GetMemberWelcomeMailResponse>(`/api/members/${props.memberId}/welcome-mail`)
+    const res = await apiFetch<GetMemberWelcomeMailResponse>(`/api/members/${props.memberId}/welcome-mail`)
     if (!res.ok) return
     status.value = res.status
     canSend.value = res.canSend
@@ -176,7 +176,7 @@ async function send() {
 
   sending.value = true
   try {
-    const res = await $fetch<SendMemberWelcomeMailResponse>(`/api/members/${props.memberId}/welcome-mail`, { method: 'POST' })
+    const res = await apiFetch<SendMemberWelcomeMailResponse>(`/api/members/${props.memberId}/welcome-mail`, { method: 'POST' })
     if (!res.ok) {
       toast.error(res.error)
       return

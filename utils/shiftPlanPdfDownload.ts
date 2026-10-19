@@ -2,7 +2,7 @@ export async function downloadShiftPlanPdf(
   eventId: number,
   options: { includeDescriptions: boolean, highlightOwn?: boolean },
 ): Promise<{ ok: true } | { ok: false, error?: string }> {
-  const response = await $fetch.raw<Blob>(`/api/events/${eventId}/shifts/pdf`, {
+  const response = await apiFetch.raw<Blob>(`/api/events/${eventId}/shifts/pdf`, {
     responseType: 'blob',
     query: {
       descriptions: options.includeDescriptions ? '1' : '0',

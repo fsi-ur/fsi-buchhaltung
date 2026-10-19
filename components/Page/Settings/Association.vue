@@ -432,7 +432,7 @@ function removePosition(value: string | number) {
 
 async function load() {
   try {
-    const res = await $fetch<{
+    const res = await apiFetch<{
       ok: boolean
       profile?: AssociationProfileRow | null
       members?: AssociationResponsibleMemberOption[]
@@ -488,7 +488,7 @@ async function save() {
       register_court: normalizeOptionalString(form.register_court),
     } satisfies SaveAssociationProfileBody))
 
-    const res = await $fetch('/api/settings/association.save', {
+    const res = await apiFetch<ApiResponse<'/api/settings/association.save', 'post'>>('/api/settings/association.save', {
       method: 'POST',
       body,
     })

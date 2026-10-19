@@ -188,7 +188,7 @@ const statusMeta = computed(() => {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetEventWebsiteResponse>(`/api/events/${props.eventId}/website`)
+    const res = await apiFetch<GetEventWebsiteResponse>(`/api/events/${props.eventId}/website`)
     if (!res.ok) {
       toast.error(t('event.website.loadFailed'))
       return
@@ -222,7 +222,7 @@ async function save() {
 
   saving.value = true
   try {
-    const res = await $fetch<UpdateEventWebsiteResponse>(`/api/events/${props.eventId}/website`, {
+    const res = await apiFetch<UpdateEventWebsiteResponse>(`/api/events/${props.eventId}/website`, {
       method: 'PUT',
       body,
     })

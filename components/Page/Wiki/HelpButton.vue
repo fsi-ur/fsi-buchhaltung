@@ -170,7 +170,7 @@ async function loadArticle(articleId: number) {
   article.value = null
 
   try {
-    const res = await $fetch<WikiArticleDetailResult>(`/api/wiki/articles/${articleId}`)
+    const res = await apiFetch<WikiArticleDetailResult>(`/api/wiki/articles/${articleId}`)
     if (!res.ok) {
       error.value = res.error
       return

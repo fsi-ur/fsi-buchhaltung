@@ -287,7 +287,7 @@ function reportError(phase: EntityManagerErrorContext['phase'], message?: string
 
 async function loadItems() {
   try {
-    const res = await $fetch<Record<string, any>>(props.listEndpoint)
+    const res = await apiFetch<Record<string, any>>(props.listEndpoint)
     if (res.ok) {
       items.value = (res[props.responseListKey] ?? []) as SettingsEntityRow[]
       return
@@ -323,7 +323,7 @@ async function saveItem() {
 
   try {
     isSaving.value = true
-    const res = await $fetch<{ ok: boolean, error?: string }>(props.saveEndpoint, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(props.saveEndpoint, {
       method: 'POST',
       body: editingItem.value,
     })
@@ -343,7 +343,7 @@ async function saveItem() {
 
 async function toggleActive(item: SettingsEntityRow) {
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(props.activateEndpoint, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(props.activateEndpoint, {
       method: 'POST',
       body: { id: item.id, is_active: !item.is_active },
     })

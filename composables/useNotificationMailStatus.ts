@@ -14,7 +14,7 @@ let loaded = false
 
 async function fetchStatus() {
   try {
-    const res = await $fetch<GetNotificationStatusResponse>('/api/notifications/status')
+    const res = await apiFetch<GetNotificationStatusResponse>('/api/notifications/status')
     status.value = res.ok
       ? {
           enabled: res.enabled,

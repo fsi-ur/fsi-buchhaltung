@@ -369,7 +369,7 @@ function eventLabel(event: Event) {
 async function ensureEventsLoaded() {
   if (eventsLoaded.value) return
   eventsLoaded.value = true
-  const res = await $fetch<GetEventsResponse>('/api/events')
+  const res = await apiFetch<GetEventsResponse>('/api/events')
   if (res.ok) events.value = res.events
 }
 
@@ -494,7 +494,7 @@ async function uploadImages(files: File[]) {
     try {
       const formData = new FormData()
       formData.append('file', file, file.name || 'bild.png')
-      const res = await $fetch<UploadWikiImageResponse>(`/api/wiki/articles/${props.articleId}/images`, {
+      const res = await apiFetch<UploadWikiImageResponse>(`/api/wiki/articles/${props.articleId}/images`, {
         method: 'POST',
         body: formData,
       })
@@ -547,7 +547,7 @@ async function refreshPreview() {
     return
   }
 
-  const res = await $fetch<PreviewResponse>('/api/wiki/preview', {
+  const res = await apiFetch<PreviewResponse>('/api/wiki/preview', {
     method: 'POST',
     body: {
       markdown: props.modelValue,

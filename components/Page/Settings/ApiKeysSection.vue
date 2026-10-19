@@ -193,7 +193,7 @@ const columns = computed<AdvancedTableColumn<ApiKey>[]>(() => ([
 
 async function loadKeys() {
   try {
-    const res = await $fetch<GetApiKeysResponse>('/api/api-keys')
+    const res = await apiFetch<GetApiKeysResponse>('/api/api-keys')
     apiKeys.value = res.ok ? res.apiKeys : []
   } catch {
     apiKeys.value = []
@@ -222,7 +222,7 @@ async function createKey() {
   saving.value = true
   createError.value = ''
   try {
-    const res = await $fetch<CreateApiKeyResponse>('/api/api-keys/create', {
+    const res = await apiFetch<CreateApiKeyResponse>('/api/api-keys/create', {
       method: 'POST',
       body: { name: newName.value },
     })
@@ -246,7 +246,7 @@ async function revokeKey() {
 
   saving.value = true
   try {
-    const res = await $fetch<RevokeApiKeyResponse>(`/api/api-keys/${target.id}/revoke`, { method: 'POST' })
+    const res = await apiFetch<RevokeApiKeyResponse>(`/api/api-keys/${target.id}/revoke`, { method: 'POST' })
     if (!res.ok) {
       toast.error(res.error || t('settings.apiKeys.revokeFailed'))
       return

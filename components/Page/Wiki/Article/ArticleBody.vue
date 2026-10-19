@@ -219,7 +219,7 @@ async function resolveEmbeds() {
   const requests: WikiEmbedRequestItem[] = mounts.map(mount => ({ key: mount.key, args: mount.args }))
 
   try {
-    const res = await $fetch<WikiEmbedsResolveResponse>('/api/wiki/embeds/resolve', {
+    const res = await apiFetch<WikiEmbedsResolveResponse>('/api/wiki/embeds/resolve', {
       method: 'POST',
       body: { embeds: requests },
     })

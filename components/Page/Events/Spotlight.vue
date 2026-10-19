@@ -218,7 +218,7 @@ function openTab(tab: EventPlanningTabKey) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetEventSpotlightResponse>('/api/events/spotlight')
+    const res = await apiFetch<GetEventSpotlightResponse>('/api/events/spotlight')
     if (res.ok) {
       upcoming.value = res.upcoming
       latest.value = res.latest

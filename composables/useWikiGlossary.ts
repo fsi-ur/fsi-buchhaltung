@@ -20,7 +20,7 @@ export function wikiGlossaryKey(value: string) {
 
 async function fetchGlossary() {
   try {
-    const res = await $fetch<WikiGlossaryResponse>('/api/wiki/glossary')
+    const res = await apiFetch<WikiGlossaryResponse>('/api/wiki/glossary')
     cache = res.ok ? res.terms : []
   } catch {
     cache = []

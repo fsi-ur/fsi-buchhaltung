@@ -16,6 +16,16 @@ import { MIGRATION_SCRIPTS } from '~/scripts/migration-list.mjs'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
+function sourceFiles(dir: string): string[] {
+  const absolute = path.join(root, dir)
+  if (!fs.existsSync(absolute)) return []
+  return fs.readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+    const relative = `${dir}/${entry.name}`
+    if (entry.isDirectory()) return sourceFiles(relative)
+    return /\.(ts|vue|mjs)$/.test(entry.name) ? [relative] : []
+  })
+}
+
 function collectKeys(node: unknown, prefix = ''): string[] {
   if (typeof node === 'string') return [prefix]
   if (!node || typeof node !== 'object') return []
@@ -219,16 +229,6 @@ describe('time zones', () => {
   const SOURCE_DIRS = ['components', 'composables', 'layouts', 'plugins', 'server', 'shared', 'utils']
   const ALLOWED_FILES = new Set(['shared/time.ts'])
 
-  function sourceFiles(dir: string): string[] {
-    const absolute = path.join(root, dir)
-    if (!fs.existsSync(absolute)) return []
-    return fs.readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
-      const relative = `${dir}/${entry.name}`
-      if (entry.isDirectory()) return sourceFiles(relative)
-      return /\.(ts|vue|mjs)$/.test(entry.name) ? [relative] : []
-    })
-  }
-
   const files = SOURCE_DIRS.flatMap(sourceFiles).filter(file => !ALLOWED_FILES.has(file))
 
   function offenders(pattern: RegExp, onlyIn?: (file: string) => boolean) {
@@ -252,5 +252,24 @@ describe('time zones', () => {
     const isServer = (file: string) => file.startsWith('server/')
     // Upper-case SQL only, and not a method call — `Date.now()` is fine, it is an instant.
     expect(offenders(/(?<![.\w])(NOW|CURDATE|CURRENT_DATE|CURTIME|UTC_TIMESTAMP|LOCALTIME|SYSDATE)\(\)|(?<![.\w])CURRENT_DATE(?!\w)/, isServer)).toEqual([])
+  })
+})
+
+describe('typed fetch', () => {
+  // A call through the global `$fetch` makes TypeScript match its URL against every server
+  // route and resolve the handlers' return types; with this many routes that exceeds the
+  // instantiation depth (TS2589) and fails typecheck at an unrelated call as soon as a route
+  // is added. `apiFetch` (utils/apiFetch.ts) takes the response type as given instead.
+  const CLIENT_DIRS = ['components', 'composables', 'layouts', 'plugins', 'utils']
+  const ALLOWED_FILES = new Set(['utils/apiFetch.ts', 'plugins/auth-fetch.client.ts'])
+
+  it('calls the API through apiFetch, not the route-typed global $fetch', () => {
+    const offenders = CLIENT_DIRS.flatMap(sourceFiles)
+      .filter(file => !ALLOWED_FILES.has(file))
+      .flatMap(file => read(file).split('\n')
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => /(?<![\w.])\$fetch\b/.test(line) && !/^\s*(\/\/|\/\*|\*)/.test(line))
+        .map(({ index }) => `${file}:${index + 1}`))
+    expect(offenders).toEqual([])
   })
 })

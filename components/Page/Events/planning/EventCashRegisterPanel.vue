@@ -557,7 +557,7 @@ async function loadOverview() {
   error.value = ''
 
   try {
-    const res = await $fetch<EventCashRegisterResponse>(`/api/events/${props.eventId}/cash-register`, {
+    const res = await apiFetch<EventCashRegisterResponse>(`/api/events/${props.eventId}/cash-register`, {
       query: { standId: String(standFilter.value) },
     })
 

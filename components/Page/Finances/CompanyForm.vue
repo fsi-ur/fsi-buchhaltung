@@ -191,7 +191,7 @@ async function save() {
 
   isSaving.value = true
   try {
-    const res = await $fetch(`/api/companies/${form.id}`, {
+    const res = await apiFetch<ApiResponse<'/api/companies/:id', 'put'>>(`/api/companies/${form.id}`, {
       method: 'PUT',
       body: form
     })

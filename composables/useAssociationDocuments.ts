@@ -15,7 +15,7 @@ function isStale() {
 async function fetchDocuments() {
   loading.value = true
   try {
-    const res = await $fetch<ListDocumentsResponse>('/api/documents?activeOnly=true')
+    const res = await apiFetch<ListDocumentsResponse>('/api/documents?activeOnly=true')
     documents.value = res.ok ? res.documents.filter(document => document.file_id !== null) : []
     loadedAt = Date.now()
   } catch {

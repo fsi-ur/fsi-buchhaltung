@@ -85,12 +85,12 @@ const confirmRestore = ref<number | null>(null)
 
 async function load() {
   if (!props.articleId) return
-  const res = await $fetch<WikiRevisionListResponse>(`/api/wiki/articles/${props.articleId}/revisions`)
+  const res = await apiFetch<WikiRevisionListResponse>(`/api/wiki/articles/${props.articleId}/revisions`)
   revisions.value = res.ok ? res.revisions : []
 }
 
 async function show(revisionId: number) {
-  const res = await $fetch<WikiRevisionDetailResponse>(`/api/wiki/revisions/${revisionId}`)
+  const res = await apiFetch<WikiRevisionDetailResponse>(`/api/wiki/revisions/${revisionId}`)
   if (!res.ok) {
     toast.error(res.error)
     return
@@ -103,7 +103,7 @@ async function restore() {
   confirmRestore.value = null
   if (!revisionId) return
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${props.articleId}/restore`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${props.articleId}/restore`, {
     method: 'POST',
     body: { revisionId },
   })

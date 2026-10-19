@@ -8,7 +8,7 @@ export function budgetPdfFileName(budget: { year: number, semester: BudgetSemest
 export async function downloadBudgetPlanPdf(
   budget: { id: number, year: number, semester: BudgetSemester },
 ): Promise<{ ok: true } | { ok: false, error?: string }> {
-  const blob = await $fetch<Blob>(`/api/finances/budgets/${budget.id}/pdf`, { responseType: 'blob' })
+  const blob = await apiFetch<Blob>(`/api/finances/budgets/${budget.id}/pdf`, { responseType: 'blob' })
 
   if (!blob.type.includes('application/pdf')) {
     try {

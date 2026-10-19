@@ -490,7 +490,7 @@ async function onScopeConfirmed(scope: AppointmentEditScope) {
 
 async function deleteAppointment(entry: CalendarEntry, scope: AppointmentEditScope) {
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}`, {
       method: 'DELETE',
       body: { scope, occurrenceDate: entry.occurrenceDate },
     })
@@ -510,7 +510,7 @@ async function deleteAppointment(entry: CalendarEntry, scope: AppointmentEditSco
 
 async function cancelAppointment(entry: CalendarEntry, scope: AppointmentEditScope) {
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/cancel`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/cancel`, {
       method: 'POST',
       body: { cancelled: true, scope, occurrenceDate: entry.occurrenceDate },
     })
@@ -535,7 +535,7 @@ function listWindow(months: number) {
 }
 
 async function fetchWindow(window: { from: string, to: string }) {
-  const res = await $fetch<GetCalendarEntriesResponse>('/api/calendar/entries', {
+  const res = await apiFetch<GetCalendarEntriesResponse>('/api/calendar/entries', {
     query: { from: window.from, to: window.to },
   })
   if (!res.ok) throw new Error(res.error || t('calendar.loadFailed'))

@@ -489,7 +489,7 @@ async function loadOutbox() {
   if (!canViewOutbox.value) return
   outboxLoading.value = true
   try {
-    const res = await $fetch<GetNotificationOutboxResponse>('/api/notifications')
+    const res = await apiFetch<GetNotificationOutboxResponse>('/api/notifications')
     if (res.ok) outboxRows.value = res.items
     else toast.error(res.error)
   } finally {
@@ -503,7 +503,7 @@ function openInboxItem(item: NotificationInboxItem) {
 }
 
 async function openOutboxItem(id: number) {
-  const res = await $fetch<GetNotificationDetailResponse>(`/api/notifications/${id}`)
+  const res = await apiFetch<GetNotificationDetailResponse>(`/api/notifications/${id}`)
   if (res.ok) {
     detail.value = res.notification
     detailOpen.value = true
@@ -514,7 +514,7 @@ async function openOutboxItem(id: number) {
 
 async function cancelDetail() {
   if (!detail.value) return
-  const res = await $fetch<CancelNotificationResponse>(`/api/notifications/${detail.value.id}`, { method: 'DELETE' })
+  const res = await apiFetch<CancelNotificationResponse>(`/api/notifications/${detail.value.id}`, { method: 'DELETE' })
   if (res.ok) {
     toast.success(t('actions.saved'))
     detailOpen.value = false

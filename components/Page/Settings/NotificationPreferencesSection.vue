@@ -232,7 +232,7 @@ function isOverridden(typeKey: NotificationTypeKey) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetNotificationPreferencesResponse>('/api/notifications/preferences')
+    const res = await apiFetch<GetNotificationPreferencesResponse>('/api/notifications/preferences')
     if (res.ok) entries.value = res.entries
     else toast.error(res.error)
   } finally {
@@ -246,7 +246,7 @@ async function toggle(typeKey: NotificationTypeKey, channel: NotificationChannel
   if (entry) entry.effective = enabled
 
   try {
-    const res = await $fetch<SaveNotificationPreferencesResponse>('/api/notifications/preferences', {
+    const res = await apiFetch<SaveNotificationPreferencesResponse>('/api/notifications/preferences', {
       method: 'PUT',
       body: { entries: [{ typeKey, channel, enabled }] },
     })
@@ -268,7 +268,7 @@ async function resetToDefault(typeKey: NotificationTypeKey) {
   if (!affected.length) return
 
   try {
-    const res = await $fetch<SaveNotificationPreferencesResponse>('/api/notifications/preferences', {
+    const res = await apiFetch<SaveNotificationPreferencesResponse>('/api/notifications/preferences', {
       method: 'PUT',
       body: { entries: affected.map(entry => ({ typeKey: entry.typeKey, channel: entry.channel, enabled: null })) },
     })

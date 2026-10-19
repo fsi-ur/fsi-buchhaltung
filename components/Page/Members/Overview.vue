@@ -61,7 +61,7 @@ const headline = computed(() => {
 
 onMounted(async () => {
   if (!hasPermission('members.editOwnData')) return
-  const res = await $fetch<GetMemberSelfResponse>('/api/members/self')
+  const res = await apiFetch<GetMemberSelfResponse>('/api/members/self')
   hasLinkedMember.value = res.ok && Boolean(res.member)
 })
 

@@ -112,7 +112,7 @@ const confirmingRegenerate = ref(false)
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetCalendarFeedResponse>('/api/user/calendar-feed')
+    const res = await apiFetch<GetCalendarFeedResponse>('/api/user/calendar-feed')
     if (res.ok) hasToken.value = res.hasToken
   } finally {
     loading.value = false
@@ -122,7 +122,7 @@ async function load() {
 async function generate() {
   generating.value = true
   try {
-    const res = await $fetch<PostCalendarFeedResponse>('/api/user/calendar-feed', { method: 'POST' })
+    const res = await apiFetch<PostCalendarFeedResponse>('/api/user/calendar-feed', { method: 'POST' })
     if (res.ok) {
       url.value = res.url
       hasToken.value = true

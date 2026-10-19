@@ -271,7 +271,7 @@ export function useFinanceAnalysisFilters() {
 
   async function loadCostCentres() {
     try {
-      const response = await $fetch<{ ok: true, costCentres: CostCentreRow[] } | { ok: false, error: string }>('/api/cost_centres')
+      const response = await apiFetch<{ ok: true, costCentres: CostCentreRow[] } | { ok: false, error: string }>('/api/cost_centres')
       costCentres.value = response.ok ? response.costCentres : []
     } catch {
       costCentres.value = []

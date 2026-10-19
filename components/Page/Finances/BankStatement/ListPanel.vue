@@ -113,7 +113,7 @@ const columns = computed<AdvancedTableColumn<BankStatementOverview>[]>(() => [
 
 onMounted(async () => {
   try {
-    const res = await $fetch('/api/bank_statements')
+    const res = await apiFetch<ApiResponse<'/api/bank_statements'>>('/api/bank_statements')
     if (res.ok) {
       bankStatements.value = res.bankStatements
     }

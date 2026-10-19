@@ -73,7 +73,7 @@ export function useEventShifts(eventId: Ref<number | null>) {
 
     try {
       shiftLoading.value = true
-      const res = await $fetch<GetEventShiftsResponse>(`/api/events/${id}/shifts`)
+      const res = await apiFetch<GetEventShiftsResponse>(`/api/events/${id}/shifts`)
       if (!res.ok) throw new Error(res.error)
 
       shiftSlots.value = res.shifts.map(mapPersistedShiftToPanel)
@@ -97,7 +97,7 @@ export function useEventShifts(eventId: Ref<number | null>) {
 
     try {
       shiftSaving.value = true
-      const res = await $fetch<UpdateEventShiftsResponse>(`/api/events/${eventId.value}/shifts`, {
+      const res = await apiFetch<UpdateEventShiftsResponse>(`/api/events/${eventId.value}/shifts`, {
         method: 'PUT',
         body: { shifts: nextSlots.map(mapPanelShiftToPayload) },
       })
@@ -119,7 +119,7 @@ export function useEventShifts(eventId: Ref<number | null>) {
 
     try {
       shiftSaving.value = true
-      const res = await $fetch<UpdateEventShiftTemplatesResponse>('/api/events/shift-templates', {
+      const res = await apiFetch<UpdateEventShiftTemplatesResponse>('/api/events/shift-templates', {
         method: 'PUT',
         body: { templates: nextTemplates.map(mapPanelShiftTemplateToPayload) },
       })
@@ -141,7 +141,7 @@ export function useEventShifts(eventId: Ref<number | null>) {
 
     try {
       shiftSaving.value = true
-      const res = await $fetch<UpdateEventShiftTypeDescriptionsResponse>(`/api/events/${eventId.value}/shifts/type-descriptions`, {
+      const res = await apiFetch<UpdateEventShiftTypeDescriptionsResponse>(`/api/events/${eventId.value}/shifts/type-descriptions`, {
         method: 'PUT',
         body: { entries: nextEntries },
       })
@@ -163,7 +163,7 @@ export function useEventShifts(eventId: Ref<number | null>) {
 
     try {
       shiftSaving.value = true
-      const res = await $fetch<AddSelfToShiftResponse>(`/api/events/${eventId.value}/shifts/${shiftId}/self`, {
+      const res = await apiFetch<AddSelfToShiftResponse>(`/api/events/${eventId.value}/shifts/${shiftId}/self`, {
         method: 'POST',
       })
       if (!res.ok) throw new Error(res.error)
@@ -183,7 +183,7 @@ export function useEventShifts(eventId: Ref<number | null>) {
 
     try {
       shiftSaving.value = true
-      const res = await $fetch<RemoveSelfFromShiftResponse>(`/api/events/${eventId.value}/shifts/${shiftId}/self`, {
+      const res = await apiFetch<RemoveSelfFromShiftResponse>(`/api/events/${eventId.value}/shifts/${shiftId}/self`, {
         method: 'DELETE',
       })
       if (!res.ok) throw new Error(res.error)

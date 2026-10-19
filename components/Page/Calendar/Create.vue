@@ -196,7 +196,7 @@ function emptyForm(): AppointmentFormValue {
 
 async function loadOptions() {
   try {
-    const res = await $fetch<GetAppointmentOptionsResponse>('/api/appointments/options')
+    const res = await apiFetch<GetAppointmentOptionsResponse>('/api/appointments/options')
     if (!res.ok) return
     members.value = res.members
     subdivisions.value = res.subdivisions
@@ -220,7 +220,7 @@ async function loadAppointment() {
 
   isLoading.value = true
   try {
-    const res = await $fetch<GetAppointmentResponse>(`/api/appointments/${id}`)
+    const res = await apiFetch<GetAppointmentResponse>(`/api/appointments/${id}`)
     if (!res.ok) {
       errors.value = [res.error || t('calendar.detail.loadFailed')]
       canEdit.value = false
@@ -278,7 +278,7 @@ async function loadAppointment() {
 }
 
 async function loadWebsite(id: number) {
-  const res = await $fetch<GetAppointmentWebsiteResponse>(`/api/appointments/${id}/website`)
+  const res = await apiFetch<GetAppointmentWebsiteResponse>(`/api/appointments/${id}/website`)
     .catch(() => ({ ok: false as const, error: '' }))
   if (!res.ok) {
     canPublish.value = false
@@ -342,11 +342,11 @@ async function save() {
       const body: SaveAppointmentBody = { ...form.value }
 
       const res = appointmentId.value
-        ? await $fetch<{ ok: boolean, id?: number, error?: string }>(`/api/appointments/${appointmentId.value}`, {
+        ? await apiFetch<{ ok: boolean, id?: number, error?: string }>(`/api/appointments/${appointmentId.value}`, {
           method: 'PUT',
           body: { ...body, scope: scope.value, occurrenceDate: occurrenceDate.value },
         })
-        : await $fetch<{ ok: boolean, id?: number, error?: string }>('/api/appointments/create', {
+        : await apiFetch<{ ok: boolean, id?: number, error?: string }>('/api/appointments/create', {
           method: 'POST',
           body,
         })
@@ -360,7 +360,7 @@ async function save() {
     }
 
     if (showWebsite.value && canPublish.value && websiteDirty.value && savedId) {
-      const websiteRes = await $fetch<UpdateAppointmentWebsiteResponse>(`/api/appointments/${savedId}/website`, {
+      const websiteRes = await apiFetch<UpdateAppointmentWebsiteResponse>(`/api/appointments/${savedId}/website`, {
         method: 'PUT',
         body: website.value,
       }).catch(() => ({ ok: false as const, error: '' }))

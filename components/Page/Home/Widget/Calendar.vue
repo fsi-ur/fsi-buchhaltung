@@ -123,7 +123,7 @@ async function respond(entry: CalendarEntry, response: AppointmentResponseValue)
   respondingKey.value = entry.key
 
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/respond`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/appointments/${entry.id}/respond`, {
       method: 'POST',
       body: { occurrenceDate: entry.occurrenceDate, response },
     })
@@ -147,7 +147,7 @@ async function load() {
   try {
     const now = nowLocalDateTime(timeZone.value)
 
-    const res = await $fetch<GetCalendarEntriesResponse>('/api/calendar/entries', {
+    const res = await apiFetch<GetCalendarEntriesResponse>('/api/calendar/entries', {
       query: {
         from: `${now.slice(0, 16)}:00`,
         to: `${addDaysToLocalDate(now.slice(0, 10), WINDOW_DAYS)} 23:59:59`,

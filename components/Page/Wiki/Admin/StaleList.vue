@@ -64,7 +64,7 @@ function open(articleId: number) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiStaleResponse>('/api/wiki/stale')
+    const res = await apiFetch<WikiStaleResponse>('/api/wiki/stale')
     articles.value = res.ok ? res.articles : []
   } finally {
     loading.value = false

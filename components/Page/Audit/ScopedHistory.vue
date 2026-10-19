@@ -27,7 +27,7 @@ const loading = ref(false)
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetScopedAuditResponse>('/api/audit/scoped', {
+    const res = await apiFetch<GetScopedAuditResponse>('/api/audit/scoped', {
       query: { tables: props.tables.join(','), parentId: props.parentId },
     })
     if (res.ok) groups.value = res.groups

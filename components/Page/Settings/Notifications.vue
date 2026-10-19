@@ -680,7 +680,7 @@ async function sendTestMail(typeKey: NotificationTypeKey) {
   if (testMailPending.value) return
   testMailPending.value = typeKey
   try {
-    const res = await $fetch<SendTestNotificationResponse>('/api/settings/notifications.test-notification', {
+    const res = await apiFetch<SendTestNotificationResponse>('/api/settings/notifications.test-notification', {
       method: 'POST',
       body: {
         typeKey,
@@ -757,7 +757,7 @@ const welcomeTypesOff = computed(() => MEMBER_WELCOME_TYPE_KEYS.every(key => set
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetNotificationSettingsResponse>('/api/settings/notifications')
+    const res = await apiFetch<GetNotificationSettingsResponse>('/api/settings/notifications')
     if (res.ok) {
       settings.value = res.settings
       savedSnapshot.value = snapshot(res.settings)
@@ -775,7 +775,7 @@ async function save() {
   if (!settings.value) return
   saving.value = true
   try {
-    const res = await $fetch<SaveNotificationSettingsResponse>('/api/settings/notifications.save', { method: 'POST', body: settings.value })
+    const res = await apiFetch<SaveNotificationSettingsResponse>('/api/settings/notifications.save', { method: 'POST', body: settings.value })
     if (res.ok) {
       settings.value = res.settings
       savedSnapshot.value = snapshot(res.settings)

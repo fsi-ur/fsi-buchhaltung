@@ -490,7 +490,7 @@ function dropUnavailableDocuments() {
 }
 
 async function loadOptions() {
-  const res = await $fetch<GetNotificationRecipientOptionsResponse>('/api/notifications/recipient-options')
+  const res = await apiFetch<GetNotificationRecipientOptionsResponse>('/api/notifications/recipient-options')
   if (res.ok) {
     options.value = res
   } else {
@@ -527,7 +527,7 @@ async function submit() {
   try {
     // Sent as the plain local wall-clock value the input shows — no UTC conversion, matching every
     // other datetime in the app (see DateInput/useDateInput) and how the server stores it.
-    const res = await $fetch<CreateNotificationResponse>('/api/notifications/create', {
+    const res = await apiFetch<CreateNotificationResponse>('/api/notifications/create', {
       method: 'POST',
       body: { ...form, scheduledFor: timing.value === 'schedule' ? scheduledFor.value : null },
     })

@@ -570,7 +570,7 @@ function selectMember(value: unknown, editingItem: SaveSettingsEntityBody) {
 async function confirmDeactivate() {
   if (!deactivatePosition.value) return
 
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/positions/activate', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/positions/activate', {
     method: 'POST',
     body: {
       id: deactivatePosition.value.id,
@@ -591,7 +591,7 @@ async function confirmDeactivate() {
 
 async function loadMemberOptions() {
   try {
-    const res = await $fetch<{ ok: boolean, members?: PositionMemberOption[], error?: string }>('/api/positions/member-options')
+    const res = await apiFetch<{ ok: boolean, members?: PositionMemberOption[], error?: string }>('/api/positions/member-options')
     if (!res.ok) {
       toast.error(res.error || t('settings.positions.loadFailed'))
       return

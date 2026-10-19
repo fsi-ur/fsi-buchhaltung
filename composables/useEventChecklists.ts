@@ -84,7 +84,7 @@ export function useEventChecklists(eventId: Ref<number | null>) {
 
     try {
       checklistLoading.value = true
-      const res = await $fetch<GetEventChecklistsResponse>(`/api/events/${id}/checklists`)
+      const res = await apiFetch<GetEventChecklistsResponse>(`/api/events/${id}/checklists`)
       if (!res.ok) throw new Error(res.error)
 
       reusableChecklists.value = res.checklists.map(mapPersistedChecklistToPanel)
@@ -104,7 +104,7 @@ export function useEventChecklists(eventId: Ref<number | null>) {
 
     try {
       checklistSaving.value = true
-      const res = await $fetch<UpdateEventChecklistsResponse>(`/api/events/${eventId.value}/checklists`, {
+      const res = await apiFetch<UpdateEventChecklistsResponse>(`/api/events/${eventId.value}/checklists`, {
         method: 'PUT',
         body: { checklists: nextChecklists.map(mapPanelChecklistToPayload) },
       })
@@ -132,7 +132,7 @@ export function useEventChecklists(eventId: Ref<number | null>) {
 
     try {
       checklistSaving.value = true
-      const res = await $fetch<UpdateChecklistItemDoneResponse>(`/api/checklist-items/${itemId}/done`, {
+      const res = await apiFetch<UpdateChecklistItemDoneResponse>(`/api/checklist-items/${itemId}/done`, {
         method: 'PUT',
         body: { done },
       })
@@ -158,7 +158,7 @@ export function useEventChecklists(eventId: Ref<number | null>) {
 
     try {
       checklistSaving.value = true
-      const res = await $fetch<UpdateEventChecklistTemplatesResponse>('/api/events/checklist-templates', {
+      const res = await apiFetch<UpdateEventChecklistTemplatesResponse>('/api/events/checklist-templates', {
         method: 'PUT',
         body: { templates: nextTemplates.map(mapPanelChecklistTemplateToPayload) },
       })

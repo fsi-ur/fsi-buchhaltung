@@ -361,7 +361,7 @@ async function save() {
 
   saving.value = true
   try {
-    const res = await $fetch<SaveWikiChecklistsResponse>(`/api/wiki/articles/${props.articleId}/checklists`, {
+    const res = await apiFetch<SaveWikiChecklistsResponse>(`/api/wiki/articles/${props.articleId}/checklists`, {
       method: 'PUT',
       body: { checklists: payload },
     })

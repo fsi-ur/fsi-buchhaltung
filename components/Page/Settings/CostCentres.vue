@@ -332,7 +332,7 @@ async function toggleCostCentre(
   clearChildParents: boolean,
   reload: () => Promise<void>,
 ) {
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/cost_centres/activate', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/cost_centres/activate', {
     method: 'POST',
     body: {
       id: item.id,

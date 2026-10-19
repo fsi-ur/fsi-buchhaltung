@@ -101,7 +101,7 @@ onMounted(async () => {
 
   isEditMode.value = true
 
-  const res = await $fetch<GetReceiptResponse>(`/api/receipts/${receiptId.value}`, { method: 'GET' })
+  const res = await apiFetch<GetReceiptResponse>(`/api/receipts/${receiptId.value}`, { method: 'GET' })
 
   if (!res.ok) {
     isEditMode.value = false
@@ -188,13 +188,13 @@ async function submit() {
     let createdReceiptId: number | null = null
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
-      const updateRes = await $fetch<{ ok: boolean, error?: string }>(`/api/receipts/${receiptId.value}`, {
+      const updateRes = await apiFetch<{ ok: boolean, error?: string }>(`/api/receipts/${receiptId.value}`, {
         method: 'PUT',
         body,
       })
       if (!updateRes.ok) throw new Error(updateRes.error || t('receipt.saved.failedUpdate'))
     } else {
-      const createRes = await $fetch<{ ok: boolean, receiptId?: number, error?: string }>('/api/receipts/create', {
+      const createRes = await apiFetch<{ ok: boolean, receiptId?: number, error?: string }>('/api/receipts/create', {
         method: 'POST',
         body,
       })

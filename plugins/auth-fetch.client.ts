@@ -18,7 +18,7 @@ function isPasswordChangeRequiredResponse(data: unknown) {
 }
 
 export default defineNuxtPlugin(() => {
-  const apiFetch = $fetch.create({
+  const authFetch = $fetch.create({
     onResponse({ response }) {
       if (isUnauthenticatedResponse(response._data)) {
         useAuth().redirectToLogin()
@@ -37,5 +37,5 @@ export default defineNuxtPlugin(() => {
     },
   })
 
-  globalThis.$fetch = apiFetch as typeof $fetch
+  globalThis.$fetch = authFetch as typeof $fetch
 })

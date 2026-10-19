@@ -338,7 +338,7 @@ onMounted(async () => {
 
   isEditMode.value = true
 
-  const res = await $fetch<{ ok: boolean, member?: Member, error?: string }>(`/api/members/${memberId.value}`)
+  const res = await apiFetch<{ ok: boolean, member?: Member, error?: string }>(`/api/members/${memberId.value}`)
   if (!res.ok || !res.member) {
     isEditMode.value = false
     return
@@ -449,7 +449,7 @@ const leftStatusResultHasChanges = computed(() => {
 
 async function loadPositionCatalog() {
   try {
-    const res = await $fetch<{ ok: boolean, positions?: PositionRow[] }>('/api/positions')
+    const res = await apiFetch<{ ok: boolean, positions?: PositionRow[] }>('/api/positions')
     if (res.ok && res.positions) positionCatalog.value = res.positions
   } catch {
     positionCatalog.value = []
@@ -460,7 +460,7 @@ async function loadSubdivisionCatalog() {
   if (!canManageSubdivisions.value) return
 
   try {
-    const res = await $fetch<{ ok: boolean, subdivisions?: SubdivisionOption[] }>('/api/subdivisions/options')
+    const res = await apiFetch<{ ok: boolean, subdivisions?: SubdivisionOption[] }>('/api/subdivisions/options')
     if (res.ok && res.subdivisions) subdivisionCatalog.value = res.subdivisions
   } catch {
     subdivisionCatalog.value = []
@@ -496,14 +496,14 @@ async function persistMember(showStatusActionsModal: boolean) {
     let response: MemberSaveResponse
 
     if (isEditMode.value && memberId.value) {
-      response = await $fetch<MemberSaveResponse>(String(`/api/members/${memberId.value}`), {
+      response = await apiFetch<MemberSaveResponse>(String(`/api/members/${memberId.value}`), {
         method: 'PUT',
         body: form.value,
       })
 
       if (!response.ok) throw new Error(response.error || t('member.saved.failedUpdate'))
     } else {
-      response = await $fetch<MemberSaveResponse>('/api/members/create', {
+      response = await apiFetch<MemberSaveResponse>('/api/members/create', {
         method: 'POST',
         body: { ...form.value, send_welcome_mail: sendWelcomeMail.value },
       })

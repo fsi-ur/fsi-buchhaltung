@@ -186,7 +186,7 @@ async function handleLogoutAll() {
 
   isLoggingOutAll.value = true
   try {
-    const res = await $fetch<LogoutAllResponse>('/api/auth/logout-all', { method: 'POST' })
+    const res = await apiFetch<LogoutAllResponse>('/api/auth/logout-all', { method: 'POST' })
     if (!res.ok) {
       toast.error(res.error || t('settings.general.logoutAllFailed'))
       return
@@ -267,7 +267,7 @@ async function changePassword() {
 
   isChangingPassword.value = true
   try {
-    const res = await $fetch<ChangePasswordResponse>('/api/auth/change-password', {
+    const res = await apiFetch<ChangePasswordResponse>('/api/auth/change-password', {
       method: 'POST',
       body: {
         currentPassword: passwordForm.value.currentPassword,

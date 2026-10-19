@@ -135,7 +135,7 @@ function edit(entry: WikiTagView) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiTagsResponse>('/api/wiki/tags')
+    const res = await apiFetch<WikiTagsResponse>('/api/wiki/tags')
     if (!res.ok) {
       errors.value = [res.error]
       return
@@ -157,8 +157,8 @@ async function save() {
 
   try {
     const res = editingId.value
-      ? await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/tags/${editingId.value}`, { method: 'PUT', body })
-      : await $fetch<{ ok: boolean, error?: string }>('/api/wiki/tags/create', { method: 'POST', body })
+      ? await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/tags/${editingId.value}`, { method: 'PUT', body })
+      : await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/tags/create', { method: 'POST', body })
 
     if (!res.ok) {
       errors.value = [res.error ?? t('wiki.errors.saveFailed')]
@@ -184,7 +184,7 @@ async function remove() {
 
   saving.value = true
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/tags/${entry.id}`, { method: 'DELETE' })
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/tags/${entry.id}`, { method: 'DELETE' })
 
     if (!res.ok) {
       errors.value = [res.error ?? t('wiki.errors.saveFailed')]

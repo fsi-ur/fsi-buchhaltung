@@ -114,7 +114,7 @@ const columns = computed<AdvancedTableColumn<ReceiptRow>[]>(() => [
 
 onMounted(async () => {
   try {
-    const res = await $fetch('/api/receipts')
+    const res = await apiFetch<ApiResponse<'/api/receipts'>>('/api/receipts')
     if (res.ok) {
       receipts.value = res.receipts
     } else {

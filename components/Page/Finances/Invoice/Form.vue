@@ -541,22 +541,22 @@ async function loadSupportData() {
 }
 
 async function loadCompanies() {
-  const res = await $fetch<{ ok: boolean, companies?: CompanyRow[] }>('/api/companies')
+  const res = await apiFetch<{ ok: boolean, companies?: CompanyRow[] }>('/api/companies')
   if (res.ok && res.companies) companies.value = res.companies
 }
 
 async function loadSpheres() {
-  const res = await $fetch<{ ok: boolean, spheres?: SphereRow[] }>('/api/spheres')
+  const res = await apiFetch<{ ok: boolean, spheres?: SphereRow[] }>('/api/spheres')
   if (res.ok && res.spheres) spheres.value = res.spheres
 }
 
 async function loadCostCentres() {
-  const res = await $fetch<{ ok: boolean, costCentres?: CostCentreRow[] }>('/api/cost_centres')
+  const res = await apiFetch<{ ok: boolean, costCentres?: CostCentreRow[] }>('/api/cost_centres')
   if (res.ok && res.costCentres) costCentres.value = res.costCentres
 }
 
 async function loadInvoiceTextSettings() {
-  const res = await $fetch<{ ok: boolean, settings?: InvoiceTextSettings }>('/api/settings/app/invoice-texts')
+  const res = await apiFetch<{ ok: boolean, settings?: InvoiceTextSettings }>('/api/settings/app/invoice-texts')
   if (res.ok && res.settings) invoiceTextSettings.value = res.settings
 }
 
@@ -611,7 +611,7 @@ function onCompanySelect(companyId: unknown) {
 
 async function createCompanyFromQuery() {
   if (!canEditCompany.value || !companyQuery.value.trim()) return
-  const res = await $fetch<{ ok: boolean, id?: number }>('/api/companies/create', {
+  const res = await apiFetch<{ ok: boolean, id?: number }>('/api/companies/create', {
     method: 'POST',
     body: {
       name: companyQuery.value.trim(),

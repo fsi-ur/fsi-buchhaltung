@@ -581,8 +581,8 @@ function editSelectedInvoice(index: number) {
 async function loadSupportData() {
   const currentStatementId = pageMeta.value?.bankStatementId || undefined
   const [membersRes, optionsRes] = await Promise.all([
-    $fetch('/api/members', { method: 'GET' }),
-    $fetch('/api/bank_statements/options', {
+    apiFetch<ApiResponse<'/api/members'>>('/api/members', { method: 'GET' }),
+    apiFetch<ApiResponse<'/api/bank_statements/options'>>('/api/bank_statements/options', {
       method: 'GET',
       query: currentStatementId ? { currentStatementId } : undefined,
     }),

@@ -8,7 +8,7 @@ import { isValidTimeZone } from '~/shared/time'
 export default defineNuxtPlugin(async () => {
   const { setTimeZone } = useAppTimeZone()
   try {
-    const res = await $fetch<GetAppTimeZoneResponse>('/api/settings/app/time-zone')
+    const res = await apiFetch<GetAppTimeZoneResponse>('/api/settings/app/time-zone')
     if (res.ok && isValidTimeZone(res.timeZone)) setTimeZone(res.timeZone)
   } catch {
     // keep the default

@@ -101,7 +101,7 @@ function openArticle(articleId: number) {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiSpotlightResponse>('/api/wiki/spotlight')
+    const res = await apiFetch<WikiSpotlightResponse>('/api/wiki/spotlight')
     articles.value = res.ok ? res.recentlyPublished : []
     recommendedPath.value = res.ok ? res.recommendedPath : null
   } finally {

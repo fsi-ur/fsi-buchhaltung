@@ -5,7 +5,7 @@ const pending = new Map<string, Promise<WikiPageHelpArticle[]>>()
 
 async function fetchPageHelp(pageName: string) {
   try {
-    const res = await $fetch<WikiPageHelpResponse>('/api/wiki/page-help', { query: { page: pageName } })
+    const res = await apiFetch<WikiPageHelpResponse>('/api/wiki/page-help', { query: { page: pageName } })
     const entries = res.ok ? res.entries : []
     cache.set(pageName, entries)
     return entries

@@ -612,7 +612,7 @@ useAppRefresh().onRefresh(async () => {
 })
 
 async function loadOptions() {
-  const res = await $fetch<GetEventOptionsResponse>('/api/events/options')
+  const res = await apiFetch<GetEventOptionsResponse>('/api/events/options')
   if (!res.ok) return
 
   members.value = res.members
@@ -631,7 +631,7 @@ async function loadEvent(id: number | null) {
     return
   }
 
-  const res = await $fetch<GetEventResponse>(`/api/events/${id}`)
+  const res = await apiFetch<GetEventResponse>(`/api/events/${id}`)
   if (!res.ok) {
     eventId.value = null
     return
@@ -686,7 +686,7 @@ async function submit() {
   try {
     isSaving.value = true
     if (eventId.value) {
-      const res = await $fetch(`/api/events/${eventId.value}`, {
+      const res = await apiFetch<ApiResponse<'/api/events/:id', 'put'>>(`/api/events/${eventId.value}`, {
         method: 'PUT',
         body: form.value,
       })
@@ -696,7 +696,7 @@ async function submit() {
       activeTab.value = 'overview'
     }
     else {
-      const res = await $fetch<CreateEventResponse>('/api/events/create', {
+      const res = await apiFetch<CreateEventResponse>('/api/events/create', {
         method: 'POST',
         body: form.value,
       })

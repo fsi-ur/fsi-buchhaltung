@@ -263,7 +263,7 @@ function createArticle() {
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<WikiHomeResponse>('/api/wiki/home')
+    const res = await apiFetch<WikiHomeResponse>('/api/wiki/home')
     if (!res.ok) return
     spaces.value = res.spaces
     paths.value = res.paths

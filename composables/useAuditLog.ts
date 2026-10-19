@@ -58,7 +58,7 @@ export function useAuditLog() {
     if (filters.search) query.search = filters.search
     if (before) query.before = String(before)
 
-    return await $fetch<GetAuditLogResponse>('/api/audit', { query })
+    return await apiFetch<GetAuditLogResponse>('/api/audit', { query })
   }
 
   async function load() {

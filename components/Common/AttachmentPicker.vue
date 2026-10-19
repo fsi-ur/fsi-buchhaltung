@@ -287,7 +287,7 @@ async function uploadFile(event: Event) {
 
   uploading.value = true
   try {
-    const res = await $fetch<UploadAttachmentResponse>('/api/attachments/upload', { method: 'POST', body })
+    const res = await apiFetch<UploadAttachmentResponse>('/api/attachments/upload', { method: 'POST', body })
     if (!res.ok) {
       toast.error(res.error)
       return
@@ -308,7 +308,7 @@ async function resolveUnknownFiles() {
   if (!missing.length) return
 
   try {
-    const res = await $fetch<ResolveAttachmentFilesResponse>('/api/attachments/files', {
+    const res = await apiFetch<ResolveAttachmentFilesResponse>('/api/attachments/files', {
       method: 'POST',
       body: { fileIds: missing },
     })

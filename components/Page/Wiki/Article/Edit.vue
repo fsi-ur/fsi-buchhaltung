@@ -602,7 +602,7 @@ function onTitleInput() {
 }
 
 async function loadSpaces() {
-  const res = await $fetch<WikiTreeResponse>('/api/wiki/tree', { query: { includeDrafts: '1' } })
+  const res = await apiFetch<WikiTreeResponse>('/api/wiki/tree', { query: { includeDrafts: '1' } })
   spaces.value = res.ok ? res.spaces : []
   if (isCreate.value && !form.spaceId && writableSpaces.value[0]) {
     form.spaceId = writableSpaces.value[0].id
@@ -610,13 +610,13 @@ async function loadSpaces() {
 }
 
 async function loadTags() {
-  const res = await $fetch<WikiTagsResponse>('/api/wiki/tags')
+  const res = await apiFetch<WikiTagsResponse>('/api/wiki/tags')
   availableTags.value = res.ok ? res.tags.map(tag => ({ id: tag.id, slug: tag.slug, label: tag.label })) : []
 }
 
 async function loadOwnerOptions() {
   for (const [type, target] of [['position', positionOptions], ['subdivision', subdivisionOptions]] as const) {
-    const res = await $fetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', { query: { type, q: '' } })
+    const res = await apiFetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', { query: { type, q: '' } })
     target.value = res.ok ? res.options.map(option => ({ id: option.id, label: option.label })) : []
   }
 }
@@ -627,7 +627,7 @@ async function loadArticle() {
     return
   }
 
-  const res = await $fetch<WikiArticleDetailResult>(`/api/wiki/articles/${articleId.value}`)
+  const res = await apiFetch<WikiArticleDetailResult>(`/api/wiki/articles/${articleId.value}`)
   if (!res.ok) {
     errors.value = [res.error]
     loading.value = false
@@ -701,7 +701,7 @@ async function saveDraft(explicit: boolean) {
     if (!await persistOwner()) return
 
     if (contentChanged) {
-      const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}`, {
+      const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}`, {
         method: 'PUT',
         body: {
           title: form.title,
@@ -743,7 +743,7 @@ async function create() {
 
   saving.value = true
   try {
-    const res = await $fetch<CreateWikiArticleResponse>('/api/wiki/articles/create', {
+    const res = await apiFetch<CreateWikiArticleResponse>('/api/wiki/articles/create', {
       method: 'POST',
       body: {
         spaceId: form.spaceId,
@@ -776,7 +776,7 @@ async function publish() {
   saving.value = true
   errors.value = []
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/publish`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/publish`, {
       method: 'POST',
       body: { changeNote: '' },
     })
@@ -798,7 +798,7 @@ async function submitReview() {
   if (articleId.value === null) return
   await saveDraft(false)
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/submit-review`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/submit-review`, {
     method: 'POST',
   })
 
@@ -813,7 +813,7 @@ async function submitReview() {
 
 async function markReviewed() {
   if (articleId.value === null) return
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/mark-reviewed`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/mark-reviewed`, {
     method: 'POST',
   })
 
@@ -828,7 +828,7 @@ async function archive() {
   confirmArchive.value = false
   if (articleId.value === null) return
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}`, { method: 'DELETE' })
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}`, { method: 'DELETE' })
   if (!res.ok) {
     errors.value = [res.error ?? t('wiki.errors.saveFailed')]
     return
@@ -844,7 +844,7 @@ async function persistOwner() {
   if (articleId.value === null) return false
   if (snapshotOwner() === savedOwnerSnapshot) return true
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/owner`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/owner`, {
     method: 'PUT',
     body: {
       ownerPositionId: owner.positionId,
@@ -870,7 +870,7 @@ async function saveAttachments(next: AttachmentSelection) {
   attachmentsSaving.value = true
 
   try {
-    const res = await $fetch<SaveWikiAttachmentsResponse>(`/api/wiki/articles/${articleId.value}/attachments`, {
+    const res = await apiFetch<SaveWikiAttachmentsResponse>(`/api/wiki/articles/${articleId.value}/attachments`, {
       method: 'PUT',
       body: { attachments: next },
     })

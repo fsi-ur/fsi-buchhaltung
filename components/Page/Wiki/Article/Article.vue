@@ -386,7 +386,7 @@ const ownerLabel = computed(() => {
 })
 
 async function loadTree() {
-  const res = await $fetch<WikiTreeResponse>('/api/wiki/tree', { query: { includeDrafts: '1' } })
+  const res = await apiFetch<WikiTreeResponse>('/api/wiki/tree', { query: { includeDrafts: '1' } })
   spaces.value = res.ok ? res.spaces : []
 }
 
@@ -399,9 +399,9 @@ async function loadArticle() {
 
   try {
     const res = articleId
-      ? await $fetch<WikiArticleDetailResult>(`/api/wiki/articles/${articleId}`)
+      ? await apiFetch<WikiArticleDetailResult>(`/api/wiki/articles/${articleId}`)
       : slug
-        ? await $fetch<WikiArticleDetailResult>('/api/wiki/articles/by-slug', { query: { slug } })
+        ? await apiFetch<WikiArticleDetailResult>('/api/wiki/articles/by-slug', { query: { slug } })
         : { ok: false as const, error: t('wiki.article.notFound') }
 
     if (!res.ok) {
@@ -447,7 +447,7 @@ async function loadPath() {
     return
   }
 
-  const res = await $fetch<WikiPathDetailResponse>(`/api/wiki/paths/${pathId.value}`)
+  const res = await apiFetch<WikiPathDetailResponse>(`/api/wiki/paths/${pathId.value}`)
   path.value = res.ok ? res.path : null
 }
 
@@ -456,7 +456,7 @@ async function setStepDone(step: WikiPathItemView, done: boolean) {
 
   savingStep.value = true
   try {
-    const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${pathId.value}/progress`, {
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${pathId.value}/progress`, {
       method: 'POST',
       body: { itemId: step.id, done },
     })
@@ -502,7 +502,7 @@ function openPath() {
 }
 
 async function saveOrder(items: WikiReorderItem[]) {
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/wiki/articles/reorder', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/articles/reorder', {
     method: 'POST',
     body: { items },
   })

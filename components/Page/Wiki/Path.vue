@@ -164,7 +164,7 @@ function openItem(item: WikiPathItemView) {
 async function toggle(item: WikiPathItemView, done: boolean) {
   if (pathId.value === null) return
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${pathId.value}/progress`, {
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/paths/${pathId.value}/progress`, {
     method: 'POST',
     body: { itemId: item.id, done },
   })
@@ -189,7 +189,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await $fetch<WikiPathDetailResponse>(`/api/wiki/paths/${pathId.value}`)
+    const res = await apiFetch<WikiPathDetailResponse>(`/api/wiki/paths/${pathId.value}`)
     if (!res.ok) {
       error.value = res.error
       path.value = null

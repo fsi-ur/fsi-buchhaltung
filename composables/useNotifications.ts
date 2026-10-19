@@ -18,7 +18,7 @@ const POLL_INTERVAL_MS = 15000
 async function fetchInbox(options?: { limit?: number }) {
   loading.value = true
   try {
-    const res = await $fetch<GetNotificationInboxResponse>('/api/notifications/inbox', {
+    const res = await apiFetch<GetNotificationInboxResponse>('/api/notifications/inbox', {
       query: options?.limit ? { limit: options.limit } : undefined,
     })
     if (res.ok) {
@@ -31,7 +31,7 @@ async function fetchInbox(options?: { limit?: number }) {
 }
 
 async function fetchUnreadCount() {
-  const res = await $fetch<GetNotificationInboxResponse>('/api/notifications/inbox', { query: { limit: 1, unreadOnly: 'true' } })
+  const res = await apiFetch<GetNotificationInboxResponse>('/api/notifications/inbox', { query: { limit: 1, unreadOnly: 'true' } })
   if (!res.ok) return
 
   const grew = res.unreadCount > unreadCount.value
@@ -44,7 +44,7 @@ async function fetchUnreadCount() {
 
 async function markRead(ids: number[]) {
   if (!ids.length) return
-  const res = await $fetch<MarkNotificationsReadResponse>('/api/notifications/read', { method: 'POST', body: { ids } })
+  const res = await apiFetch<MarkNotificationsReadResponse>('/api/notifications/read', { method: 'POST', body: { ids } })
   if (res.ok) {
     for (const item of items.value) {
       if (ids.includes(item.deliveryId) && !item.readAt) {
@@ -56,7 +56,7 @@ async function markRead(ids: number[]) {
 }
 
 async function markAllRead() {
-  const res = await $fetch<MarkNotificationsReadResponse>('/api/notifications/read', { method: 'POST', body: { all: true } })
+  const res = await apiFetch<MarkNotificationsReadResponse>('/api/notifications/read', { method: 'POST', body: { all: true } })
   if (res.ok) {
     for (const item of items.value) item.readAt = item.readAt || new Date().toISOString()
     unreadCount.value = 0

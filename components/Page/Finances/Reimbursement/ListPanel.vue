@@ -135,7 +135,7 @@ const columns = computed<AdvancedTableColumn<ReimbursementOverview>[]>(() => [
 
 onMounted(async () => {
   try {
-    const res = await $fetch('/api/reimbursements')
+    const res = await apiFetch<ApiResponse<'/api/reimbursements'>>('/api/reimbursements')
     if (res.ok) {
       reimbursements.value = res.reimbursements
     } else {

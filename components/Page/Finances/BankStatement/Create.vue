@@ -119,7 +119,7 @@ onMounted(async () => {
 
     if (bankStatementId.value) {
       isEditMode.value = true
-      const res = await $fetch<GetBankStatementResponse>(String(`/api/bank_statements/${bankStatementId.value}`), { method: 'GET' })
+      const res = await apiFetch<GetBankStatementResponse>(String(`/api/bank_statements/${bankStatementId.value}`), { method: 'GET' })
       if (res.ok) {
         openingBalance.value = res.bankStatement.opening_balance
         if (res.file && !removeExistingFile.value) {
@@ -133,7 +133,7 @@ onMounted(async () => {
         }
       }
     } else {
-      const balanceRes = await $fetch('/api/bank_statements/current-balance', { method: 'GET' })
+      const balanceRes = await apiFetch<ApiResponse<'/api/bank_statements/current-balance'>>('/api/bank_statements/current-balance', { method: 'GET' })
       if (balanceRes.ok) openingBalance.value = balanceRes.balance
     }
 
@@ -142,7 +142,7 @@ onMounted(async () => {
     const newInvoiceId = pageMeta.value?.newInvoiceId ? Number(pageMeta.value.newInvoiceId) : null
 
     if (positionIndex >= 0 && (newReceiptId || newInvoiceId)) {
-      const optionsRes = await $fetch('/api/bank_statements/options', {
+      const optionsRes = await apiFetch<ApiResponse<'/api/bank_statements/options'>>('/api/bank_statements/options', {
         method: 'GET',
         query: bankStatementId.value ? { currentStatementId: bankStatementId.value } : undefined,
       })
@@ -169,7 +169,7 @@ onMounted(async () => {
   if (bankStatementId.value) {
     isEditMode.value = true
 
-    const res = await $fetch<GetBankStatementResponse>(String(`/api/bank_statements/${bankStatementId.value}`), { method: 'GET' })
+    const res = await apiFetch<GetBankStatementResponse>(String(`/api/bank_statements/${bankStatementId.value}`), { method: 'GET' })
 
     if (!res.ok) {
       isEditMode.value = false
@@ -204,7 +204,7 @@ onMounted(async () => {
       }
     }
   } else {
-    const balanceRes = await $fetch('/api/bank_statements/current-balance', { method: 'GET' })
+    const balanceRes = await apiFetch<ApiResponse<'/api/bank_statements/current-balance'>>('/api/bank_statements/current-balance', { method: 'GET' })
     if (balanceRes.ok) openingBalance.value = balanceRes.balance
   }
 })
@@ -230,13 +230,13 @@ async function submit() {
 
     if (isEditMode.value && bankStatementId.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
-      const res = await $fetch<{ ok: boolean, error?: string }>(String(`/api/bank_statements/${bankStatementId.value}`), {
+      const res = await apiFetch<{ ok: boolean, error?: string }>(String(`/api/bank_statements/${bankStatementId.value}`), {
         method: 'PUT',
         body,
       })
       if (!res.ok) throw new Error(res.error || t('bankStatement.saved.failedUpdate'))
     } else {
-      const res = await $fetch<{ ok: boolean, error?: string }>('/api/bank_statements/create', {
+      const res = await apiFetch<{ ok: boolean, error?: string }>('/api/bank_statements/create', {
         method: 'POST',
         body,
       })

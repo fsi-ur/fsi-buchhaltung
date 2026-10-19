@@ -134,7 +134,7 @@ const columns = computed<AdvancedTableColumn<CashCountListRow>[]>(() => [
 
 onMounted(async () => {
   try {
-    const res = await $fetch('/api/cash_counts')
+    const res = await apiFetch<ApiResponse<'/api/cash_counts'>>('/api/cash_counts')
     if (res.ok) {
       cashCounts.value = res.cashCounts.map((entry: CashCountOverview) => ({
         ...entry,

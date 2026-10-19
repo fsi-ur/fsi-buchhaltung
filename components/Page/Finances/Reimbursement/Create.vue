@@ -147,7 +147,7 @@ onMounted(async () => {
 
     if (reimbursementId.value) {
       isEditMode.value = true
-      const res = await $fetch<GetReimbursementResponse>(`/api/reimbursements/${reimbursementId.value}`, { method: 'GET' })
+      const res = await apiFetch<GetReimbursementResponse>(`/api/reimbursements/${reimbursementId.value}`, { method: 'GET' })
       if (res.ok && res.file && !removeExistingFile.value) {
         existingFile.value = {
           id: res.file.id,
@@ -170,7 +170,7 @@ onMounted(async () => {
 
   isEditMode.value = true
 
-  const res = await $fetch<GetReimbursementResponse>(`/api/reimbursements/${reimbursementId.value}`, { method: 'GET' })
+  const res = await apiFetch<GetReimbursementResponse>(`/api/reimbursements/${reimbursementId.value}`, { method: 'GET' })
 
   if (!res.ok) {
     isEditMode.value = false
@@ -202,7 +202,7 @@ onMounted(async () => {
 useAppRefresh().onRefresh(loadReceipts)
 
 async function loadReceipts() {
-  const receiptsRes = await $fetch('/api/receipts', { method: 'GET' })
+  const receiptsRes = await apiFetch<ApiResponse<'/api/receipts'>>('/api/receipts', { method: 'GET' })
   if (receiptsRes.ok) receipts.value = receiptsRes.receipts
 }
 
@@ -284,13 +284,13 @@ async function submit() {
     isSaving.value = true
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
-      const updateRes = await $fetch<{ ok: boolean, error?: string }>(`/api/reimbursements/${reimbursementId.value}`, {
+      const updateRes = await apiFetch<{ ok: boolean, error?: string }>(`/api/reimbursements/${reimbursementId.value}`, {
         method: 'PUT',
         body,
       })
       if (!updateRes.ok) throw new Error(updateRes.error || t('reimbursement.saved.failedUpdate'))
     } else {
-      const createRes = await $fetch<{ ok: boolean, error?: string }>('/api/reimbursements/create', {
+      const createRes = await apiFetch<{ ok: boolean, error?: string }>('/api/reimbursements/create', {
         method: 'POST',
         body,
       })

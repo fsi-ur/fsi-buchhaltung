@@ -339,17 +339,17 @@ const disbursedAtDate = computed({
 })
 
 async function loadMembers() {
-  const res = await $fetch('/api/members', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/members'>>('/api/members', { method: 'GET' })
   if (res.ok) members.value = res.members
 }
 
 async function loadReceipts() {
-  const res = await $fetch('/api/receipts', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/receipts'>>('/api/receipts', { method: 'GET' })
   if (res.ok) receipts.value = res.receipts
 }
 
 async function loadReceiptAssignments() {
-  const res = await $fetch('/api/reimbursements/receipt_assignments', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/reimbursements/receipt_assignments'>>('/api/reimbursements/receipt_assignments', { method: 'GET' })
   if (res.ok) receiptAssignments.value = res.assignments
 }
 

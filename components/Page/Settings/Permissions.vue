@@ -413,28 +413,28 @@ function formatRoleOptionLabel(role: RoleRow) {
 }
 
 async function loadDefinitions() {
-  const res = await $fetch('/api/permissions/definitions')
+  const res = await apiFetch<ApiResponse<'/api/permissions/definitions'>>('/api/permissions/definitions')
   if (res.ok) {
     permissions.value = res.permissions
   } else console.log(res.error)
 }
 
 async function loadRoles() {
-  const res = await $fetch('/api/permissions/roles')
+  const res = await apiFetch<ApiResponse<'/api/permissions/roles'>>('/api/permissions/roles')
   if (res.ok) {
     roles.value = res.roles
   } else console.log(res.error)
 }
 
 async function loadPositions() {
-  const res = await $fetch('/api/permissions/positions')
+  const res = await apiFetch<ApiResponse<'/api/permissions/positions'>>('/api/permissions/positions')
   if (res.ok) {
     positions.value = res.positions
   } else console.log(res.error)
 }
 
 async function loadUsers() {
-  const res = await $fetch('/api/permissions/users')
+  const res = await apiFetch<ApiResponse<'/api/permissions/users'>>('/api/permissions/users')
   if (res.ok) {
     users.value = res.users
   } else console.log(res.error)
@@ -481,7 +481,7 @@ async function saveRole() {
   }
   try {
     savingRole.value = true
-    const res = await $fetch('/api/permissions/roles.save', {
+    const res = await apiFetch<ApiResponse<'/api/permissions/roles.save', 'post'>>('/api/permissions/roles.save', {
       method: 'POST',
       body: payload,
     })
@@ -528,7 +528,7 @@ async function savePermissionModal() {
 
   try {
     savingPermissions.value = true
-    const res = await $fetch(endpoint, {
+    const res = await apiFetch<ApiResponse<'/api/permissions/roles.set_permissions', 'post'>>(endpoint, {
       method: 'POST',
       body,
     })
@@ -561,7 +561,7 @@ async function saveUserAccess() {
   }
   try {
     savingUserAccess.value = true
-    const res = await $fetch<{ ok: boolean, error?: string }>('/api/permissions/users.update', {
+    const res = await apiFetch<{ ok: boolean, error?: string }>('/api/permissions/users.update', {
       method: 'POST',
       body: payload,
     })

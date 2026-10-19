@@ -181,7 +181,7 @@ function close() {
 
 async function loadOwnerOptions() {
   for (const [type, target] of [['position', positionOptions], ['subdivision', subdivisionOptions]] as const) {
-    const res = await $fetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', { query: { type, q: '' } })
+    const res = await apiFetch<WikiSubjectOptionsResponse>('/api/wiki/access/subject-options', { query: { type, q: '' } })
     target.value = res.ok ? res.options.map(option => ({ id: option.id, label: option.label })) : []
   }
 }
@@ -226,7 +226,7 @@ async function submit() {
   saving.value = true
   try {
     if (isCreate.value) {
-      const res = await $fetch<CreateWikiSpaceResponse>('/api/wiki/spaces/create', { method: 'POST', body })
+      const res = await apiFetch<CreateWikiSpaceResponse>('/api/wiki/spaces/create', { method: 'POST', body })
       if (!res.ok) {
         error.value = res.error
         return
@@ -234,7 +234,7 @@ async function submit() {
       toast.success(t('wiki.space.createdToast'))
       emit('saved', res.spaceId)
     } else {
-      const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/spaces/${props.space!.id}`, {
+      const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/spaces/${props.space!.id}`, {
         method: 'PUT',
         body,
       })

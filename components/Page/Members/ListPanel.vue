@@ -128,7 +128,7 @@ const columns = computed<AdvancedTableColumn<MemberListItem>[]>(() => [
 
 async function load() {
   try {
-    const res = await $fetch('/api/members')
+    const res = await apiFetch<ApiResponse<'/api/members'>>('/api/members')
     if (res.ok) {
       members.value = res.members
     } else {

@@ -122,7 +122,7 @@ const endpoint = computed(() => props.scopeType === 'space'
 
 async function load() {
   if (!props.scopeId) return
-  const res = await $fetch<WikiScopeAccessResponse>(endpoint.value)
+  const res = await apiFetch<WikiScopeAccessResponse>(endpoint.value)
   if (!res.ok) {
     grants.value = []
     canManage.value = false
@@ -140,7 +140,7 @@ async function addGrant(grant: {
   accessLevel: WikiAccessLevel
   includeDescendants: boolean
 }) {
-  const res = await $fetch<{ ok: boolean, error?: string }>('/api/wiki/access/grant', {
+  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/wiki/access/grant', {
     method: 'POST',
     body: { scopeType: props.scopeType, scopeId: props.scopeId, ...grant },
   })
@@ -159,7 +159,7 @@ async function removeGrant() {
   confirmRemoval.value = null
   if (!grantId) return
 
-  const res = await $fetch<{ ok: boolean, error?: string }>(`/api/wiki/access/${grantId}`, { method: 'DELETE' })
+  const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/access/${grantId}`, { method: 'DELETE' })
   if (!res.ok) {
     toast.error(res.error ?? t('wiki.errors.saveFailed'))
     return

@@ -31,7 +31,7 @@ const loading = ref(false)
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<GetRecordAuditResponse>('/api/audit/record', {
+    const res = await apiFetch<GetRecordAuditResponse>('/api/audit/record', {
       query: { table: props.table, id: props.recordId, includeChildren: String(props.includeChildren) },
     })
     if (res.ok) groups.value = res.groups
