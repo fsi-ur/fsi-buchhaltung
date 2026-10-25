@@ -4,15 +4,24 @@
 
 The event planning workspace gains a "Kasse" tab (visible to users with the
 `cash_register.manage` permission) that shows the sales overview of the linked
-kassensystem event: revenue, Fachschaft payments, given-out items, and an
-hourly revenue chart.
+kassensystem event.
+
+The content comes entirely from the kassensystem's integration API
+(`GET /api/integration/v1/events/<id>/overview`), which describes the overview
+as generic, already translated building blocks (stat tiles, tables, lists, an
+hourly chart). The buchhaltung only renders them
+([components/Page/Events/planning/cashRegister/](components/Page/Events/planning/cashRegister/)),
+so changing what the tab shows only needs a kassensystem release. The
+buchhaltung never reads the kassensystem database.
 
 To enable it, set in `.env`:
 
 - `CASH_REGISTER_MODE=connected`
-- `CASH_REGISTER_DB_HOST/PORT/NAME` — the kassensystem database
-- `CASH_REGISTER_DB_USER/PASSWORD` — the restricted read-only user created by
-  the **kassensystem's** `npm run setup:connection-db-user`
+- `CASH_REGISTER_API_URL` — the kassensystem's base URL including its
+  `APP_BASE_URL` path (`http://kasse-app:3001` inside the shared docker network)
+- `CASH_REGISTER_API_KEY` — the same value as the kassensystem's
+  `INTEGRATION_API_KEY` (at least 32 characters, e.g. `openssl rand -hex 32`)
+- optionally `CASH_REGISTER_API_TIMEOUT_MS` (default 10000)
 
 ### Single sign-on (SSO)
 

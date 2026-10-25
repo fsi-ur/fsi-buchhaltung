@@ -18,8 +18,7 @@ services:
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root_password}
       - DB_NAME=${DB_NAME:-fsi_buchhaltung}
       - DB_CONN_LIMIT=${DB_CONN_LIMIT:-5}
-      - CASH_REGISTER_DB_HOST=kasse-db
-      - CASH_REGISTER_DB_PORT=3306
+      - CASH_REGISTER_API_URL=${CASH_REGISTER_API_URL:-http://kasse-app:3001}
       - UPLOAD_DIR=/uploads
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-5}
       - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-fsi_session}

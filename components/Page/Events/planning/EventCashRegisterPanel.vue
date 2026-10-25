@@ -1,6 +1,6 @@
 <template>
   <section class="space-y-6">
-    <div v-if="loading && !overview" class="-mx-6 bg-white p-8 text-center text-sm text-base-400 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
+    <div v-if="loading && !view" class="-mx-6 bg-white p-8 text-center text-sm text-base-400 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
       {{ t('event.cashRegister.loading') }}
     </div>
 
@@ -9,352 +9,105 @@
       <p class="text-sm text-base-500">{{ error }}</p>
     </div>
 
-    <div v-else-if="!linked" class="-mx-6 bg-white p-8 text-center shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
+    <div v-else-if="!view" class="-mx-6 bg-white p-8 text-center shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
       <Icon name="material-symbols:link-off-rounded" class="mb-1 text-2xl text-base-300" />
       <p class="text-sm text-base-500">{{ t('event.cashRegister.notLinked') }}</p>
     </div>
 
-    <template v-else-if="overview">
+    <template v-else>
+      <!-- Everything below is described by the kassensystem (shared/cashRegisterView.ts). -->
       <div
-        v-if="hasStands"
+        v-for="filter in view.filters"
+        :key="filter.key"
         class="-mx-6 flex flex-wrap items-center gap-3 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
       >
         <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-          <Icon name="material-symbols:storefront-rounded" class="text-base" />
+          <Icon name="material-symbols:filter-alt-outline" class="text-base" />
         </span>
-        <span class="text-sm font-semibold text-base-700">{{ t('event.cashRegister.standFilter') }}</span>
+        <span class="text-sm font-semibold text-base-700">{{ filter.label }}</span>
         <div class="w-full sm:w-64">
           <CommonSearchSelect
-            v-model="standQuery"
-            :options="standOptions"
-            :placeholder="t('event.cashRegister.allStands')"
-            :empty-text="t('event.cashRegister.noMatchingStands')"
-            :selected-label="selectedStandLabel"
-            @select="onStandSelect"
-            @clear-selection="standFilter = 'all'"
+            v-model="filterQueries[filter.key]"
+            :options="filterOptions(filter)"
+            :placeholder="filter.options[0]?.label"
+            :empty-text="t('event.cashRegister.noMatchingOptions')"
+            :selected-label="filter.options.find(option => option.value === filter.value)?.label ?? ''"
+            @select="value => setFilter(filter.key, String(value))"
+            @clear-selection="setFilter(filter.key, filter.options[0]?.value ?? '')"
           />
         </div>
-        <p v-if="standFilterActive" class="text-xs text-base-400">
-          {{ t('event.cashRegister.paymentsNotStandBound') }}
+        <p v-if="filter.activeNote && filter.value !== filter.options[0]?.value" class="text-xs text-base-400">
+          {{ filter.activeNote }}
         </p>
       </div>
 
-      <div class="grid gap-4 sm:grid-cols-2" :class="standFilterActive ? 'xl:grid-cols-4' : 'xl:grid-cols-5'">
-        <div
-          v-for="tile in statTiles"
-          :key="tile.label"
-          class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
-        >
-          <div class="flex items-center gap-2">
-            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-              <Icon :name="tile.icon" class="text-base" />
-            </span>
-            <p class="text-sm text-base-500">{{ tile.label }}</p>
-          </div>
-          <p class="mt-3 text-2xl font-semibold text-base-900">{{ tile.value }}</p>
-          <p class="mt-1 text-xs text-base-400">{{ tile.meta }}</p>
-        </div>
-      </div>
-
-      <div v-if="hasStands" class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
-        <div class="mb-3 flex items-center gap-2">
-          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-            <Icon name="material-symbols:storefront-rounded" class="text-base" />
-          </span>
-          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.standComparisonTitle') }}</h2>
-        </div>
-
-        <div class="hidden grid-cols-[minmax(0,1fr)_6rem_6rem_7rem_7rem] gap-4 border-b border-base-200 pb-2 text-xs font-semibold uppercase tracking-wide text-base-400 md:grid">
-          <span>{{ t('event.cashRegister.stand') }}</span>
-          <span class="text-right">{{ t('event.cashRegister.orders') }}</span>
-          <span class="text-right">{{ t('event.cashRegister.quantity') }}</span>
-          <span class="text-right">{{ t('event.cashRegister.revenue') }}</span>
-          <span class="text-right">{{ t('event.cashRegister.donations') }}</span>
-        </div>
-
-        <ul>
-          <li v-for="row in standRows" :key="row.key">
-            <button
-              type="button"
-              class="w-full cursor-pointer border-b border-base-100 px-1 py-2 text-left transition-colors hover:bg-base-50"
-              :class="row.filterValue === standFilter ? 'bg-accent-50' : ''"
-              @click="standFilter = row.filterValue"
-            >
-              <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-[minmax(0,1fr)_6rem_6rem_7rem_7rem]">
-                <span class="col-span-2 truncate font-medium text-base-800 md:col-span-1">{{ row.label }}</span>
-                <span class="text-base-500 md:text-right">
-                  <span class="md:hidden">{{ t('event.cashRegister.orders') }}: </span>{{ row.orders }}
-                </span>
-                <span class="text-right text-base-500">
-                  <span class="md:hidden">{{ t('event.cashRegister.quantity') }}: </span>{{ row.quantity }}
-                </span>
-                <span class="font-medium text-base-800 md:text-right">
-                  <span class="font-normal text-base-500 md:hidden">{{ t('event.cashRegister.revenue') }}: </span>{{ row.revenueLabel }}
-                </span>
-                <span class="text-right text-base-700">
-                  <span class="text-base-500 md:hidden">{{ t('event.cashRegister.donations') }}: </span>{{ row.donationsLabel }}
-                </span>
-              </div>
-              <div class="mt-1 h-2 rounded-full bg-base-100">
-                <div class="h-2 rounded-full bg-accent-400" :style="{ width: `${row.barPercent}%` }"></div>
-              </div>
-            </button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
-        <div class="mb-4 flex items-center gap-2">
-          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-            <Icon name="material-symbols:bar-chart-rounded" class="text-base" />
-          </span>
-          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.hourlyTitle') }}</h2>
-        </div>
-
-        <div v-if="overview.hourly.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-6 text-center text-sm text-base-400">
-          {{ t('event.cashRegister.noSales') }}
-        </div>
-
-        <div v-else class="overflow-x-auto pb-1">
-          <div class="flex items-end gap-2 min-w-fit">
-            <div
-              v-for="entry in overview.hourly"
-              :key="entry.hour"
-              class="group flex min-w-14 flex-1 flex-col items-center"
-              :title="`${formatCurrency(entry.revenue)} · ${entry.quantity} ${t('event.cashRegister.pcs')}`"
-            >
-              <span class="mb-1 whitespace-nowrap text-xs text-base-500">{{ formatCurrency(entry.revenue) }}</span>
-              <div
-                class="w-full rounded-t-md bg-accent-400 transition-colors"
-                :style="{ height: `${barHeight(entry.revenue)}px` }"
-              ></div>
-              <span class="mt-1 w-full whitespace-nowrap border-t border-base-200 pt-1 text-center text-xs font-medium text-base-500">
-                {{ hourLabel(entry.hour) }}
-              </span>
-              <span class="h-4 whitespace-nowrap text-xs text-base-400">
-                {{ dayLabel(entry.hour) }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="grid items-start gap-6 lg:grid-cols-2">
-        <div class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
-          <div class="mb-3 flex items-center gap-2">
-            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-              <Icon name="material-symbols:shopping-cart-rounded" class="text-base" />
-            </span>
-            <h2 class="text-lg font-semibold">{{ t('event.cashRegister.salesTitle') }}</h2>
-          </div>
-
-          <div v-if="overview.regular.items.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-6 text-center text-sm text-base-400">
-            {{ t('event.cashRegister.noSales') }}
-          </div>
-
-          <table v-else class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
-                <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.item') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.quantity') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.revenue') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in overview.regular.items" :key="item.id" class="border-b border-base-100">
-                <td class="max-w-0 truncate py-2 pr-3 text-base-700">{{ item.name }}</td>
-                <td class="py-2 text-right text-base-500">{{ item.quantity }}</td>
-                <td class="py-2 text-right font-medium text-base-800">{{ formatCurrency(item.amount) }}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
-                <td class="pt-2 text-right font-semibold text-base-700">{{ overview.regular.totalQuantity }}</td>
-                <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(overview.regular.itemsRevenue ?? overview.regular.totalRevenue) }}</td>
-              </tr>
-            </tfoot>
-          </table>
-
-          <p class="mt-3 text-xs text-base-400">{{ t('event.cashRegister.historicalPricesNotice') }}</p>
-        </div>
-
-        <div class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
-          <div class="mb-3 flex items-center gap-2">
-            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-              <Icon name="material-symbols:volunteer-activism-rounded" class="text-base" />
-            </span>
-            <h2 class="text-lg font-semibold">{{ t('event.cashRegister.givenOutTitle') }}</h2>
-          </div>
-
-          <div v-if="overview.fachschaft.items.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-6 text-center text-sm text-base-400">
-            {{ t('event.cashRegister.noGivenOut') }}
-          </div>
-
-          <table v-else class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
-                <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.item') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.quantity') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.worth') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in overview.fachschaft.items" :key="item.id" class="border-b border-base-100">
-                <td class="max-w-0 truncate py-2 pr-3 text-base-700">{{ item.name }}</td>
-                <td class="py-2 text-right text-base-500">{{ item.quantity }}</td>
-                <td class="py-2 text-right font-medium text-base-800">{{ formatCurrency(item.amount) }}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
-                <td class="pt-2 text-right font-semibold text-base-700">{{ overview.fachschaft.totalQuantity }}</td>
-                <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(overview.fachschaft.totalWorth) }}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      <div v-if="vouchers" class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
-        <div class="mb-3 flex items-center gap-2">
-          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
-            <Icon name="material-symbols:confirmation-number-outline-rounded" class="text-base" />
-          </span>
-          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.vouchersTitle') }}</h2>
-        </div>
-
-        <div class="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h3 class="mb-2 text-sm font-semibold text-base-700">{{ t('event.cashRegister.vouchersSoldTitle') }}</h3>
-            <div v-if="vouchers.sold.byBatch.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-4 text-center text-sm text-base-400">
-              {{ t('event.cashRegister.vouchersNoneSold') }}
+        <template v-for="section in view.sections" :key="section.id">
+          <div
+            v-if="section.type === 'stats'"
+            class="grid gap-4 sm:grid-cols-2 lg:col-span-2"
+            :class="STAT_COLUMNS[Math.min(section.items.length, 6)]"
+          >
+            <div
+              v-for="(tile, index) in section.items"
+              :key="index"
+              class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
+            >
+              <div class="flex items-center gap-2">
+                <span
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                  :class="VIEW_TONE_ICON[tile.tone ?? 'default']"
+                >
+                  <Icon :name="tile.icon ?? 'material-symbols:analytics-outline-rounded'" class="text-base" />
+                </span>
+                <p class="text-sm text-base-500">{{ tile.label }}</p>
+              </div>
+              <p class="mt-3 text-2xl font-semibold text-base-900">
+                <PageEventsPlanningCashRegisterViewCell :cell="tile.value" />
+              </p>
+              <p v-if="tile.meta" class="mt-1 text-xs text-base-400">{{ tile.meta }}</p>
             </div>
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
-                  <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.vouchersBatch') }}</th>
-                  <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.quantity') }}</th>
-                  <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.revenue') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="batch in vouchers.sold.byBatch" :key="batch.batchId ?? batch.name" class="border-b border-base-100">
-                  <td class="max-w-0 truncate py-2 pr-3 text-base-700">{{ batch.name }}</td>
-                  <td class="py-2 text-right text-base-500">{{ batch.count }}</td>
-                  <td class="py-2 text-right font-medium text-base-800">{{ formatCurrency(batch.revenue) }}</td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
-                  <td class="pt-2 text-right font-semibold text-base-700">{{ vouchers.sold.count }}</td>
-                  <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(vouchers.sold.revenue) }}</td>
-                </tr>
-              </tfoot>
-            </table>
-            <p class="mt-3 text-xs text-base-400">{{ t('event.cashRegister.vouchersSoldNotice') }}</p>
           </div>
 
-          <div>
-            <h3 class="mb-2 text-sm font-semibold text-base-700">{{ t('event.cashRegister.vouchersRedeemedTitle') }}</h3>
-            <div v-if="vouchers.redeemed.items.length === 0" class="rounded-lg border border-base-200 bg-base-50 p-4 text-center text-sm text-base-400">
-              {{ t('event.cashRegister.vouchersNoneRedeemed') }}
+          <div
+            v-else-if="section.type === 'alert'"
+            class="-mx-6 flex items-center gap-3 border p-4 text-sm shadow-sm sm:mx-0 sm:rounded-xl lg:col-span-2"
+            :class="VIEW_TONE_ALERT[section.tone ?? 'default']"
+          >
+            <Icon :name="section.icon ?? 'material-symbols:info-outline-rounded'" class="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span>{{ section.text }}</span>
+          </div>
+
+          <div
+            v-else-if="section.type === 'card'"
+            class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
+            :class="section.width === 'half' ? '' : 'lg:col-span-2'"
+          >
+            <div class="mb-3 flex items-center gap-2">
+              <span
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                :class="VIEW_TONE_ICON[section.tone ?? 'default']"
+              >
+                <Icon :name="section.icon ?? 'material-symbols:analytics-outline-rounded'" class="text-base" />
+              </span>
+              <h2 class="text-lg font-semibold">{{ section.title }}</h2>
             </div>
-            <template v-else>
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
-                    <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.item') }}</th>
-                    <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.quantity') }}</th>
-                    <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.worth') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="item in vouchers.redeemed.items" :key="item.id ?? item.name" class="border-b border-base-100">
-                    <td class="max-w-0 truncate py-2 pr-3 text-base-700">{{ item.name }}</td>
-                    <td class="py-2 text-right text-base-500">{{ item.quantity }}</td>
-                    <td class="py-2 text-right font-medium text-base-800">{{ formatCurrency(item.worth) }}</td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td class="pt-2 font-semibold text-base-700">{{ t('common.total') }}</td>
-                    <td class="pt-2 text-right font-semibold text-base-700">{{ vouchers.redeemed.totalQuantity }}</td>
-                    <td class="pt-2 text-right font-semibold text-base-900">{{ formatCurrency(vouchers.redeemed.totalWorth) }}</td>
-                  </tr>
-                </tfoot>
-              </table>
-              <dl class="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
-                <dt class="text-base-500">{{ t('event.cashRegister.vouchersPaidWorth') }}</dt>
-                <dd class="text-right text-base-700">{{ formatCurrency(vouchers.redeemed.paidWorth) }}</dd>
-                <dt class="text-base-500">{{ t('event.cashRegister.vouchersFreeWorth') }}</dt>
-                <dd class="text-right text-base-700">{{ formatCurrency(vouchers.redeemed.freeWorth) }}</dd>
-                <dt class="text-base-500">{{ t('event.cashRegister.vouchersDeposits') }}</dt>
-                <dd class="text-right text-base-700">{{ formatCurrency(vouchers.redeemed.depositsCollected) }}</dd>
-              </dl>
-            </template>
-            <p class="mt-3 text-xs text-base-400">{{ t('event.cashRegister.vouchersRedeemedNotice') }}</p>
+
+            <div class="grid gap-6" :class="section.columns === 2 ? 'lg:grid-cols-2' : ''">
+              <PageEventsPlanningCashRegisterViewBlock
+                v-for="(block, index) in section.blocks"
+                :key="index"
+                :block="block"
+                @filter="action => setFilter(action.key, action.value)"
+              />
+            </div>
           </div>
-        </div>
+        </template>
       </div>
 
-      <div v-if="deposits" class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg">
-        <div class="mb-3 flex items-center gap-2">
-          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info-50 text-info-600">
-            <Icon name="material-symbols:recycling-rounded" class="text-base" />
-          </span>
-          <h2 class="text-lg font-semibold">{{ t('event.cashRegister.depositsTitle') }}</h2>
-        </div>
-
-        <div class="grid gap-6 lg:grid-cols-2">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-base-200 text-xs uppercase tracking-wide text-base-400">
-                <th class="pb-2 text-left font-semibold">{{ t('event.cashRegister.depositsAmount') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.depositsIssued') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.depositsReturned') }}</th>
-                <th class="pb-2 text-right font-semibold">{{ t('event.cashRegister.depositsOpen') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in deposits.amounts" :key="row.amount" class="border-b border-base-100">
-                <td class="py-2 pr-3 text-base-700">{{ formatCurrency(row.amount) }}</td>
-                <td class="py-2 text-right text-base-500">{{ row.issued }}</td>
-                <td class="py-2 text-right text-base-500">{{ row.returned }}</td>
-                <td class="py-2 text-right font-medium text-base-800">{{ row.issued - row.returned }}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div>
-            <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
-              <dt class="text-base-500">{{ t('event.cashRegister.depositsIssuedValue') }}</dt>
-              <dd class="text-right text-base-700">{{ formatCurrency(deposits.issuedValue) }}</dd>
-              <!-- Only worth splitting when vouchers covered part of it -->
-              <template v-if="deposits.coveredValue > 0">
-                <dt class="pl-4 text-base-400">{{ t('event.cashRegister.depositsCovered') }}</dt>
-                <dd class="text-right text-base-500">{{ formatCurrency(deposits.coveredValue) }}</dd>
-                <dt class="pl-4 text-base-400">{{ t('event.cashRegister.depositsTaken') }}</dt>
-                <dd class="text-right text-base-500">{{ formatCurrency(deposits.issuedValue - deposits.coveredValue) }}</dd>
-              </template>
-              <dt class="text-base-500">{{ t('event.cashRegister.depositsPaidBack') }}</dt>
-              <dd class="text-right text-base-700">{{ formatCurrency(-deposits.returnedValue) }}</dd>
-              <dt class="font-semibold text-base-700">{{ t('event.cashRegister.depositsNetCash') }}</dt>
-              <dd class="text-right font-semibold text-base-900">{{ formatCurrency(deposits.netCash) }}</dd>
-              <dt class="font-semibold text-info-700">{{ t('event.cashRegister.depositsOpenValue') }}</dt>
-              <dd class="text-right font-semibold text-info-700">{{ formatCurrency(deposits.openValue) }}</dd>
-            </dl>
-            <p v-if="deposits.returnRate !== null" class="mt-2 text-sm text-base-600">
-              {{ t('event.cashRegister.depositsReturnRate', { rate: Math.round(deposits.returnRate * 100) }) }}
-            </p>
-            <p class="mt-3 text-xs text-base-400">
-              {{ t(standFilterActive ? 'event.cashRegister.depositsStandNotice' : 'event.cashRegister.depositsNotice') }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <p v-if="view.generatedAt" class="text-right text-xs text-base-400">
+        {{ t('event.cashRegister.generatedAt', { time: formatDateTime(view.generatedAt) }) }}
+      </p>
     </template>
   </section>
 </template>
@@ -362,222 +115,73 @@
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
-import type { CashRegisterOverview, EventCashRegisterResponse } from '~/server/api/events/[id]/cash-register.get'
-import type { CashRegisterStandFilterValue, CashRegisterStandStat } from '~/server/utils/cashRegisterStands'
+import type { CashRegisterErrorReason, EventCashRegisterResponse } from '~/server/api/events/[id]/cash-register.get'
+import type { CashRegisterView, ViewFilter } from '~/shared/cashRegisterView'
 import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
-const { toLocalDateTime } = useAppTimeZone()
 
 const props = defineProps<{
   eventId: number
 }>()
 
-const { t } = useI18n()
-const { formatCurrency } = useLocaleFormatters()
+const { t, language } = useI18n()
+const { formatDateTime } = useLocaleFormatters()
 
 const loading = ref(true)
 const error = ref('')
-const linked = ref(false)
-const overview = ref<CashRegisterOverview | null>(null)
+const view = ref<CashRegisterView | null>(null)
 
-const MAX_BAR_HEIGHT = 160
+// The kassensystem declares the filters; their values travel back as `f.<key>`.
+const filterValues = ref<Record<string, string>>({})
+const filterQueries = ref<Record<string, string>>({})
 
-const standFilter = ref<CashRegisterStandFilterValue>('all')
-const standQuery = ref('')
-
-const standStats = computed<CashRegisterStandStat[]>(() => overview.value?.stands ?? [])
-// Only shown once the event has voucher sales or redemptions.
-const vouchers = computed(() => {
-  const stats = overview.value?.vouchers
-  return stats && (stats.sold.count > 0 || stats.redeemed.totalQuantity > 0) ? stats : null
-})
-// Only shown once containers with a deposit went out or came back.
-const deposits = computed(() => {
-  const stats = overview.value?.deposits
-  return stats && stats.amounts.length > 0 ? stats : null
-})
-const hasStands = computed(() => standStats.value.some(stand => stand.id != null))
-const standFilterActive = computed(() => hasStands.value && overview.value?.standFilter !== 'all')
-
-function standFilterValue(stand: CashRegisterStandStat): CashRegisterStandFilterValue {
-  return stand.id == null ? 'none' : stand.id
+const STAT_COLUMNS: Record<number, string> = {
+  0: '',
+  1: 'xl:grid-cols-1',
+  2: 'xl:grid-cols-2',
+  3: 'xl:grid-cols-3',
+  4: 'xl:grid-cols-4',
+  5: 'xl:grid-cols-5',
+  6: 'xl:grid-cols-6',
 }
 
-function standLabel(stand: CashRegisterStandStat) {
-  if (stand.id == null) return t('event.cashRegister.noStand')
-  return stand.name ?? `#${stand.id}`
+const ERROR_REASONS: CashRegisterErrorReason[] = ['notConfigured', 'unreachable', 'rejected', 'incompatible', 'invalid']
+
+function filterOptions(filter: ViewFilter): SearchSelectOption[] {
+  return filter.options.map(option => ({ key: option.value, label: option.label, value: option.value }))
 }
 
-const standOptions = computed<SearchSelectOption[]>(() => [
-  { key: 'all', label: t('event.cashRegister.allStands'), value: 'all' },
-  ...standStats.value.map(stand => ({
-    key: String(standFilterValue(stand)),
-    label: standLabel(stand),
-    value: standFilterValue(stand),
-  })),
-])
-
-const selectedStandLabel = computed(() =>
-  standOptions.value.find(option => option.value === standFilter.value)?.label ?? '')
-
-function onStandSelect(value: unknown) {
-  standFilter.value = value as CashRegisterStandFilterValue
-  standQuery.value = ''
-}
-
-const standRows = computed(() => {
-  const max = standStats.value.reduce((highest, stand) => Math.max(highest, stand.revenue), 0)
-
-  return standStats.value.map(stand => ({
-    key: String(standFilterValue(stand)),
-    filterValue: standFilterValue(stand),
-    label: standLabel(stand),
-    orders: stand.orders,
-    quantity: stand.quantity,
-    revenueLabel: formatCurrency(stand.revenue),
-    donationsLabel: formatCurrency(stand.donations),
-    barPercent: max > 0 ? Math.max(stand.revenue > 0 ? 1 : 0, stand.revenue / max * 100) : 0,
-  }))
-})
-
-const maxHourlyRevenue = computed(() =>
-  (overview.value?.hourly ?? []).reduce((max, entry) => Math.max(max, entry.revenue), 0),
-)
-
-// "à {amount}" is only truthful while every payment of the event was booked at
-// the same amount — the stored amounts decide, not the current setting.
-const fachschaftPaymentsMeta = computed(() => {
-  const payments = overview.value?.payments
-  if (!payments) return ''
-
-  if (payments.amounts.length > 1) {
-    return t('event.cashRegister.fachschaftPaymentsMetaMixed', { count: payments.count })
-  }
-
-  return t('event.cashRegister.fachschaftPaymentsMeta', {
-    count: payments.count,
-    amount: formatCurrency(payments.amounts[0]?.amount ?? payments.amount),
-  })
-})
-
-const statTiles = computed(() => {
-  if (!overview.value) return []
-
-  if (standFilterActive.value) {
-    return [
-      {
-        label: t('event.cashRegister.totalRevenue'),
-        value: formatCurrency(overview.value.regular.totalRevenue),
-        meta: t('event.cashRegister.itemsSoldMeta', { count: overview.value.regular.totalQuantity }),
-        icon: 'material-symbols:euro-rounded',
-      },
-      {
-        label: t('event.cashRegister.donations'),
-        value: formatCurrency(overview.value.donations.total),
-        meta: t('event.cashRegister.donationsMeta', { count: overview.value.donations.count }),
-        icon: 'material-symbols:favorite-rounded',
-      },
-      {
-        label: t('event.cashRegister.givenOutWorth'),
-        value: formatCurrency(overview.value.fachschaft.totalWorth),
-        meta: t('event.cashRegister.givenOutMeta', { count: overview.value.fachschaft.totalQuantity }),
-        icon: 'material-symbols:volunteer-activism-rounded',
-      },
-      {
-        label: t('event.cashRegister.standRevenue'),
-        value: formatCurrency(overview.value.regular.totalRevenue + overview.value.donations.total),
-        meta: t('event.cashRegister.standRevenueMeta'),
-        icon: 'material-symbols:account-balance-wallet',
-      },
-    ]
-  }
-
-  const totalIncome = overview.value.regular.totalRevenue
-    + overview.value.payments.revenue
-    + overview.value.donations.total
-
-  return [
-    {
-      label: t('event.cashRegister.totalRevenue'),
-      value: formatCurrency(overview.value.regular.totalRevenue),
-      meta: t('event.cashRegister.itemsSoldMeta', { count: overview.value.regular.totalQuantity }),
-      icon: 'material-symbols:euro-rounded',
-    },
-    {
-      label: t('event.cashRegister.fachschaftPayments'),
-      value: formatCurrency(overview.value.payments.revenue),
-      meta: fachschaftPaymentsMeta.value,
-      icon: 'material-symbols:savings-rounded',
-    },
-    {
-      label: t('event.cashRegister.donations'),
-      value: formatCurrency(overview.value.donations.total),
-      meta: t('event.cashRegister.donationsMeta', { count: overview.value.donations.count }),
-      icon: 'material-symbols:favorite-rounded',
-    },
-    {
-      label: t('event.cashRegister.givenOutWorth'),
-      value: formatCurrency(overview.value.fachschaft.totalWorth),
-      meta: t('event.cashRegister.givenOutMeta', { count: overview.value.fachschaft.totalQuantity }),
-      icon: 'material-symbols:volunteer-activism-rounded',
-    },
-    {
-      label: t('event.cashRegister.combinedRevenue'),
-      value: formatCurrency(totalIncome),
-      meta: t('event.cashRegister.combinedRevenueMeta'),
-      icon: 'material-symbols:account-balance-wallet',
-    },
-  ]
-})
-
-function barHeight(revenue: number) {
-  if (maxHourlyRevenue.value <= 0) return 2
-  const scaled = Math.round((revenue / maxHourlyRevenue.value) * MAX_BAR_HEIGHT)
-  return Math.max(revenue > 0 ? 4 : 2, scaled)
-}
-
-/** `hour` is an ISO instant (the start of a UTC hour); shown as the wall clock of the app time zone. */
-function toLocalHour(hour: string) {
-  return toLocalDateTime(hour)
-}
-
-function hourLabel(hour: string) {
-  return toLocalHour(hour).slice(11, 16)
-}
-
-function dayLabel(hour: string) {
-  const entries = overview.value?.hourly ?? []
-  const index = entries.findIndex(entry => entry.hour === hour)
-  const localDate = toLocalHour(hour).slice(0, 10)
-  if (index > 0 && toLocalHour(entries[index - 1]!.hour).slice(0, 10) === localDate) return ''
-  return `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}.`
+function setFilter(key: string, value: string) {
+  filterQueries.value[key] = ''
+  if (filterValues.value[key] === value) return
+  filterValues.value = { ...filterValues.value, [key]: value }
+  loadOverview()
 }
 
 async function loadOverview() {
   loading.value = true
   error.value = ''
 
+  const query: Record<string, string> = { locale: language.value }
+  for (const [key, value] of Object.entries(filterValues.value)) query[`f.${key}`] = value
+
   try {
-    const res = await apiFetch<EventCashRegisterResponse>(`/api/events/${props.eventId}/cash-register`, {
-      query: { standId: String(standFilter.value) },
-    })
+    const res = await apiFetch<EventCashRegisterResponse>(`/api/events/${props.eventId}/cash-register`, { query })
 
     if (!res.ok) {
-      error.value = res.error || t('event.cashRegister.loadFailed')
+      error.value = res.reason && ERROR_REASONS.includes(res.reason)
+        ? t(`event.cashRegister.errors.${res.reason}`)
+        : res.error || t('event.cashRegister.loadFailed')
       return
     }
 
     if (!res.connected || !res.linked) {
-      linked.value = false
-      overview.value = null
+      view.value = null
       return
     }
 
-    linked.value = true
-    overview.value = res.overview
-
-    if (standFilter.value !== 'all' && !standOptions.value.some(option => option.value === standFilter.value)) {
-      standFilter.value = 'all'
-    }
+    view.value = res.view
+    // The kassensystem may normalize a filter (e.g. reset an unknown stand).
+    filterValues.value = Object.fromEntries(res.view.filters.map(filter => [filter.key, filter.value]))
   } catch {
     error.value = t('event.cashRegister.loadFailed')
   } finally {
@@ -586,11 +190,11 @@ async function loadOverview() {
 }
 
 watch(() => props.eventId, () => {
-  overview.value = null
-  if (standFilter.value === 'all') loadOverview()
-  else standFilter.value = 'all'
+  view.value = null
+  filterValues.value = {}
+  loadOverview()
 })
-watch(standFilter, loadOverview)
+watch(language, loadOverview)
 onMounted(loadOverview)
 useAppRefresh().onRefresh(loadOverview)
 </script>
