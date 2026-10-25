@@ -72,6 +72,61 @@ export interface FinanceAnalysisCashCountBreakdownItem {
   total_difference: number
 }
 
+/**
+ * Confirmed = a booking accepted exactly this amount; stale = a booking exists but the computed
+ * difference has changed since (an earlier count or cash receipt was edited); unconfirmed = no booking.
+ */
+export type FinanceAnalysisCashDiscrepancyStatus = 'confirmed' | 'stale' | 'unconfirmed'
+
+/** Where the sphere/cost centre of a difference came from, in order of precedence. */
+export type FinanceAnalysisCashDiscrepancyAssignment = 'booking' | 'event' | 'default' | 'none'
+
+/** The difference (counted − book balance) of one register at one count. */
+export interface FinanceAnalysisCashDiscrepancyRegister {
+  register_number: number
+  expected_amount: number
+  measured_amount: number
+  amount: number
+}
+
+/**
+ * The net cash difference of one count: the sum over its registers. Netting per count keeps a
+ * payment taken from two registers (booked against one of them) from turning into a surplus here
+ * and a shortfall there — money only moved between registers.
+ */
+export interface FinanceAnalysisCashDiscrepancyItem {
+  key: string
+  cash_count_id: number
+  event_id: number | null
+  event_name: string
+  date: string
+  /** Every register of the count with a non-zero difference, even when they cancel out. */
+  registers: FinanceAnalysisCashDiscrepancyRegister[]
+  expected_amount: number
+  measured_amount: number
+  /** Signed net: positive = surplus (Kassenüberschuss), negative = shortfall (Kassenfehlbetrag). */
+  amount: number
+  status: FinanceAnalysisCashDiscrepancyStatus
+  assignment: FinanceAnalysisCashDiscrepancyAssignment
+  cost_centres: FinanceAnalysisCostCentreSplit[]
+  booked_amount: number | null
+  notes: string | null
+  confirmed_by_name: string | null
+  confirmed_at: string | null
+}
+
+export interface FinanceAnalysisCashDiscrepancyBreakdownItem {
+  group_type: 'costCentre' | 'sphere'
+  group_id: number | null
+  group_code: string
+  group_name: string
+  month_key: string
+  discrepancy_count: number
+  surplus_amount: number
+  shortfall_amount: number
+  total_amount: number
+}
+
 export type FinanceAnalysisBankPositionType = 'receipt' | 'invoice' | 'event'
 
 export interface FinanceAnalysisBankStatementPosition {
@@ -175,19 +230,44 @@ export interface FinanceAnalysisSummary {
   cash_before: number
   /** Cash pool total at the end of the period */
   cash_after: number
-  /** Sum of in-period cashCountRegister/registerCheck discrepancy_amount values (unexplained gaps) */
-  period_discrepancy_total: number
-  /** Count of in-period cashCountRegister/registerCheck rows with non-zero discrepancy */
-  period_discrepancy_count: number
+  /** Signed sum of all in-period cash differences — part of net_result as "Sonstiges: Kassendifferenzen" */
+  cash_discrepancy_total: number
+  cash_discrepancy_count: number
+  /** The share of cash_discrepancy_total nobody has confirmed yet (unconfirmed or stale) */
+  cash_discrepancy_unconfirmed_total: number
+  cash_discrepancy_unconfirmed_count: number
+}
+
+/**
+ * Bridge from the net result (an accounting result: booked by date and status) to the change in
+ * total money (what really moved in the period). net_result + every line = money_change, exactly.
+ */
+export interface FinanceAnalysisReconciliation {
+  net_result: number
+  /** Receipts in the result that were not paid in the period, minus receipts paid now that belong elsewhere */
+  receipt_timing: number
+  /** Same for invoices: booked but not (yet) received, or received for another period */
+  invoice_timing: number
+  /** Event revenue that moved money but is not in the result (other cost centres when filtered) */
+  event_difference: number
+  /** Cash differences that moved money but are not in the result (other cost centres when filtered) */
+  discrepancy_difference: number
+  /** First counts of a register, cash movements no register could absorb, rounding */
+  other: number
+  money_change: number
+  has_cost_centre_filter: boolean
 }
 
 export interface FinanceAnalysisData {
   summary: FinanceAnalysisSummary
+  reconciliation: FinanceAnalysisReconciliation
   receipts: FinanceAnalysisReceiptItem[]
   receiptBreakdown: FinanceAnalysisReceiptBreakdownItem[]
   invoiceBreakdown: FinanceAnalysisInvoiceBreakdownItem[]
   cashCounts: FinanceAnalysisCashCountItem[]
   cashCountBreakdown: FinanceAnalysisCashCountBreakdownItem[]
+  cashDiscrepancies: FinanceAnalysisCashDiscrepancyItem[]
+  cashDiscrepancyBreakdown: FinanceAnalysisCashDiscrepancyBreakdownItem[]
   bankStatementPositions: FinanceAnalysisBankStatementPosition[]
   invoices: FinanceAnalysisInvoiceItem[]
   liquidityRows: FinanceLiquidityRow[]

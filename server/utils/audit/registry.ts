@@ -116,6 +116,14 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     viewPermissions: ['cash_counts.view'],
     parent: { table: 'cash_counts', foreignKey: 'cash_count_id' },
   },
+  cash_count_discrepancy_bookings: {
+    table: 'cash_count_discrepancy_bookings',
+    labelKey: 'audit.entities.cashDiscrepancyBooking',
+    domain: 'finances',
+    viewPermissions: ['cash_counts.view'],
+    parent: { table: 'cash_counts', foreignKey: 'cash_count_id' },
+    references: { sphere_id: SPHERE_REF, cost_centre_id: COST_CENTRE_REF, confirmed_by: USER_REF },
+  },
   budgets: {
     table: 'budgets',
     labelKey: 'audit.entities.budget',

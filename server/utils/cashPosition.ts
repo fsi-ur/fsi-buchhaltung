@@ -444,11 +444,25 @@ export async function computeCurrentBankBalance(): Promise<number> {
 // buildCashLedger — full chronological liquidity ledger
 // ---------------------------------------------------------------------------
 
+/** A register whose counted amount differs from its book balance at a (non-first) count. */
+export interface CashLedgerDiscrepancy {
+  cash_count_id: number
+  event_id: number | null
+  event_name: string
+  date: string
+  register_number: number
+  expected_amount: number
+  measured_amount: number
+  amount: number
+}
+
 export interface CashLedgerResult {
   rows: FinanceLiquidityRow[]
   finalBank: number
   finalCash: number
   finalExpected: Map<number, number>
+  /** Every non-zero difference, chronologically — the books are snapped to the counted amount there. */
+  discrepancies: CashLedgerDiscrepancy[]
 }
 
 function makeLedgerRow(
@@ -676,7 +690,7 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
   // -----------------------------------------------------------------------
 
   const anchorsByRegister = new Map<number, RegisterAnchor[]>()
-  const cashCountsById = new Map<number, { event_name: string; date: string; isCheck: boolean; registers: { register_number: number; amount_before: number; amount_after: number }[] }>()
+  const cashCountsById = new Map<number, { event_id: number | null; event_name: string; date: string; isCheck: boolean; registers: { register_number: number; amount_before: number; amount_after: number }[] }>()
 
   for (const row of cashCountRows) {
     const ccId = Number(row.id)
@@ -686,6 +700,7 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
     const amountAfter = Number(row.amount_after)
 
     const existing = cashCountsById.get(ccId) ?? {
+      event_id: row.event_id === null || row.event_id === undefined ? null : Number(row.event_id),
       event_name: String(row.event_name || ''),
       date,
       isCheck: row.event_id === null || row.event_id === undefined,
@@ -856,6 +871,7 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
   const expected = new Map<number, number>()
   const firstCountEver = new Set<number>() // register numbers ever counted (for first-count detection)
   const rows: FinanceLiquidityRow[] = []
+  const discrepancies: CashLedgerDiscrepancy[] = []
   let rowSeq = 0
 
   function cashSum(): number {
@@ -997,6 +1013,19 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
         const expectedVal = isFirstEver ? null : (expectedBefore ?? null)
         const discrepancy = expectedVal !== null ? rc(measured - expectedVal) : null
 
+        if (expectedVal !== null && discrepancy !== null && discrepancy !== 0) {
+          discrepancies.push({
+            cash_count_id: evt.ccId,
+            event_id: cc.event_id,
+            event_name: cc.event_name,
+            date: cc.date,
+            register_number: regNum,
+            expected_amount: rc(expectedVal),
+            measured_amount: rc(measured),
+            amount: discrepancy,
+          })
+        }
+
         // Snap books to measured
         expected.set(regNum, measured)
         const cashAfterSnap = cashSum()
@@ -1051,5 +1080,6 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
     finalBank: bank,
     finalCash: cashSum(),
     finalExpected: expected,
+    discrepancies,
   }
 }

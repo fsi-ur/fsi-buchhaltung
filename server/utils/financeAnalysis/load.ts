@@ -22,6 +22,11 @@ import {
   summarizeBankStatementPositions,
 } from '~/server/utils/financeAnalysis/bankStatements'
 import { buildLiquidityRows } from '~/server/utils/financeAnalysis/liquidity'
+import { buildFinanceReconciliation } from '~/server/utils/financeAnalysis/reconciliation'
+import {
+  buildCashDiscrepancyBreakdown,
+  loadFinanceAnalysisCashDiscrepancies,
+} from '~/server/utils/financeAnalysis/cashDiscrepancies'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
 import { ReceiptStatus } from '~/types/receipt'
 
@@ -103,16 +108,41 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
     costCentreIds.length > 0,
   )
 
-  const discrepancyRows = liquidityRows.filter(row => (
-    (row.type === 'cashCountRegister' || row.type === 'registerCheck') && row.discrepancy_amount !== null
-  ))
+  const cashDiscrepancies = await loadFinanceAnalysisCashDiscrepancies(
+    ledgerResult.discrepancies,
+    startDate,
+    endDate,
+    costCentreIds,
+  )
+  const unconfirmedDiscrepancies = cashDiscrepancies.filter(item => item.status !== 'confirmed')
+  const cashDiscrepancyTotal = cashDiscrepancies.reduce((total, item) => total + item.amount, 0)
 
   const receiptSummary = summarizeReceipts(receipts)
   const bankSummary = summarizeBankStatementPositions(bankStatementPositions)
   const cashCountTotalDifference = cashCounts.reduce((total, cashCount) => total + cashCount.total_difference, 0)
   const invoiceTotal = invoices.reduce((total, invoice) => total + invoice.total_amount, 0)
+  const eventRevenueTotal = cashCountTotalDifference + bankSummary.eventRevenueTotal
+  const netResult = roundFinanceCurrency(
+    eventRevenueTotal + invoiceTotal - receiptSummary.receipt_total
+    // Kassendifferenzen are real money gained or lost — part of the result, not a footnote.
+    + cashDiscrepancyTotal,
+  )
 
   return {
+    reconciliation: buildFinanceReconciliation(
+      ledgerResult.rows,
+      startDate,
+      endDate,
+      {
+        netResult,
+        receiptTotal: receiptSummary.receipt_total,
+        invoiceTotal,
+        eventRevenueTotal,
+        discrepancyTotal: cashDiscrepancyTotal,
+      },
+      closingPosition.totalMoney - openingPosition.totalMoney,
+      costCentreIds.length > 0,
+    ),
     summary: {
       start_date: startDate,
       end_date: endDate,
@@ -137,25 +167,27 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
       bank_outflow_total: bankSummary.outflowTotal,
       invoice_count: invoices.length,
       invoice_total: roundFinanceCurrency(invoiceTotal),
-      net_result: roundFinanceCurrency(
-        cashCountTotalDifference + bankSummary.eventRevenueTotal + invoiceTotal - receiptSummary.receipt_total,
-      ),
+      net_result: netResult,
       money_before: openingPosition.totalMoney,
       money_after: closingPosition.totalMoney,
       bank_before: openingPosition.bankBalance,
       bank_after: closingPosition.bankBalance,
       cash_before: openingPosition.cashTotal,
       cash_after: closingPosition.cashTotal,
-      period_discrepancy_total: roundFinanceCurrency(
-        discrepancyRows.reduce((total, row) => total + (row.discrepancy_amount ?? 0), 0),
+      cash_discrepancy_total: roundFinanceCurrency(cashDiscrepancyTotal),
+      cash_discrepancy_count: cashDiscrepancies.length,
+      cash_discrepancy_unconfirmed_total: roundFinanceCurrency(
+        unconfirmedDiscrepancies.reduce((total, item) => total + item.amount, 0),
       ),
-      period_discrepancy_count: discrepancyRows.filter(row => row.has_discrepancy).length,
+      cash_discrepancy_unconfirmed_count: unconfirmedDiscrepancies.length,
     },
     receipts,
     receiptBreakdown,
     invoiceBreakdown,
     cashCounts,
     cashCountBreakdown: buildCashCountBreakdown(cashCounts),
+    cashDiscrepancies,
+    cashDiscrepancyBreakdown: buildCashDiscrepancyBreakdown(cashDiscrepancies),
     bankStatementPositions,
     invoices,
     liquidityRows,

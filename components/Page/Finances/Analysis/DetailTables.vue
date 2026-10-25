@@ -65,6 +65,26 @@
     />
 
     <CommonAdvancedTable
+      v-else-if="activeTabKey === 'cashDiscrepancies'"
+      v-model:search="search"
+      :rows="analysis.cashDiscrepancies"
+      :columns="cashDiscrepancyColumns"
+      :loading="loading"
+      :empty-text="t('financeAnalysis.noCashDiscrepancies')"
+      table-class="min-w-4xl"
+      @row-open="$emit('open', { page: 'CashCountCreate', id: $event.cash_count_id })"
+    >
+      <template #cell-amount="{ row }">
+        <span :class="row.amount > 0 ? 'text-success-700' : 'text-danger-700'">
+          {{ formatSignedCurrency(row.amount) }}
+        </span>
+      </template>
+      <template #cell-status="{ row }">
+        <CommonStatusBadge :label="cashDiscrepancyStatusLabel(row, t)" :tone="row.status === 'confirmed' ? 'success' : 'warning'" />
+      </template>
+    </CommonAdvancedTable>
+
+    <CommonAdvancedTable
       v-else
       v-model:search="search"
       :rows="analysis.bankStatementPositions"
@@ -91,9 +111,16 @@ import type { AdvancedTableColumn } from '~/composables/useAdvancedTable'
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { financeStatusTone } from '~/utils/financeAnalysisStatus'
+import {
+  cashDiscrepancyAssignmentLabel,
+  cashDiscrepancyRegistersLabel,
+  cashDiscrepancySourceLabel,
+  cashDiscrepancyStatusLabel,
+} from '~/shared/cashDiscrepancyLabels'
 import type {
   FinanceAnalysisBankStatementPosition,
   FinanceAnalysisCashCountItem,
+  FinanceAnalysisCashDiscrepancyItem,
   FinanceAnalysisCostCentreSplit,
   FinanceAnalysisData,
   FinanceAnalysisInvoiceItem,
@@ -103,7 +130,7 @@ import type { InvoiceStatus } from '~/types/invoice'
 import type { ReceiptStatus } from '~/types/receipt'
 import type { InvoiceDateField, ReceiptDateField } from '~/composables/useFinanceAnalysisFilters'
 
-export type DetailTabKey = 'receipts' | 'invoices' | 'cashCounts' | 'bankStatements' | 'liquidity'
+export type DetailTabKey = 'receipts' | 'invoices' | 'cashCounts' | 'cashDiscrepancies' | 'bankStatements' | 'liquidity'
 
 const props = defineProps<{
   analysis: FinanceAnalysisData
@@ -156,6 +183,12 @@ const tabs = computed(() => ([
     count: props.analysis.cashCounts.length,
   },
   {
+    key: 'cashDiscrepancies' as const,
+    label: t('financeAnalysis.cashDiscrepanciesTableTitle'),
+    description: t('financeAnalysis.cashDiscrepanciesSectionDescription'),
+    count: props.analysis.cashDiscrepancies.length,
+  },
+  {
     key: 'bankStatements' as const,
     label: t('financeAnalysis.bankStatementsTableTitle'),
     description: t('financeAnalysis.bankStatementsSectionDescription'),
@@ -201,6 +234,10 @@ function invoiceDateValue(invoice: FinanceAnalysisInvoiceItem) {
   if (props.invoiceDateField === 'service_date') return invoice.service_date
   if (props.invoiceDateField === 'paid_at') return invoice.paid_at
   return invoice.invoice_date
+}
+
+function formatSignedCurrency(value: number) {
+  return `${value > 0 ? '+' : ''}${formatCurrency(value)}`
 }
 
 function formatSignedAmount(position: FinanceAnalysisBankStatementPosition) {
@@ -359,6 +396,71 @@ const cashCountColumns = computed<AdvancedTableColumn<FinanceAnalysisCashCountIt
     format: row => formatCurrency(row.total_difference),
     headerClass: 'w-32 text-right',
     cellClass: 'text-right font-medium tabular-nums',
+    mobile: 'meta',
+  },
+])
+
+const cashDiscrepancyColumns = computed<AdvancedTableColumn<FinanceAnalysisCashDiscrepancyItem>[]>(() => [
+  {
+    key: 'date',
+    globalSearchable: true,
+    label: t('cashCount.countedAfterAt'),
+    filterType: 'date',
+    getValue: row => row.date,
+    format: row => formatDate(row.date),
+    mobile: 'meta',
+    headerClass: 'w-32',
+  },
+  {
+    key: 'event_name',
+    globalSearchable: true,
+    label: t('cashCount.event'),
+    getValue: row => cashDiscrepancySourceLabel(row, t),
+    format: row => `${cashDiscrepancySourceLabel(row, t)} · ${cashDiscrepancyRegistersLabel(row, t)}`,
+    mobile: 'title',
+  },
+  {
+    key: 'assignment',
+    globalSearchable: true,
+    label: t('financeAnalysis.sphereAndCostCentre'),
+    getValue: row => cashDiscrepancyAssignmentLabel(row, t),
+    mobile: 'meta',
+    mobileLabel: true,
+  },
+  {
+    key: 'expected_amount',
+    label: t('cashCount.discrepancies.expected'),
+    filterType: 'number',
+    getValue: row => row.expected_amount,
+    format: row => formatCurrency(row.expected_amount),
+    headerClass: 'w-28 text-right',
+    cellClass: 'text-right tabular-nums',
+    mobile: 'hidden',
+  },
+  {
+    key: 'measured_amount',
+    label: t('cashCount.discrepancies.measured'),
+    filterType: 'number',
+    getValue: row => row.measured_amount,
+    format: row => formatCurrency(row.measured_amount),
+    headerClass: 'w-28 text-right',
+    cellClass: 'text-right tabular-nums',
+    mobile: 'hidden',
+  },
+  {
+    key: 'amount',
+    label: t('cashCount.discrepancies.difference'),
+    filterType: 'number',
+    getValue: row => row.amount,
+    headerClass: 'w-28 text-right',
+    cellClass: 'text-right font-medium tabular-nums',
+    mobile: 'meta',
+  },
+  {
+    key: 'status',
+    label: t('cashCount.discrepancies.statusLabel'),
+    getValue: row => cashDiscrepancyStatusLabel(row, t),
+    headerClass: 'w-36',
     mobile: 'meta',
   },
 ])

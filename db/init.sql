@@ -538,6 +538,22 @@ CREATE TABLE IF NOT EXISTS cash_count_positions (
   UNIQUE KEY uq_cash_count_register (cash_count_id, register_number)
 );
 
+CREATE TABLE IF NOT EXISTS cash_count_discrepancy_bookings (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  cash_count_id BIGINT UNSIGNED NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  sphere_id TINYINT UNSIGNED NULL,
+  cost_centre_id MEDIUMINT UNSIGNED NULL,
+  notes TEXT NULL,
+  confirmed_by BIGINT UNSIGNED NULL,
+  confirmed_at TIMESTAMP NOT NULL,
+  UNIQUE KEY uq_cash_count_discrepancy_booking (cash_count_id),
+  FOREIGN KEY (cash_count_id) REFERENCES cash_counts(id) ON DELETE CASCADE,
+  FOREIGN KEY (sphere_id) REFERENCES spheres(id),
+  FOREIGN KEY (cost_centre_id) REFERENCES cost_centres(id),
+  FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS bank_statements (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   statement_number VARCHAR(50) NOT NULL,

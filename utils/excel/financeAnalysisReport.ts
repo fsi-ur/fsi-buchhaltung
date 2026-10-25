@@ -14,9 +14,16 @@ import { InvoiceStatus } from '~/types/invoice'
 import { ReceiptStatus } from '~/types/receipt'
 import {
   aggregateCashCountBreakdown,
+  aggregateCashDiscrepancyBreakdown,
   allocateBankEventRevenue,
+  allocateCashDiscrepancies,
   type FinanceAnalysisExportGrouping,
 } from '~/shared/financeAnalysisGrouping'
+import {
+  cashDiscrepancyAssignmentLabel,
+  cashDiscrepancySourceLabel,
+  cashDiscrepancyStatusLabel,
+} from '~/shared/cashDiscrepancyLabels'
 import { liquidityRowLabel, liquidityRowNote } from '~/shared/financeLiquidityLabels'
 import {
   createSpreadsheetRow,
@@ -428,6 +435,7 @@ function buildActualOwnAmountsByCostCentreId(options: FinanceAnalysisReportOptio
   })
 
   allocateBankEventRevenue(options.analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
+  allocateCashDiscrepancies(options.analysis.cashDiscrepancies, add)
 
   return amounts
 }
@@ -608,6 +616,7 @@ function buildOverviewRows(options: FinanceAnalysisReportOptions) {
     const receiptDifference = Number((summary.receipt_total - comparisonAnalysis.summary.receipt_total).toFixed(2))
     const cashDifference = Number((summary.cash_count_total_difference - comparisonAnalysis.summary.cash_count_total_difference).toFixed(2))
     const invoiceDifference = Number((summary.invoice_total - comparisonAnalysis.summary.invoice_total).toFixed(2))
+    const discrepancyDifference = Number((summary.cash_discrepancy_total - comparisonAnalysis.summary.cash_discrepancy_total).toFixed(2))
     const netDifference = Number((summary.net_result - comparisonAnalysis.summary.net_result).toFixed(2))
     const entryDifference = (summary.receipt_count + summary.cash_count_count + summary.invoice_count) - (comparisonAnalysis.summary.receipt_count + comparisonAnalysis.summary.cash_count_count + comparisonAnalysis.summary.invoice_count)
 
@@ -638,6 +647,12 @@ function buildOverviewRows(options: FinanceAnalysisReportOptions) {
         currencyCell(invoiceDifference, signedCurrencyStyle(invoiceDifference)),
       ]),
       createSpreadsheetRow([
+        { value: t('financeAnalysis.cards.cashDiscrepancies'), styleId: 'TextCell' },
+        currencyCell(summary.cash_discrepancy_total, signedCurrencyStyle(summary.cash_discrepancy_total)),
+        currencyCell(comparisonAnalysis.summary.cash_discrepancy_total, signedCurrencyStyle(comparisonAnalysis.summary.cash_discrepancy_total)),
+        currencyCell(discrepancyDifference, signedCurrencyStyle(discrepancyDifference)),
+      ]),
+      createSpreadsheetRow([
         { value: t('financeAnalysis.cards.netResult'), styleId: 'TextCell' },
         currencyCell(summary.net_result, signedCurrencyStyle(summary.net_result)),
         currencyCell(comparisonAnalysis.summary.net_result, signedCurrencyStyle(comparisonAnalysis.summary.net_result)),
@@ -655,6 +670,7 @@ function buildOverviewRows(options: FinanceAnalysisReportOptions) {
       createSpreadsheetRow([{ value: t('financeAnalysis.cards.receiptTotal'), styleId: 'TextCell' }, currencyCell(summary.receipt_total, 'CurrencyCell', singleValueMergeAcross)]),
       createSpreadsheetRow([{ value: t('financeAnalysis.cards.cashCountRevenue'), styleId: 'TextCell' }, currencyCell(summary.cash_count_total_difference, 'CurrencyCell', singleValueMergeAcross)]),
       createSpreadsheetRow([{ value: t('financeAnalysis.cards.invoiceRevenue'), styleId: 'TextCell' }, currencyCell(summary.invoice_total, 'CurrencyCell', singleValueMergeAcross)]),
+      createSpreadsheetRow([{ value: t('financeAnalysis.cards.cashDiscrepancies'), styleId: 'TextCell' }, currencyCell(summary.cash_discrepancy_total, signedCurrencyStyle(summary.cash_discrepancy_total), singleValueMergeAcross)]),
       createSpreadsheetRow([{ value: t('financeAnalysis.cards.netResult'), styleId: 'TextCell' }, currencyCell(summary.net_result, signedCurrencyStyle(summary.net_result), singleValueMergeAcross)]),
       createSpreadsheetRow([{ value: t('financeAnalysis.cards.entriesReviewed'), styleId: 'TextCell' }, countCell(summary.receipt_count + summary.cash_count_count + summary.invoice_count, 'CountCell', singleValueMergeAcross)]),
     )
@@ -682,7 +698,8 @@ function buildOverviewRows(options: FinanceAnalysisReportOptions) {
     createSpreadsheetRow([{ value: t('financeAnalysis.cashCards.totalBefore'), styleId: 'TextCell' }, currencyCell(summary.money_before, 'CurrencyCell', singleValueMergeAcross)]),
     createSpreadsheetRow([{ value: t('financeAnalysis.cashCards.totalAfter'), styleId: 'TextCell' }, currencyCell(summary.money_after, 'CurrencyCell', singleValueMergeAcross)]),
     createSpreadsheetRow([{ value: t('financeAnalysis.cashCards.registers'), styleId: 'TextCell' }, countCell(summary.cash_count_register_total, 'CountCell', singleValueMergeAcross)]),
-    createSpreadsheetRow([{ value: t('financeAnalysis.cashCards.periodDiscrepancyTotal'), styleId: 'TextCell' }, currencyCell(summary.period_discrepancy_total, signedCurrencyStyle(summary.period_discrepancy_total), singleValueMergeAcross)]),
+    createSpreadsheetRow([{ value: t('financeAnalysis.cashCards.periodDiscrepancyTotal'), styleId: 'TextCell' }, currencyCell(summary.cash_discrepancy_total, signedCurrencyStyle(summary.cash_discrepancy_total), singleValueMergeAcross)]),
+    createSpreadsheetRow([{ value: t('financeAnalysis.cashCards.unconfirmedDiscrepancyTotal'), styleId: 'TextCell' }, currencyCell(summary.cash_discrepancy_unconfirmed_total, signedCurrencyStyle(summary.cash_discrepancy_unconfirmed_total), singleValueMergeAcross)]),
   )
 
   rows.push(
@@ -783,6 +800,105 @@ function buildCashCountRows(options: FinanceAnalysisReportOptions) {
       currencyCell(cashCount.total_after_amount),
       currencyCell(cashCount.total_difference, signedCurrencyStyle(cashCount.total_difference)),
     ]
+    return createSpreadsheetRow(cells)
+  }))
+
+  return rows
+}
+
+function buildCashDiscrepancyRows(options: FinanceAnalysisReportOptions) {
+  const { t, analysis, startDate, endDate, formatDate } = options
+  const headerCells: SpreadsheetCell[] = [
+    { value: t('cashCount.countedAfterAt'), styleId: 'Header' },
+    { value: t('cashCount.event'), styleId: 'Header' },
+    { value: t('cashCount.register'), styleId: 'Header' },
+    { value: t('financeAnalysis.sphereAndCostCentre'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.expected'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.measured'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.difference'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.statusLabel'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.notes'), styleId: 'Header' },
+  ]
+  const mergeAcross = headerCells.length - 1
+
+  const rows = [
+    createBandRow(mergeAcross + 1, t('financeAnalysis.cashDiscrepanciesTableTitle'), 'Title', 20),
+    createBandRow(mergeAcross + 1, t('financeAnalysis.periodLabel', { start: formatDate(startDate), end: formatDate(endDate) }), 'Subtitle'),
+    createBandRow(mergeAcross + 1, t('financeAnalysis.cashDiscrepanciesSectionDescription'), 'BodyMuted'),
+    createSpreadsheetRow(headerCells),
+  ]
+
+  if (analysis.cashDiscrepancies.length === 0) {
+    rows.push(createSpreadsheetRow([{ value: t('financeAnalysis.noCashDiscrepancies'), styleId: 'Body', mergeAcross }]))
+    return rows
+  }
+
+  rows.push(...analysis.cashDiscrepancies.map(item => createSpreadsheetRow([
+    { value: formatDate(item.date), styleId: 'TextCell' },
+    { value: cashDiscrepancySourceLabel(item, t), styleId: 'TextCell' },
+    { value: item.registers.map(register => register.register_number).join(', '), styleId: 'TextCell' },
+    { value: cashDiscrepancyAssignmentLabel(item, t), styleId: 'TextCell' },
+    currencyCell(item.expected_amount),
+    currencyCell(item.measured_amount),
+    currencyCell(item.amount, signedCurrencyStyle(item.amount)),
+    { value: cashDiscrepancyStatusLabel(item, t), styleId: 'TextCell' },
+    { value: item.notes || '', styleId: 'TextCell' },
+  ])))
+
+  return rows
+}
+
+function buildCashDiscrepancyOverviewRows(options: FinanceAnalysisReportOptions) {
+  const { t, locale, startDate, endDate, formatDate } = options
+  const groupedRows = aggregateCashDiscrepancyBreakdown(
+    options.analysis.cashDiscrepancyBreakdown,
+    options.exportGrouping,
+    options.exportSplitByMonth,
+    {
+      unassigned: t('cashCount.discrepancies.assignment.none'),
+      formatGroup: (code, name) => [code, name].filter(Boolean).join(' - '),
+    },
+  )
+  const headerCells: SpreadsheetCell[] = []
+  if (options.exportGrouping !== 'none') {
+    headerCells.push({
+      value: options.exportGrouping === 'spheres'
+        ? t('financeAnalysis.exportGroupingSpheres')
+        : t('financeAnalysis.exportGroupingCostCentres'),
+      styleId: 'Header',
+    })
+  }
+  if (options.exportSplitByMonth) headerCells.push({ value: t('financeAnalysis.quickMonth'), styleId: 'Header' })
+  headerCells.push(
+    { value: t('financeAnalysis.countHeader'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.surplus'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.shortfall'), styleId: 'Header' },
+    { value: t('cashCount.discrepancies.difference'), styleId: 'Header' },
+  )
+
+  const mergeAcross = Math.max(headerCells.length - 1, 0)
+  const rows = [
+    createBandRow(mergeAcross + 1, t('financeAnalysis.cashDiscrepancyOverviewExportTitle'), 'Title', 20),
+    createBandRow(mergeAcross + 1, t('financeAnalysis.periodLabel', { start: formatDate(startDate), end: formatDate(endDate) }), 'Subtitle'),
+    createBandRow(mergeAcross + 1, t('financeAnalysis.countLabel', { count: groupedRows.length }), 'BodyMuted'),
+    createSpreadsheetRow(headerCells),
+  ]
+
+  if (groupedRows.length === 0) {
+    rows.push(createSpreadsheetRow([{ value: t('financeAnalysis.noCashDiscrepancies'), styleId: 'Body', mergeAcross }]))
+    return rows
+  }
+
+  rows.push(...groupedRows.map((group) => {
+    const cells: SpreadsheetCell[] = []
+    if (options.exportGrouping !== 'none') cells.push({ value: group.groupLabel, styleId: 'TextCell' })
+    if (options.exportSplitByMonth) cells.push({ value: formatMonthKey(group.monthKey, locale), styleId: 'TextCell' })
+    cells.push(
+      countCell(group.discrepancyCount),
+      currencyCell(group.surplusAmount),
+      currencyCell(group.shortfallAmount),
+      currencyCell(group.totalAmount, signedCurrencyStyle(group.totalAmount)),
+    )
     return createSpreadsheetRow(cells)
   }))
 
@@ -1566,6 +1682,12 @@ function buildWorkbook(options: FinanceAnalysisReportOptions) {
     ? [86, 138, 172, 90, 70, 70]
     : [86, 138, 172, 90, 82]
   const cashCountColumnWidths = [104, 140, 168, 92, 92, 92, 60, 78, 78, 78]
+  const cashDiscrepancyColumnWidths = [96, 170, 60, 220, 84, 84, 84, 110, 200]
+  const cashDiscrepancyOverviewColumnWidths = [
+    ...(options.exportGrouping !== 'none' ? [190] : []),
+    ...(options.exportSplitByMonth ? [92] : []),
+    70, 98, 98, 100,
+  ]
   const bankStatementColumnWidths = [86, 84, 96, 132, 190, 96, 132, 160]
   const invoiceColumnWidths = options.includeComparison
     ? [86, 132, 186, 94, 70, 70]
@@ -1636,6 +1758,12 @@ function buildWorkbook(options: FinanceAnalysisReportOptions) {
       rows: buildCashCountOverviewRows(options),
       orientation: 'landscape',
     })
+    sheets.push({
+      name: options.t('financeAnalysis.cashDiscrepancyOverviewExportTitle'),
+      columnWidths: scaleColumnWidthsToTotal(cashDiscrepancyOverviewColumnWidths, detailSheetWidth),
+      rows: buildCashDiscrepancyOverviewRows(options),
+      orientation: 'landscape',
+    })
   }
 
   if (options.includeBalanceSheet) {
@@ -1670,6 +1798,12 @@ function buildWorkbook(options: FinanceAnalysisReportOptions) {
       name: options.t('financeAnalysis.cashCountsTableTitle'),
       columnWidths: scaleColumnWidthsToTotal(cashCountColumnWidths, detailSheetWidth),
       rows: buildCashCountRows(options),
+      orientation: 'landscape',
+    })
+    sheets.push({
+      name: options.t('financeAnalysis.cashDiscrepanciesTableTitle'),
+      columnWidths: scaleColumnWidthsToTotal(cashDiscrepancyColumnWidths, detailSheetWidth),
+      rows: buildCashDiscrepancyRows(options),
       orientation: 'landscape',
     })
   }

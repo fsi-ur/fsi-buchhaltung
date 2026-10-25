@@ -1,4 +1,6 @@
 <template>
+  <PageSettingsCashDiscrepancyDefaults />
+
   <PageSettingsEntityManager
     ref="entityManagerRef"
     :title="t('settings.entities.costCentres')"

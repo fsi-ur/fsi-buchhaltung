@@ -20,4 +20,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-explicit-time-zones.mjs',
   'migrate-website-events.mjs',
   'migrate-website-appointments.mjs',
+  'migrate-cash-discrepancy-bookings.mjs',
 ]

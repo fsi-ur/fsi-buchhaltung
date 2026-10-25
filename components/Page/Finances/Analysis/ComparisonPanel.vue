@@ -10,7 +10,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       <div v-for="card in cards" :key="card.key" class="rounded-xl bg-base-50 px-4 py-4">
         <div class="text-sm text-base-700">{{ card.label }}</div>
 
@@ -105,6 +105,13 @@ const cards = computed(() => {
       type: 'currency',
       current: props.summary.invoice_total,
       previous: props.comparison.invoice_total,
+    },
+    {
+      key: 'cashDiscrepancies',
+      label: t('financeAnalysis.cards.cashDiscrepancies'),
+      type: 'currency',
+      current: props.summary.cash_discrepancy_total,
+      previous: props.comparison.cash_discrepancy_total,
     },
     {
       key: 'netResult',

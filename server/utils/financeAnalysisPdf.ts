@@ -2,12 +2,18 @@ import { estimateTextWidth, wrapTextByWidth, type PdfColor } from '~/server/util
 import { createPdfDocumentLayout, PDF_LAYOUT, type PdfDocumentLayout } from '~/server/utils/pdfLayout'
 import { PDF_COLORS } from '~/config/pdfColors'
 import type { FinanceAnalysisFilters } from '~/server/utils/financeAnalysis/filters'
-import { aggregateCashCountBreakdown, allocateBankEventRevenue } from '~/shared/financeAnalysisGrouping'
+import {
+  aggregateCashCountBreakdown,
+  aggregateCashDiscrepancyBreakdown,
+  allocateBankEventRevenue,
+  allocateCashDiscrepancies,
+} from '~/shared/financeAnalysisGrouping'
 import type { AssociationProfileRow } from '~/types/association'
 import type { BudgetCostCentreLine } from '~/types/budget'
 import type { CostCentreRow } from '~/types/costCentre'
 import type {
   FinanceAnalysisBankStatementPosition,
+  FinanceAnalysisCashDiscrepancyItem,
   FinanceAnalysisCostCentreSplit,
   FinanceAnalysisData,
   FinanceAnalysisInvoiceItem,
@@ -353,6 +359,7 @@ function buildActualOwnAmountsByCostCentreId(analysis: FinanceAnalysisData) {
   })
 
   allocateBankEventRevenue(analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
+  allocateCashDiscrepancies(analysis.cashDiscrepancies, add)
 
   return amounts
 }
@@ -550,6 +557,30 @@ function buildBankStatementOverviewAggregates(options: FinanceAnalysisPdfOptions
     .sort((left, right) => (
       left.typeLabel.localeCompare(right.typeLabel) || left.monthKey.localeCompare(right.monthKey)
     ))
+}
+
+const CASH_DISCREPANCY_STATUS_LABELS: Record<FinanceAnalysisCashDiscrepancyItem['status'], string> = {
+  confirmed: 'Bestätigt',
+  stale: 'Betrag geändert',
+  unconfirmed: 'Unbestätigt',
+}
+
+function cashDiscrepancyAssignmentText(item: FinanceAnalysisCashDiscrepancyItem) {
+  if (item.assignment === 'none') return 'Nicht zugeordnet'
+  const prefix = item.assignment === 'booking' ? 'Manuell' : item.assignment === 'event' ? 'Veranstaltung' : 'Standard'
+  return `${prefix}: ${formatCostCentreSplits(item.cost_centres)}`
+}
+
+function buildCashDiscrepancyOverviewAggregates(options: FinanceAnalysisPdfOptions) {
+  return aggregateCashDiscrepancyBreakdown(
+    options.analysis.cashDiscrepancyBreakdown,
+    options.exportGrouping,
+    options.exportSplitByMonth,
+    {
+      unassigned: 'Nicht zugeordnet',
+      formatGroup: (code, name) => [code, name].filter(Boolean).join(' - '),
+    },
+  )
 }
 
 function buildCashCountOverviewAggregates(options: FinanceAnalysisPdfOptions): CashCountOverviewAggregate[] {
@@ -1078,6 +1109,14 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         currencyRow('Rechnungen gesamt', summary.invoice_total, comparison.invoice_total),
         {
           cells: [
+            'Sonstiges: Kassendifferenzen',
+            signedMoneyCell(summary.cash_discrepancy_total),
+            signedMoneyCell(comparison.cash_discrepancy_total),
+            signedMoneyCell(summary.cash_discrepancy_total - comparison.cash_discrepancy_total),
+          ],
+        },
+        {
+          cells: [
             'Saldo',
             signedMoneyCell(summary.net_result),
             signedMoneyCell(comparison.net_result),
@@ -1108,6 +1147,7 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         { cells: ['Belege gesamt', formatCount(summary.receipt_count), formatMoney(summary.receipt_total)] },
         { cells: ['Kassenerlös', formatCount(summary.cash_count_count), formatMoney(summary.cash_count_total_difference)] },
         { cells: ['Rechnungen gesamt', formatCount(summary.invoice_count), formatMoney(summary.invoice_total)] },
+        { cells: ['Sonstiges: Kassendifferenzen', formatCount(summary.cash_discrepancy_count), signedMoneyCell(summary.cash_discrepancy_total)] },
         { cells: ['Saldo', '', signedMoneyCell(summary.net_result)], bold: true },
         { cells: ['Geprüfte Vorgänge', formatCount(totalEntries), ''] },
       ],
@@ -1152,7 +1192,8 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         { cells: ['Gesamtvermögen zu Periodenbeginn', formatMoney(summary.money_before)] },
         { cells: ['Gesamtvermögen am Periodenende', formatMoney(summary.money_after)] },
         { cells: ['Kassen insgesamt', formatCount(summary.cash_count_register_total)] },
-        { cells: ['Ungeklärte Kassenabweichungen', formatMoney(summary.period_discrepancy_total)] },
+        { cells: ['Kassendifferenzen (im Saldo enthalten)', signedMoneyCell(summary.cash_discrepancy_total)] },
+        { cells: ['davon unbestätigt', signedMoneyCell(summary.cash_discrepancy_unconfirmed_total)] },
       ],
     })
 
@@ -1428,6 +1469,37 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
       }),
       emptyText: 'Keine Kassenzählungen im gewählten Zeitraum.',
     })
+
+    const discrepancyAggregates = buildCashDiscrepancyOverviewAggregates(options)
+    const discrepancyColumns: TableColumn[] = []
+    if (options.exportGrouping !== 'none') discrepancyColumns.push({ label: groupColumnLabel, width: 165 })
+    if (options.exportSplitByMonth) discrepancyColumns.push({ label: 'Monat', width: 70 })
+    discrepancyColumns.push(
+      { label: 'Anzahl', width: 55, align: 'right' },
+      { label: 'Überschuss', width: 80, align: 'right' },
+      { label: 'Fehlbetrag', width: 80, align: 'right' },
+      { label: 'Saldo', width: 90, align: 'right' },
+    )
+
+    renderSectionTable(layout, {
+      title: 'Kassendifferenzenübersicht',
+      toc: toc('Übersichten'),
+      metaLine: `${discrepancyAggregates.length} Einträge · Sonstiges, im Saldo enthalten`,
+      columns: discrepancyColumns,
+      rows: discrepancyAggregates.map((aggregate) => {
+        const cells: Array<string | TableCell> = []
+        if (options.exportGrouping !== 'none') cells.push(aggregate.groupLabel)
+        if (options.exportSplitByMonth) cells.push(formatMonthKey(aggregate.monthKey))
+        cells.push(
+          formatCount(aggregate.discrepancyCount),
+          formatMoney(aggregate.surplusAmount),
+          formatMoney(aggregate.shortfallAmount),
+          signedMoneyCell(aggregate.totalAmount),
+        )
+        return { cells }
+      }),
+      emptyText: 'Keine Kassendifferenzen im gewählten Zeitraum.',
+    })
   }
 
   if (hasCashCountOverview) {
@@ -1568,6 +1640,43 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         ],
       })),
       emptyText: 'Keine Kassenzählungen im gewählten Zeitraum.',
+    })
+
+    const discrepancies = analysis.cashDiscrepancies
+    renderSectionTable(layout, {
+      title: 'Kassendifferenzen im Zeitraum',
+      toc: toc('Detaillisten'),
+      metaLine: `${discrepancies.length} Einträge · Sonstiges, im Saldo enthalten`,
+      columns: [
+        { label: 'Datum', width: 55 },
+        { label: 'Zählung', width: 120 },
+        { label: 'Zuordnung', width: 130 },
+        { label: 'Soll', width: 55, align: 'right' },
+        { label: 'Ist', width: 55, align: 'right' },
+        { label: 'Differenz', width: 70, align: 'right' },
+      ],
+      rows: discrepancies.map(item => ({
+        cells: [
+          formatDate(item.date),
+          {
+            text: `${item.event_id ? item.event_name : 'Kassenbestandsprüfung'} (${item.registers.length === 1 ? 'Kasse' : 'Kassen'} ${item.registers.map(register => register.register_number).join(', ')})`,
+            // Several registers are netted — show what the net amount is made of.
+            subLines: [
+              CASH_DISCREPANCY_STATUS_LABELS[item.status],
+              item.registers.length > 1
+                ? item.registers.map(register => `Kasse ${register.register_number}: ${formatMoney(register.amount)}`).join(' · ')
+                : '',
+              item.notes || '',
+            ],
+          },
+          cashDiscrepancyAssignmentText(item),
+          formatMoney(item.expected_amount),
+          formatMoney(item.measured_amount),
+          signedMoneyCell(item.amount),
+        ],
+        tone: item.status === 'confirmed' ? undefined : 'warning',
+      })),
+      emptyText: 'Keine Kassendifferenzen im gewählten Zeitraum.',
     })
   }
 

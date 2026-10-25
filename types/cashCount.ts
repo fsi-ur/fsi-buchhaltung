@@ -58,3 +58,29 @@ export interface CreateCashCountBody {
   counted_after_at: string
   positions: CreateCashCountPositionBody[]
 }
+
+/** Default sphere/cost centre for cash differences that have no event split (Settings → Cost centres). */
+export interface CashDiscrepancyDefaults {
+  sphere_id: number | null
+  cost_centre_id: number | null
+}
+
+export interface CashDiscrepancyBookingRow {
+  id: number
+  cash_count_id: number
+  /** The net difference of the whole count when it was confirmed. */
+  amount: number
+  sphere_id: number | null
+  cost_centre_id: number | null
+  notes: string | null
+  confirmed_by: number | null
+  confirmed_by_name: string | null
+  confirmed_at: string
+}
+
+export interface SaveCashDiscrepancyBookingBody {
+  /** Both null = keep the automatic assignment (event split or default); both set = override. */
+  sphere_id: number | null
+  cost_centre_id: number | null
+  notes: string | null
+}

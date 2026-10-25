@@ -21,6 +21,13 @@
       @submit="submit"
       @cancel="cancel"
     />
+
+    <CashCountDiscrepancyPanel
+      v-if="isEditMode && cashCountId"
+      class="mt-6"
+      :cash-count-id="cashCountId"
+      :can-edit="canEdit"
+    />
   </PageFinancesEditorLayout>
 </template>
 
@@ -29,6 +36,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import { useReturnTarget } from '~/composables/useReturnTarget'
 import CashCountForm from './Form.vue'
+import CashCountDiscrepancyPanel from './DiscrepancyPanel.vue'
 import { usePage } from '~/composables/usePage'
 import { useAuth } from '~/composables/useAuth'
 import type { CreateCashCountBody } from '~/types/cashCount'

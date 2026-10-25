@@ -1,17 +1,17 @@
 <template>
   <div class="space-y-4">
     <div
-      v-if="summary.period_discrepancy_count > 0"
+      v-if="summary.cash_discrepancy_unconfirmed_count > 0"
       class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-900"
     >
       <Icon name="material-symbols:warning-outline-rounded" class="h-5 w-5 shrink-0" aria-hidden="true" />
       <span class="font-medium">
         {{ t('financeAnalysis.discrepancyWarning', {
-          count: summary.period_discrepancy_count,
-          amount: formatCurrency(summary.period_discrepancy_total),
+          count: summary.cash_discrepancy_unconfirmed_count,
+          amount: formatSignedCurrency(summary.cash_discrepancy_unconfirmed_total),
         }) }}
       </span>
-      <button type="button" class="cursor-pointer underline underline-offset-2" @click="$emit('show-liquidity')">
+      <button type="button" class="cursor-pointer underline underline-offset-2" @click="$emit('show-discrepancies')">
         {{ t('financeAnalysis.discrepancyWarningAction') }}
       </button>
     </div>
@@ -21,7 +21,7 @@
         {{ t('financeAnalysis.resultSectionTitle') }}
       </h3>
 
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
         <PageFinancesAnalysisStatCard
           tone="accent"
           :label="t('financeAnalysis.cards.receiptTotal')"
@@ -44,6 +44,16 @@
           :label="t('financeAnalysis.cards.invoiceRevenue')"
           :value="formatCurrency(summary.invoice_total)"
           :caption="t('financeAnalysis.cards.invoiceCountCount', { count: summary.invoice_count })"
+        />
+
+        <PageFinancesAnalysisStatCard
+          :tone="summary.cash_discrepancy_unconfirmed_count > 0 ? 'warning' : 'neutral'"
+          :label="t('financeAnalysis.cards.cashDiscrepancies')"
+          :value="formatSignedCurrency(summary.cash_discrepancy_total)"
+          :caption="t('financeAnalysis.cards.cashDiscrepanciesCaption', {
+            count: summary.cash_discrepancy_count,
+            unconfirmed: formatSignedCurrency(summary.cash_discrepancy_unconfirmed_total),
+          })"
         />
 
         <PageFinancesAnalysisStatCard
@@ -81,6 +91,8 @@
           })"
         />
       </div>
+
+      <PageFinancesAnalysisReconciliationPanel :reconciliation="reconciliation" />
     </section>
 
     <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -101,16 +113,17 @@ import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { financeStatusDotClass } from '~/utils/financeAnalysisStatus'
-import type { FinanceAnalysisSummary } from '~/types/financeAnalysis'
+import type { FinanceAnalysisReconciliation, FinanceAnalysisSummary } from '~/types/financeAnalysis'
 import { ReceiptStatus } from '~/types/receipt'
 
 const props = defineProps<{
   summary: FinanceAnalysisSummary
+  reconciliation: FinanceAnalysisReconciliation
   receiptStatusLabels: Record<ReceiptStatus, string>
 }>()
 
 defineEmits<{
-  (e: 'show-liquidity'): void
+  (e: 'show-discrepancies'): void
 }>()
 
 const { t } = useI18n()

@@ -70,8 +70,9 @@
 
           <PageFinancesAnalysisSummaryCards
             :summary="analysis.summary"
+            :reconciliation="analysis.reconciliation"
             :receipt-status-labels="filters.receiptStatusLabels.value"
-            @show-liquidity="activeDetailTab = 'liquidity'"
+            @show-discrepancies="activeDetailTab = 'cashDiscrepancies'"
           />
 
           <PageFinancesAnalysisComparisonPanel
