@@ -151,10 +151,32 @@
 
           <CommonAttachmentPicker v-model="form.attachments" scope="notification" :disabled="saving" />
 
-          <p v-if="attachmentCount && !form.channels.includes('email')" class="inline-flex items-start gap-1 text-xs text-warning-600">
+          <p v-if="form.attachments.documentIds.length + form.attachments.fileIds.length && !form.channels.includes('email')" class="inline-flex items-start gap-1 text-xs text-warning-600">
             <Icon name="material-symbols:error-outline-rounded" class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             {{ t('notifications.compose.attachmentsEmailOnly') }}
           </p>
+
+          <div class="space-y-2 border-t border-base-100 pt-3">
+            <div class="field">
+              <label for="notification-shift-plan">{{ t('notifications.compose.shiftPlan') }}</label>
+              <select
+                id="notification-shift-plan"
+                v-model="shiftPlanEventId"
+                class="input"
+                :disabled="saving"
+              >
+                <option :value="null">{{ t('notifications.compose.shiftPlanNone') }}</option>
+                <option v-for="eventOption in shiftPlanEventOptions" :key="eventOption.id" :value="eventOption.id">
+                  {{ eventOption.label }}
+                </option>
+              </select>
+              <p class="mt-1 text-xs text-base-400">{{ t('notifications.compose.shiftPlanHelp') }}</p>
+            </div>
+            <label v-if="shiftPlanEventId" class="flex cursor-pointer items-center gap-2 text-sm text-base-700">
+              <input v-model="shiftPlanDescriptions" type="checkbox" class="checkbox">
+              {{ t('notifications.compose.shiftPlanDescriptions') }}
+            </label>
+          </div>
         </section>
 
         <section class="space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6 sm:shadow-lg">
@@ -320,6 +342,7 @@ const toast = useToast()
 const { pageMeta } = usePage()
 const { goToReturnTarget } = useReturnTarget('NotificationList')
 const { channelIcon, channelLabel, scheduledTime, variableDescription } = useNotificationDisplay()
+const { formatDate } = useLocaleFormatters()
 
 type RecipientOptions = Extract<GetNotificationRecipientOptionsResponse, { ok: true }>
 
@@ -344,7 +367,19 @@ const form = reactive({
   attachments: { documentIds: [], fileIds: [] } as AttachmentSelection,
 })
 
-const attachmentCount = computed(() => form.attachments.documentIds.length + form.attachments.fileIds.length)
+const shiftPlanEventId = ref<number | null>(null)
+const shiftPlanDescriptions = ref(false)
+
+const shiftPlanEventOptions = computed(() => (options.value?.shiftPlanEvents || []).map(eventOption => ({
+  id: eventOption.id,
+  label: `${eventOption.name} · ${formatDate(eventOption.startsAt)}`,
+})))
+
+const shiftPlan = computed<CustomNotificationDraft['shiftPlan']>(() => shiftPlanEventId.value
+  ? { eventId: shiftPlanEventId.value, includeDescriptions: shiftPlanDescriptions.value }
+  : null)
+
+const attachmentCount = computed(() => form.attachments.documentIds.length + form.attachments.fileIds.length + (shiftPlan.value ? 1 : 0))
 
 const attachmentSummary = computed(() => {
   if (!attachmentCount.value) return t('notifications.compose.attachmentsNone')
@@ -354,6 +389,7 @@ const attachmentSummary = computed(() => {
 const documentTitles = computed(() => {
   const titles = form.attachments.documentIds.map(id => byId(id)?.title || String(id))
   if (form.attachments.fileIds.length) titles.push(t('attachments.ownFilesCount', { count: form.attachments.fileIds.length }))
+  if (shiftPlan.value) titles.push(t('notifications.compose.shiftPlanSummary'))
   return titles
 })
 
@@ -529,7 +565,7 @@ async function submit() {
     // other datetime in the app (see DateInput/useDateInput) and how the server stores it.
     const res = await apiFetch<CreateNotificationResponse>('/api/notifications/create', {
       method: 'POST',
-      body: { ...form, scheduledFor: timing.value === 'schedule' ? scheduledFor.value : null },
+      body: { ...form, shiftPlan: shiftPlan.value, scheduledFor: timing.value === 'schedule' ? scheduledFor.value : null },
     })
 
     if (res.ok) {
@@ -569,6 +605,10 @@ onMounted(() => {
     form.allActiveMembers = Boolean(prefill.allActiveMembers)
     if (prefill.channels?.length) form.channels = [...prefill.channels]
     if (prefill.attachments) form.attachments = { documentIds: [...prefill.attachments.documentIds], fileIds: [...prefill.attachments.fileIds] }
+    if (prefill.shiftPlan) {
+      shiftPlanEventId.value = prefill.shiftPlan.eventId
+      shiftPlanDescriptions.value = prefill.shiftPlan.includeDescriptions
+    }
   }
   loadOptions()
   loadDocuments()

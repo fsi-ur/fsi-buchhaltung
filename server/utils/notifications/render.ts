@@ -1,15 +1,55 @@
 import { NOTIFICATION_TYPE_MAP, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
-import type { RenderedNotification } from '~/server/utils/notifications/types'
+import type { RenderedNotification, ShiftListEntry, TaskListEntry } from '~/server/utils/notifications/types'
 import { translate } from '~/shared/i18n'
 import { describeChangedFields, type ChangedField } from '~/server/utils/notifications/changeDescription'
 import { describeLeadText } from '~/server/utils/notifications/leadText'
 
 export function formatLocalDateTime(value: unknown): string {
   const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})/)
-  if (!match) return String(value ?? '')
+  if (!match) return formatLocalDate(value)
   return `${match[3]}.${match[2]}.${match[1]}, ${match[4]}:${match[5]}`
+}
+
+/** Date-only values (a task deadline without a time) — anything else is passed through unchanged. */
+function formatLocalDate(value: unknown): string {
+  const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return String(value ?? '')
+  return `${match[3]}.${match[2]}.${match[1]}`
+}
+
+/** "25.10.2026, 10:00 – 12:00", or both full date-times when the range crosses midnight. */
+function formatLocalRange(start: unknown, end: unknown): string {
+  const from = formatLocalDateTime(start)
+  const to = formatLocalDateTime(end)
+  if (!to) return from
+  if (String(start).slice(0, 10) === String(end).slice(0, 10)) return `${from} – ${to.slice(-5)}`
+  return `${from} – ${to}`
+}
+
+/** One entry of the `{shift_list}` variable — see `ShiftListEntry` in types.ts for who writes which fields. */
+function formatShiftList(locale: 'de' | 'en', entries: ShiftListEntry[]): string {
+  return entries.map((entry) => {
+    let line = `${entry.name} · ${formatLocalRange(entry.start, entry.end)}`
+    if (entry.change) line = `${translate(locale, `notifications.lists.${entry.change}`)}: ${line}`
+    if (entry.change === 'changed' && entry.changes?.length) line += ` (${describeChangedFields(locale, entry.changes)})`
+    if (entry.required !== undefined) {
+      line += ` – ${translate(locale, 'notifications.lists.staffing', { assigned: entry.assigned ?? 0, required: entry.required })}`
+    }
+    return `- ${line}`
+  }).join('\n')
+}
+
+function formatTaskList(locale: 'de' | 'en', entries: TaskListEntry[]): string {
+  return entries.map((entry) => {
+    let line = entry.title
+    line += entry.deadline
+      ? ` (${translate(locale, 'notifications.lists.deadline', { deadline: formatLocalDateTime(entry.deadline) })})`
+      : ` (${translate(locale, 'notifications.lists.noDeadline')})`
+    if (entry.days_overdue) line += ` – ${translate(locale, 'notifications.lists.overdueDays', { count: entry.days_overdue })}`
+    return `- ${line}`
+  }).join('\n')
 }
 
 const DATETIME_VARIABLES = new Set([
@@ -29,6 +69,10 @@ function formatPayload(payload: Record<string, any>, locale: 'de' | 'en'): Recor
       // translated here, once the recipient's locale is known, instead of being baked into a fixed
       // language at enqueue time.
       formatted[key] = describeChangedFields(locale, value as ChangedField[])
+    } else if (key === 'shift_list' && Array.isArray(value)) {
+      formatted[key] = formatShiftList(locale, value as ShiftListEntry[])
+    } else if (key === 'task_list' && Array.isArray(value)) {
+      formatted[key] = formatTaskList(locale, value as TaskListEntry[])
     } else if (key === 'lead_minutes') {
       // Stored as raw minutes (see reminders.ts) so "{lead_text}" can be translated here, once the
       // recipient's locale is known, instead of being baked into a fixed language at sweep time.

@@ -1,7 +1,8 @@
 import type mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import type { EventShiftMember, EventShiftSlot, EventShiftTemplate, EventShiftTypeDescriptions, SaveEventShiftSlot, SaveEventShiftTemplate } from '~/types/event'
-import { enqueueNotification, dropFutureReminders } from '~/server/utils/notifications/enqueue'
+import { dropFutureReminders } from '~/server/utils/notifications/enqueue'
+import { queueShiftChanges, type ShiftChangeInput } from '~/server/utils/notifications/changeDigest'
 import { pickChangedFields, type ChangedField } from '~/server/utils/notifications/changeDescription'
 import { formatLocalDateTime } from '~/server/utils/notifications/render'
 import { normalizeLocalDateTime } from '~/shared/time'
@@ -454,9 +455,29 @@ export async function replaceEventShiftSlots({
   )
   if (relationError) return relationError
 
+  const shiftChanges: ShiftChangeInput[] = []
+  const shiftEntry = (id: number, slot: { name: string, starts_at: string, ends_at: string }) => ({
+    shift_id: id,
+    name: String(slot.name),
+    start: String(slot.starts_at),
+    end: String(slot.ends_at),
+  })
+
   const incomingIdSet = new Set(incomingIds)
   for (const id of existingIds) {
     if (incomingIdSet.has(id)) continue
+
+    // A deleted shift takes its members with it (ON DELETE CASCADE) — tell them it is gone.
+    const existing = existingRows.find(row => Number(row.id) === id)!
+    const deletedMembers = await query<{ member_id: number }[]>(
+      `SELECT member_id FROM event_shift_members WHERE shift_id = ?`,
+      [id],
+      conn,
+    )
+    for (const row of deletedMembers) {
+      shiftChanges.push({ memberId: Number(row.member_id), entry: { ...shiftEntry(id, existing), change: 'removed' } })
+    }
+
     await query(
       `DELETE FROM event_shift_slots
        WHERE id = ? AND event_id = ?`,
@@ -468,7 +489,7 @@ export async function replaceEventShiftSlots({
   for (const slot of slots) {
     let shiftId = slot.id ?? null
     let timingOrNameChanged = false
-    let shiftChanges: ChangedField[] = []
+    let changedFields: ChangedField[] = []
 
     if (shiftId) {
       const existing = existingRows.find(row => Number(row.id) === shiftId)
@@ -486,7 +507,7 @@ export async function replaceEventShiftSlots({
           || String(existing.ends_at) !== slot.ends_at
           || String(existing.name) !== slot.name
 
-        shiftChanges = pickChangedFields([
+        changedFields = pickChangedFields([
           { field: 'name', from: existing.name, to: slot.name },
           { field: 'start', from: formatLocalDateTime(existing.starts_at), to: formatLocalDateTime(slot.starts_at) },
           { field: 'end', from: formatLocalDateTime(existing.ends_at), to: formatLocalDateTime(slot.ends_at) },
@@ -538,40 +559,12 @@ export async function replaceEventShiftSlots({
     const removedMemberIds = existingMemberIds.filter(id => !slot.member_ids.includes(id))
     const keptMemberIds = slot.member_ids.filter(id => existingMemberIds.includes(id))
 
-    const shiftPayload = {
-      event_id: eventId,
-      event_name: eventRow?.name ?? '',
-      shift_name: slot.name,
-      shift_start: slot.starts_at,
-      shift_end: slot.ends_at,
-      location: eventRow?.location ?? null,
-    }
+    const entry = shiftEntry(shiftId, slot)
+    for (const memberId of addedMemberIds) shiftChanges.push({ memberId, entry: { ...entry, change: 'added' } })
+    for (const memberId of removedMemberIds) shiftChanges.push({ memberId, entry: { ...entry, change: 'removed' } })
 
-    if (addedMemberIds.length) {
-      await enqueueNotification({
-        type: 'shift.assigned',
-        payload: shiftPayload,
-        recipients: { kind: 'members', memberIds: addedMemberIds },
-        createdByUserId: actingUserId ?? null,
-      }, conn)
-    }
-
-    if (removedMemberIds.length) {
-      await enqueueNotification({
-        type: 'shift.removed',
-        payload: shiftPayload,
-        recipients: { kind: 'members', memberIds: removedMemberIds },
-        createdByUserId: actingUserId ?? null,
-      }, conn)
-    }
-
-    if (timingOrNameChanged && keptMemberIds.length) {
-      await enqueueNotification({
-        type: 'shift.changed',
-        payload: { ...shiftPayload, changes: shiftChanges },
-        recipients: { kind: 'members', memberIds: keptMemberIds },
-        createdByUserId: actingUserId ?? null,
-      }, conn)
+    if (timingOrNameChanged) {
+      for (const memberId of keptMemberIds) shiftChanges.push({ memberId, entry: { ...entry, change: 'changed', changes: changedFields } })
       await dropFutureReminders({ type: 'shift.reminder', entityId: shiftId }, conn)
     }
 
@@ -582,6 +575,13 @@ export async function replaceEventShiftSlots({
       conn,
     })
   }
+
+  await queueShiftChanges({
+    event: { id: eventId, name: eventRow?.name ?? '', location: eventRow?.location ?? null },
+    changes: shiftChanges,
+    actingUserId: actingUserId ?? null,
+    conn,
+  })
 
   return null
 }

@@ -168,6 +168,24 @@
         </div>
       </div>
 
+      <div class="flex flex-wrap items-end justify-between gap-3 border-t border-base-100 pt-4">
+        <div class="min-w-0 flex-1">
+          <label for="change-bundle-minutes" class="text-sm font-medium text-base-800">{{ t('settings.notifications.changeBundleMinutes') }}</label>
+          <p class="text-xs text-base-500">{{ t('settings.notifications.changeBundleMinutesHelp') }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            id="change-bundle-minutes"
+            v-model.number="settings.change_bundle_minutes"
+            type="number"
+            min="0"
+            :max="CHANGE_BUNDLE_MAX_MINUTES"
+            class="input w-24"
+          >
+          <span class="text-sm text-base-500">{{ t('settings.notifications.unitMinutes') }}</span>
+        </div>
+      </div>
+
       <div class="flex flex-wrap items-center justify-between gap-3 border-t border-base-100 pt-4">
         <div class="min-w-0">
           <p class="text-sm font-medium text-base-800">{{ t('settings.notifications.skipDeclinedAppointmentReminders') }}</p>
@@ -338,6 +356,30 @@
               scope="notification_template"
               @update:model-value="setTemplateAttachments(typeKey, $event)"
             />
+
+            <div v-if="SHIFT_PLAN_PDF_TYPES.includes(typeKey)" class="space-y-1.5 pt-1">
+              <label class="flex cursor-pointer items-start gap-2 text-sm text-base-700">
+                <input
+                  type="checkbox"
+                  class="checkbox mt-0.5"
+                  :checked="Boolean(settings.shift_plan_pdf[typeKey])"
+                  @change="setShiftPlanPdf(typeKey, ($event.target as HTMLInputElement).checked)"
+                >
+                <span>
+                  <span class="block">{{ t('settings.notifications.shiftPlanPdf') }}</span>
+                  <span class="block text-xs text-base-400">{{ t('settings.notifications.shiftPlanPdfHelp') }}</span>
+                </span>
+              </label>
+              <label v-if="settings.shift_plan_pdf[typeKey]" class="ml-6 flex cursor-pointer items-center gap-2 text-sm text-base-700">
+                <input
+                  type="checkbox"
+                  class="checkbox"
+                  :checked="settings.shift_plan_pdf[typeKey]!.include_descriptions"
+                  @change="setShiftPlanPdf(typeKey, true, ($event.target as HTMLInputElement).checked)"
+                >
+                {{ t('settings.notifications.shiftPlanPdfDescriptions') }}
+              </label>
+            </div>
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -473,7 +515,7 @@ import { useNotificationDisplay } from '~/composables/useNotificationDisplay'
 import { useTextFormatting } from '~/composables/useTextFormatting'
 import { useVariableInsert } from '~/composables/useVariableInsert'
 import { NOTIFICATION_CHANNELS, type NotificationChannelKey } from '~/config/notificationChannels'
-import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_MAP, EMAIL_FOOTER_VARIABLES, MEMBER_WELCOME_TYPE_KEYS, type NotificationTypeKey } from '~/config/notificationTypes'
+import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_MAP, EMAIL_FOOTER_VARIABLES, MEMBER_WELCOME_TYPE_KEYS, SHIFT_PLAN_PDF_TYPES, CHANGE_BUNDLE_MAX_MINUTES, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationSettings } from '~/types/notification'
 import type { AttachmentSelection } from '~/types/attachment'
 import type { GetNotificationSettingsResponse } from '~/server/api/settings/notifications.get'
@@ -551,7 +593,13 @@ function canonicalizeSettings(input: NotificationSettings): NotificationSettings
     }
   }
 
-  return { ...input, type_settings: typeSettings, default_channels: defaultChannels, templates, template_attachments: templateAttachments }
+  const shiftPlanPdf: NotificationSettings['shift_plan_pdf'] = {}
+  for (const key of Object.keys(input.shift_plan_pdf).sort() as NotificationTypeKey[]) {
+    const option = input.shift_plan_pdf[key]
+    if (option) shiftPlanPdf[key] = { include_descriptions: Boolean(option.include_descriptions) }
+  }
+
+  return { ...input, type_settings: typeSettings, default_channels: defaultChannels, templates, template_attachments: templateAttachments, shift_plan_pdf: shiftPlanPdf }
 }
 
 function snapshot(input: NotificationSettings): string {
@@ -674,6 +722,14 @@ function templateAttachments(typeKey: NotificationTypeKey): AttachmentSelection 
 function setTemplateAttachments(typeKey: NotificationTypeKey, selection: AttachmentSelection) {
   if (!settings.value) return
   settings.value.template_attachments = { ...settings.value.template_attachments, [typeKey]: selection }
+}
+
+function setShiftPlanPdf(typeKey: NotificationTypeKey, enabled: boolean, includeDescriptions?: boolean) {
+  if (!settings.value) return
+  const next = { ...settings.value.shift_plan_pdf }
+  if (enabled) next[typeKey] = { include_descriptions: includeDescriptions ?? next[typeKey]?.include_descriptions ?? false }
+  else delete next[typeKey]
+  settings.value.shift_plan_pdf = next
 }
 
 async function sendTestMail(typeKey: NotificationTypeKey) {

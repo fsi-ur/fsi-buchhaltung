@@ -21,6 +21,10 @@ export interface MemberWelcomeSettings {
   send_time: string
 }
 
+export interface ShiftPlanPdfOption {
+  include_descriptions: boolean
+}
+
 export interface NotificationSettings {
   notifications_enabled: boolean
   channels_enabled: Record<NotificationChannelKey, boolean>
@@ -38,6 +42,17 @@ export interface NotificationSettings {
   template_attachments: Partial<Record<NotificationTypeKey, AttachmentSelection>>
   /** When the welcome mail goes out: `delay_days` after the member's `joined_at`, at `send_time`. */
   member_welcome: MemberWelcomeSettings
+  /**
+   * Minutes shift/task assignment changes are collected before one summary per person and event goes
+   * out (see server/utils/notifications/changeDigest.ts). Every further change restarts the wait,
+   * capped at three windows after the first one (changeDigest.ts). 0 = right after the save.
+   */
+  change_bundle_minutes: number
+  /**
+   * Types whose e-mail carries the event's shift plan as PDF with the recipient's own shifts
+   * highlighted (only `SHIFT_PLAN_PDF_TYPES` are honoured). Generated per recipient at send time.
+   */
+  shift_plan_pdf: Partial<Record<NotificationTypeKey, ShiftPlanPdfOption>>
   email_from_name: string
   email_subject_prefix: string
   email_footer: string
@@ -64,6 +79,8 @@ export interface NotificationInboxItem {
   readAt: string | null
   /** What the same notification carried by mail — the in-app copy offers them for download too. */
   attachments: AttachmentItem[]
+  /** Set when the notification comes with a personal shift plan — offered as a PDF download. */
+  shiftPlan: { eventId: number, eventName: string } | null
 }
 
 export interface NotificationOutboxDeliveryCounts {
@@ -109,6 +126,8 @@ export interface NotificationOutboxDetail {
   channels: NotificationChannelKey[] | null
   deliveries: NotificationDelivery[]
   attachments: NotificationAttachmentInfo[]
+  /** The custom message's personal shift plan, so "duplicate" restores it too. */
+  shiftPlan: CustomNotificationDraft['shiftPlan']
 }
 
 export interface NotificationPreferenceEntry {
@@ -131,4 +150,6 @@ export interface CustomNotificationDraft {
   scheduledFor: string | null
   /** Documents and one-off files attached to this one message. */
   attachments: AttachmentSelection
+  /** Attach this event's shift plan, generated per recipient with their own shifts highlighted. */
+  shiftPlan: { eventId: number, includeDescriptions: boolean } | null
 }

@@ -130,7 +130,19 @@
                 v-html="renderNotificationInlineHtml(item.body)"
               ></span>
 
-              <span v-if="item.attachments.length" class="mt-2 flex flex-wrap gap-1.5">
+              <span v-if="item.attachments.length || item.shiftPlan" class="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  v-if="item.shiftPlan"
+                  type="button"
+                  class="inline-flex max-w-full cursor-pointer items-center gap-1 rounded-md border border-base-200 bg-white px-2 py-0.5 text-[11px] font-medium text-base-700 hover:border-base-300 hover:text-link-600"
+                  :class="{ 'cursor-wait opacity-60': shiftPlanPending === item.deliveryId }"
+                  :disabled="shiftPlanPending === item.deliveryId"
+                  :title="t('notifications.shiftPlanDownloadHelp')"
+                  @click.stop="downloadShiftPlan(item.deliveryId)"
+                >
+                  <Icon name="material-symbols:picture-as-pdf-rounded" class="h-3.5 w-3.5 shrink-0 text-base-400" aria-hidden="true" />
+                  <span class="truncate">{{ t('notifications.shiftPlanDownload', { event: item.shiftPlan.eventName }) }}</span>
+                </button>
                 <a
                   v-for="attachment in item.attachments"
                   :key="attachment.key"
@@ -330,6 +342,7 @@ import { useNotificationDisplay } from '~/composables/useNotificationDisplay'
 import { usePage } from '~/composables/usePage'
 import { buildReturnTarget } from '~/composables/useReturnTarget'
 import { renderNotificationBodyHtml, renderNotificationInlineHtml } from '~/utils/notificationFormatting'
+import { downloadNotificationShiftPlan } from '~/utils/shiftPlanPdfDownload'
 import type { PageTarget } from '~/types/page'
 import type { CustomNotificationDraft, NotificationInboxItem, NotificationOutboxItem, NotificationOutboxDetail } from '~/types/notification'
 import type { AdvancedTableColumn } from '~/composables/useAdvancedTable'
@@ -559,6 +572,7 @@ function duplicateDetail() {
       documentIds: detail.value.attachments.filter(entry => entry.documentId !== null).map(entry => entry.documentId!),
       fileIds: detail.value.attachments.filter(entry => entry.fileId !== null && entry.kind === 'file').map(entry => entry.fileId!),
     },
+    shiftPlan: detail.value.shiftPlan,
   }
 
   detailOpen.value = false
@@ -567,6 +581,18 @@ function duplicateDetail() {
 
 function create() {
   setPage('NotificationCreate' as any, { returnTarget: editorReturnTarget.value })
+}
+
+const shiftPlanPending = ref<number | null>(null)
+
+async function downloadShiftPlan(deliveryId: number) {
+  shiftPlanPending.value = deliveryId
+  try {
+    const result = await downloadNotificationShiftPlan(deliveryId)
+    if (!result.ok) toast.error(result.error || t('notifications.shiftPlanDownloadFailed'))
+  } finally {
+    shiftPlanPending.value = null
+  }
 }
 
 // Each tab filters a different data set, so the shared search box starts empty on a switch.

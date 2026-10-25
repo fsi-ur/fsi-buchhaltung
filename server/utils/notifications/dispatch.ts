@@ -10,6 +10,9 @@ import { localWallClockNowDate, reminderMomentHasPassed, shiftWallClock } from '
 import { CHANNELS } from '~/server/utils/notifications/channels'
 import { loadMailAttachments } from '~/server/utils/attachments'
 import { resolveNotificationAttachments } from '~/server/utils/notifications/attachments'
+import { loadShiftStaffing, understaffedPayload, understaffedShiftsOfCluster } from '~/server/utils/notifications/reminders'
+import { personalizeReminder, reminderEntityId, reminderLeadMinutes } from '~/server/utils/notifications/personalize'
+import { createShiftPlanRenderer, shiftPlanMailAttachment, shiftPlanRequestFor, type ShiftPlanRenderer } from '~/server/utils/notifications/shiftPlan'
 import { NOTIFICATION_TYPE_MAP, SCHEDULE_ANCHOR_VARIABLES, SELF_ACTION_EXEMPT_TYPES, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { RecipientRule, DbConn } from '~/server/utils/notifications/types'
@@ -24,6 +27,7 @@ interface NotificationRow {
   subject_override: string | null
   body_override: string | null
   created_by: number | null
+  dedupe_key: string | null
 }
 
 function toMysqlDatetime(date: Date): string {
@@ -55,21 +59,44 @@ function quietHoursEnd(now: Date, quietHours: NotificationSettings['quiet_hours'
   return end
 }
 
-async function processNotification(row: NotificationRow, settings: NotificationSettings, now: Date) {
+/**
+ * The understaffing warning as it stands now: the payload was written when the warning was planned,
+ * possibly days ago, so which of its shifts are still short — and by how many — is re-read here.
+ * null when nothing is short any more, or when another warning of the event now covers these shifts.
+ */
+async function currentUnderstaffing(payload: Record<string, any>, dedupeKey: string | null, conn: DbConn) {
+  const shiftId = reminderEntityId(payload, 'shift_id', dedupeKey)
+  const lead = reminderLeadMinutes(payload, dedupeKey)
+  const eventId = Number(payload.event_id)
+  if (!shiftId || !lead || !Number.isInteger(eventId)) return null
+
+  const shifts = await loadShiftStaffing([eventId], conn)
+  const entries = understaffedShiftsOfCluster(shifts, lead, shiftId)
+  return entries?.length ? understaffedPayload(entries) : null
+}
+
+async function processNotification(id: number, settings: NotificationSettings, now: Date) {
   await withTransaction(async (conn) => {
+    // Re-read under a row lock instead of trusting the due list: a change summary may have been
+    // merged into this row — or pushed back — since then (changeDigest.ts), and the merge waits for
+    // this lock, so it never edits a row that is half sent.
+    const [row] = await query<NotificationRow[]>(
+      `SELECT id, type_key, recipient_rule, channels, payload, subject_override, body_override, created_by, dedupe_key
+       FROM notifications
+       WHERE id = ? AND status = 'scheduled' AND scheduled_for <= ?
+       FOR UPDATE`,
+      [id, toMysqlDatetime(now)],
+      conn,
+    )
+    if (!row) return
+
     const recipientRule: RecipientRule = JSON.parse(row.recipient_rule)
     const payload = row.payload ? JSON.parse(row.payload) : {}
     const overrideChannels = row.channels ? (row.channels.split(',') as NotificationChannelKey[]) : null
 
-    if (row.type_key === 'shift.understaffed' && payload.shift_id) {
-      const [current] = await query<Array<{ required_people: number, assigned_count: number }>>(
-        `SELECT ess.required_people,
-                (SELECT COUNT(*) FROM event_shift_members esm WHERE esm.shift_id = ess.id) AS assigned_count
-         FROM event_shift_slots ess WHERE ess.id = ?`,
-        [payload.shift_id],
-        conn,
-      )
-      if (!current || current.assigned_count >= current.required_people) {
+    if (row.type_key === 'shift.understaffed') {
+      const current = await currentUnderstaffing(payload, row.dedupe_key, conn)
+      if (!current) {
         await query(
           `UPDATE notifications SET status = 'cancelled', cancelled_at = ? WHERE id = ?`,
           [toMysqlDatetime(now), row.id],
@@ -77,12 +104,7 @@ async function processNotification(row: NotificationRow, settings: NotificationS
         )
         return
       }
-
-      // The payload was written when the reminder was planned, possibly days ago — report the head
-      // count as it is now, otherwise sign-ups since then are missing from the message.
-      payload.required_people = current.required_people
-      payload.assigned_people = current.assigned_count
-      payload.missing_people = current.required_people - current.assigned_count
+      Object.assign(payload, current)
     }
 
     let recipients = await resolveRecipients(recipientRule, conn)
@@ -135,12 +157,26 @@ async function processNotification(row: NotificationRow, settings: NotificationS
       if (selection.documentIds.length || selection.fileIds.length) attachments = await loadMailAttachments(selection, conn)
     }
 
+    // The personal shift plan is rendered per e-mail recipient; its data is only loaded once, and
+    // only if some recipient actually gets an e-mail.
+    const shiftPlanRequest = shiftPlanRequestFor(row.type_key, payload, settings)
+    let shiftPlan: ShiftPlanRenderer | null | undefined
+
+    // During quiet hours only the silent in-app copy goes out; the row stays scheduled until the
+    // quiet hours end and the next pass sends the rest (the in-app delivery then already exists).
+    const quietUntil = isWithinQuietHours(now, settings.quiet_hours) ? quietHoursEnd(now, settings.quiet_hours) : null
+    let deferred = false
     let anyFailed = false
 
     for (const recipient of recipients) {
+      const personal = await personalizeReminder({ type: row.type_key, payload, dedupeKey: row.dedupe_key, recipient, conn })
+      // Another reminder of the same person's group carries this one (see clusters.ts).
+      if (personal === null) continue
+
       const channels = overrideChannels ?? await getEffectiveChannels(row.type_key, recipient, settings, conn)
       const recipientPayload = {
         ...payload,
+        ...personal,
         member_name: recipient.displayName,
         first_name: recipient.firstName ?? recipient.displayName,
         ...associationPayload,
@@ -149,6 +185,11 @@ async function processNotification(row: NotificationRow, settings: NotificationS
       for (const channelKey of channels) {
         const channel = CHANNELS[channelKey]
         if (!channel) continue
+
+        if (channelKey !== 'in_app' && quietUntil) {
+          deferred = true
+          continue
+        }
 
         const address = channel.addressFor(recipient)
         const rendered = renderNotification({
@@ -161,15 +202,6 @@ async function processNotification(row: NotificationRow, settings: NotificationS
           bodyOverride: row.body_override,
         })
 
-        if (channelKey !== 'in_app' && isWithinQuietHours(now, settings.quiet_hours)) {
-          await query(
-            `UPDATE notifications SET scheduled_for = ? WHERE id = ?`,
-            [toMysqlDatetime(quietHoursEnd(now, settings.quiet_hours)), row.id],
-            conn,
-          )
-          continue
-        }
-
         if (!address || !channel.isConfigured(settings)) {
           await insertDelivery(conn, row.id, recipient, channelKey, address, rendered, 'skipped', address ? 'Channel not configured' : 'No address for recipient')
           continue
@@ -177,9 +209,17 @@ async function processNotification(row: NotificationRow, settings: NotificationS
 
         const unsubscribeToken = channelKey === 'email' && NOTIFICATION_TYPE_MAP[row.type_key]?.userConfigurable ? makeToken() : null
         const deliveryId = await insertDelivery(conn, row.id, recipient, channelKey, address, rendered, 'pending', null, unsubscribeToken)
+        // Already delivered on an earlier pass (the in-app copy sent during quiet hours).
+        if (!deliveryId) continue
+
+        let channelAttachments = attachments
+        if (channelKey === 'email' && shiftPlanRequest) {
+          if (shiftPlan === undefined) shiftPlan = await createShiftPlanRenderer(shiftPlanRequest, conn)
+          if (shiftPlan) channelAttachments = [...attachments, shiftPlanMailAttachment(shiftPlan, recipient.memberId)]
+        }
 
         try {
-          await channel.send({ recipient, rendered, deliveryId, settings, unsubscribeToken, attachments })
+          await channel.send({ recipient, rendered, deliveryId, settings, unsubscribeToken, attachments: channelAttachments })
           await query(`UPDATE notification_deliveries SET status = 'sent', sent_at = ? WHERE id = ?`, [toMysqlDatetime(now), deliveryId], conn)
         } catch (err: any) {
           anyFailed = true
@@ -192,6 +232,16 @@ async function processNotification(row: NotificationRow, settings: NotificationS
           )
         }
       }
+    }
+
+    if (deferred && quietUntil) {
+      // Marking the row sent here used to drop every e-mail and push that fell into quiet hours.
+      await query(
+        `UPDATE notifications SET scheduled_for = ? WHERE id = ?`,
+        [toMysqlDatetime(quietUntil), row.id],
+        conn,
+      )
+      return
     }
 
     await query(
@@ -256,6 +306,12 @@ async function retryFailedDeliveries(settings: NotificationSettings, now: Date) 
         ? await resolveNotificationAttachments(delivery.notification_id, delivery.type_key, settings)
         : { documentIds: [], fileIds: [] }
       const attachments = selection.documentIds.length || selection.fileIds.length ? await loadMailAttachments(selection) : []
+
+      const shiftPlanRequest = delivery.channel === 'email'
+        ? shiftPlanRequestFor(delivery.type_key, delivery.payload ? JSON.parse(delivery.payload) : null, settings)
+        : null
+      const shiftPlan = shiftPlanRequest ? await createShiftPlanRenderer(shiftPlanRequest) : null
+      if (shiftPlan) attachments.push(shiftPlanMailAttachment(shiftPlan, delivery.member_id))
 
       await channel.send({
         attachments,
@@ -332,8 +388,8 @@ export async function runNotificationDispatch({ now, limit = 50 }: { now?: Date,
         console.error('notifications dispatch: sweepReminders failed', err)
       }
 
-      const due = await query<NotificationRow[]>(
-        `SELECT id, type_key, recipient_rule, channels, payload, subject_override, body_override, created_by
+      const due = await query<Array<{ id: number }>>(
+        `SELECT id
          FROM notifications
          WHERE status = 'scheduled' AND scheduled_for <= ?
          ORDER BY scheduled_for ASC
@@ -344,7 +400,7 @@ export async function runNotificationDispatch({ now, limit = 50 }: { now?: Date,
 
       for (const row of due) {
         try {
-          await processNotification(row, settings, referenceNow)
+          await processNotification(Number(row.id), settings, referenceNow)
         } catch (err) {
           console.error(`notifications dispatch: notification ${row.id} failed`, err)
         }

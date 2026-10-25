@@ -7,6 +7,7 @@ import type { CustomNotificationDraft } from '~/types/notification'
 import { normalizeAttachmentSelection } from '~/server/utils/attachments'
 import type { AttachmentSelection } from '~/types/attachment'
 import type { RecipientRule } from '~/server/utils/notifications/types'
+import { eventExists } from '~/server/utils/eventShifts'
 
 function normalizeSelection(input: unknown): AttachmentSelection {
   const result = normalizeAttachmentSelection(input)
@@ -33,9 +34,20 @@ export default defineEventHandler(async (event): Promise<CreateNotificationRespo
   if (body.userIds?.length) rules.push({ kind: 'users', userIds: body.userIds })
   const recipients: RecipientRule = rules.length === 1 ? rules[0]! : { kind: 'composite', rules }
 
+  // The event's shift plan, rendered per recipient with their own shifts highlighted (shiftPlan.ts).
+  const payload: Record<string, unknown> = {}
+  if (body.shiftPlan) {
+    const eventId = Number(body.shiftPlan.eventId)
+    if (!Number.isInteger(eventId) || eventId <= 0 || !await eventExists(eventId)) {
+      return { ok: false, error: 'Die Veranstaltung für den Schichtplan wurde nicht gefunden.' }
+    }
+    payload.shift_plan_event_id = eventId
+    payload.shift_plan_descriptions = Boolean(body.shiftPlan.includeDescriptions)
+  }
+
   const result = await withAuditTransaction(current.user, async conn => enqueueNotification({
     type: 'custom.message',
-    payload: {},
+    payload,
     recipients,
     scheduledFor: body.scheduledFor || null,
     createdByUserId: current.user.id,

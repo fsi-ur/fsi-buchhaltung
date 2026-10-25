@@ -3,6 +3,7 @@ import { requireAuth } from '~/server/utils/api/guards'
 import { query } from '~/server/utils/db'
 import { getNotificationSettings } from '~/server/utils/notifications/settings'
 import { NOTIFICATION_ENTITY_TYPE } from '~/server/utils/notifications/attachments'
+import { shiftPlanRequestFor } from '~/server/utils/notifications/shiftPlan'
 import { loadAttachmentItems, loadAttachmentSelections, mergeAttachmentSelections } from '~/server/utils/attachments'
 import type { NotificationTypeKey } from '~/config/notificationTypes'
 import type { AttachmentItem, AttachmentSelection } from '~/types/attachment'
@@ -50,10 +51,11 @@ export default defineEventHandler(async (event): Promise<GetNotificationInboxRes
     created_at: string
     sent_at: string | null
     read_at: string | null
+    payload: string | null
   }>>(
     // `sent_at` is when the delivery actually went out — that, not the enqueue time, is what "3 min
     // ago" should count from for a notification that sat in the queue or was scheduled ahead.
-    `SELECT nd.id, nd.notification_id, n.type_key, nd.subject, nd.body, n.link_page, n.link_meta, n.created_at, nd.sent_at, nd.read_at
+    `SELECT nd.id, nd.notification_id, n.type_key, nd.subject, nd.body, n.link_page, n.link_meta, n.created_at, nd.sent_at, nd.read_at, n.payload
      FROM notification_deliveries nd
      JOIN notifications n ON n.id = nd.notification_id
      WHERE ${conditions.join(' AND ')}
@@ -63,8 +65,34 @@ export default defineEventHandler(async (event): Promise<GetNotificationInboxRes
   )
 
   const attachmentsByNotification = new Map<number, AttachmentItem[]>()
+  const shiftPlanByNotification = new Map<number, NonNullable<NotificationInboxItem['shiftPlan']>>()
   if (rows.length) {
     const settings = await getNotificationSettings()
+
+    const shiftPlanEvents = new Map<number, number>()
+    for (const row of rows) {
+      let payload: Record<string, any> | null = null
+      try {
+        payload = row.payload ? JSON.parse(row.payload) : null
+      } catch {
+        payload = null
+      }
+      const request = shiftPlanRequestFor(row.type_key as NotificationTypeKey, payload, settings)
+      if (request) shiftPlanEvents.set(row.notification_id, request.eventId)
+    }
+    if (shiftPlanEvents.size) {
+      const eventIds = [...new Set(shiftPlanEvents.values())]
+      const eventRows = await query<Array<{ id: number, name: string }>>(
+        `SELECT id, name FROM events WHERE id IN (${eventIds.map(() => '?').join(',')})`,
+        eventIds,
+      )
+      const names = new Map(eventRows.map(eventRow => [Number(eventRow.id), String(eventRow.name)]))
+      for (const [notificationId, eventId] of shiftPlanEvents) {
+        // A deleted event has no plan left to offer.
+        const eventName = names.get(eventId)
+        if (eventName !== undefined) shiftPlanByNotification.set(notificationId, { eventId, eventName })
+      }
+    }
     const ownSelections = await loadAttachmentSelections(NOTIFICATION_ENTITY_TYPE, [...new Set(rows.map(row => row.notification_id))])
 
     const selections = new Map<number, AttachmentSelection>()
@@ -110,6 +138,7 @@ export default defineEventHandler(async (event): Promise<GetNotificationInboxRes
       sentAt: row.sent_at,
       readAt: row.read_at,
       attachments: attachmentsByNotification.get(row.notification_id) ?? [],
+      shiftPlan: shiftPlanByNotification.get(row.notification_id) ?? null,
     })),
     unreadCount: Number(unreadCount),
   }

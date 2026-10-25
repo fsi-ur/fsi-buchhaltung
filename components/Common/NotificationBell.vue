@@ -125,12 +125,12 @@
                   <span class="mt-1 flex items-center gap-2">
                     <span class="truncate text-[11px] text-base-400">{{ typeLabel(item.typeKey) }}</span>
                     <span
-                      v-if="item.attachments.length"
+                      v-if="item.attachments.length || item.shiftPlan"
                       class="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-base-400"
-                      :title="t('notifications.attachmentCount', { count: item.attachments.length })"
+                      :title="t('notifications.attachmentCount', { count: item.attachments.length + (item.shiftPlan ? 1 : 0) })"
                     >
                       <Icon name="material-symbols:attach-file-rounded" class="h-3.5 w-3.5" aria-hidden="true" />
-                      {{ item.attachments.length }}
+                      {{ item.attachments.length + (item.shiftPlan ? 1 : 0) }}
                     </span>
                     <Icon
                       name="material-symbols:chevron-right-rounded"

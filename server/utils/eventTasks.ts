@@ -1,7 +1,8 @@
 import type mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import type { EventTask, EventTaskMember, EventTaskSubdivision, SaveEventTask } from '~/types/event'
-import { enqueueNotification, dropFutureReminders } from '~/server/utils/notifications/enqueue'
+import { dropFutureReminders } from '~/server/utils/notifications/enqueue'
+import { queueTaskChanges, type TaskChangeInput } from '~/server/utils/notifications/changeDigest'
 
 interface EventTaskRow {
   id: number
@@ -260,6 +261,43 @@ async function syncTaskSubdivisions(
   }
 }
 
+/**
+ * Everyone a task reaches — named directly or through one of its subdivisions — so an assignment
+ * notice goes to each person once, however many ways they are on the task.
+ */
+async function effectiveTaskMemberIds(memberIds: number[], subdivisionIds: number[], conn: mariadb.PoolConnection): Promise<Set<number>> {
+  const result = new Set(memberIds)
+  if (subdivisionIds.length) {
+    const rows = await query<{ member_id: number }[]>(
+      `SELECT DISTINCT sm.member_id
+       FROM subdivision_members sm
+       JOIN members m ON m.id = sm.member_id
+       WHERE sm.subdivision_id IN (${subdivisionIds.map(() => '?').join(',')}) AND m.status != 'left'`,
+      subdivisionIds,
+      conn,
+    )
+    for (const row of rows) result.add(Number(row.member_id))
+  }
+  return result
+}
+
+async function loadTaskAssignment(taskId: number, conn: mariadb.PoolConnection) {
+  const memberRows = await query<{ member_id: number }[]>(
+    `SELECT member_id FROM event_task_members WHERE task_id = ?`,
+    [taskId],
+    conn,
+  )
+  const subdivisionRows = await query<{ subdivision_id: number }[]>(
+    `SELECT subdivision_id FROM event_task_subdivisions WHERE task_id = ?`,
+    [taskId],
+    conn,
+  )
+  return {
+    memberIds: memberRows.map(r => Number(r.member_id)),
+    subdivisionIds: subdivisionRows.map(r => Number(r.subdivision_id)),
+  }
+}
+
 /** Ids of the event's tasks that are linked to a checklist and therefore take their status from it. */
 export async function getChecklistControlledTaskIds(eventId: number, conn?: mariadb.PoolConnection): Promise<number[]> {
   const rows = await query<{ task_id: number }[]>(
@@ -309,9 +347,23 @@ export async function replaceEventTasks({
   const relationError = await validateRelatedIds(allMemberIds, allSubdivisionIds, conn)
   if (relationError) return relationError
 
+  const taskChanges: TaskChangeInput[] = []
+  const taskEntry = (id: number, task: { title: string, deadline: string | null }) => ({
+    task_id: id,
+    title: String(task.title),
+    deadline: task.deadline ?? null,
+  })
+
   const incomingIdSet = new Set(incomingIds)
   for (const id of existingIds) {
     if (incomingIdSet.has(id)) continue
+
+    // Withdraws a not-yet-sent "new task" mention for a task that no longer exists.
+    const assignment = await loadTaskAssignment(id, conn)
+    for (const memberId of await effectiveTaskMemberIds(assignment.memberIds, assignment.subdivisionIds, conn)) {
+      taskChanges.push({ memberId, change: 'removed', entry: taskEntry(id, existingById.get(id)!) })
+    }
+
     await query(`DELETE FROM event_tasks WHERE id = ? AND event_id = ?`, [id, eventId], conn)
   }
 
@@ -358,44 +410,16 @@ export async function replaceEventTasks({
       taskId = Number(result.insertId)
     }
 
-    const memberRows = await query<{ member_id: number }[]>(
-      `SELECT member_id FROM event_task_members WHERE task_id = ?`,
-      [taskId],
-      conn,
-    )
-    const subdivisionRows = await query<{ subdivision_id: number }[]>(
-      `SELECT subdivision_id FROM event_task_subdivisions WHERE task_id = ?`,
-      [taskId],
-      conn,
-    )
+    const { memberIds: existingMemberIds, subdivisionIds: existingSubdivisionIds } = await loadTaskAssignment(taskId, conn)
 
-    const existingMemberIds = memberRows.map(r => Number(r.member_id))
-    const existingSubdivisionIds = subdivisionRows.map(r => Number(r.subdivision_id))
-    const addedMemberIds = task.member_ids.filter(id => !existingMemberIds.includes(id))
-    const addedSubdivisionIds = task.subdivision_ids.filter(id => !existingSubdivisionIds.includes(id))
-
-    const taskPayload = {
-      event_id: eventId,
-      event_name: eventRow?.name ?? '',
-      task_title: task.title,
-      task_deadline: task.deadline,
+    const before = await effectiveTaskMemberIds(existingMemberIds, existingSubdivisionIds, conn)
+    const after = await effectiveTaskMemberIds(task.member_ids, task.subdivision_ids, conn)
+    const entry = taskEntry(taskId, task)
+    for (const memberId of after) {
+      if (!before.has(memberId)) taskChanges.push({ memberId, change: 'added', entry })
     }
-
-    if (addedMemberIds.length) {
-      await enqueueNotification({
-        type: 'task.assigned',
-        payload: taskPayload,
-        recipients: { kind: 'members', memberIds: addedMemberIds },
-        createdByUserId: actingUserId ?? null,
-      }, conn)
-    }
-    if (addedSubdivisionIds.length) {
-      await enqueueNotification({
-        type: 'task.assigned',
-        payload: taskPayload,
-        recipients: { kind: 'subdivisions', subdivisionIds: addedSubdivisionIds },
-        createdByUserId: actingUserId ?? null,
-      }, conn)
+    for (const memberId of before) {
+      if (!after.has(memberId)) taskChanges.push({ memberId, change: 'removed', entry })
     }
     if (deadlineChanged) {
       await dropFutureReminders({ type: 'task.deadline_reminder', entityId: taskId }, conn)
@@ -404,6 +428,13 @@ export async function replaceEventTasks({
     await syncTaskMembers(taskId, existingMemberIds, task.member_ids, conn)
     await syncTaskSubdivisions(taskId, existingSubdivisionIds, task.subdivision_ids, conn)
   }
+
+  await queueTaskChanges({
+    event: { id: eventId, name: eventRow?.name ?? '' },
+    changes: taskChanges,
+    actingUserId: actingUserId ?? null,
+    conn,
+  })
 
   return null
 }

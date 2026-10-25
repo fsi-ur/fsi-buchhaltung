@@ -89,7 +89,9 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     descriptionKey: 'notifications.types.shift.assigned.description',
     userConfigurable: true,
     audience: 'assignees',
-    variables: ['member_name', 'event_name', 'shift_name', 'shift_start', 'shift_end', 'location'],
+    // `shift_name`/`shift_start`/`shift_end` describe the first entry of the summary; `shift_list`
+    // lists every shift that was added, removed or changed within the bundling window.
+    variables: ['member_name', 'event_name', 'shift_list', 'shift_name', 'shift_start', 'shift_end', 'location'],
     link: shiftLink,
   },
   {
@@ -99,7 +101,9 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     descriptionKey: 'notifications.types.shift.removed.description',
     userConfigurable: true,
     audience: 'assignees',
-    variables: ['member_name', 'event_name', 'shift_name', 'shift_start', 'shift_end', 'location'],
+    // `shift_name`/`shift_start`/`shift_end` describe the first entry of the summary; `shift_list`
+    // lists every shift that was added, removed or changed within the bundling window.
+    variables: ['member_name', 'event_name', 'shift_list', 'shift_name', 'shift_start', 'shift_end', 'location'],
     link: shiftLink,
   },
   {
@@ -109,7 +113,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     descriptionKey: 'notifications.types.shift.changed.description',
     userConfigurable: true,
     audience: 'assignees',
-    variables: ['member_name', 'event_name', 'shift_name', 'shift_start', 'shift_end', 'location', 'changes'],
+    variables: ['member_name', 'event_name', 'shift_list', 'shift_name', 'shift_start', 'shift_end', 'location', 'changes'],
     link: shiftLink,
   },
   {
@@ -120,7 +124,9 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     userConfigurable: true,
     audience: 'assignees',
     schedule: { defaultLeadMinutes: [1440, 120], anchor: 'shift.starts_at' },
-    variables: ['member_name', 'event_name', 'shift_name', 'shift_start', 'shift_end', 'location', 'lead_text'],
+    // `shift_name`/`shift_start` are the first shift; `shift_list` every shift of the person that is
+    // folded into this one reminder (see server/utils/notifications/clusters.ts).
+    variables: ['member_name', 'event_name', 'shift_list', 'shift_name', 'shift_start', 'shift_end', 'location', 'lead_text'],
     link: shiftLink,
   },
   {
@@ -131,8 +137,9 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     userConfigurable: true,
     audience: 'organizers',
     schedule: { defaultLeadMinutes: [2880], anchor: 'shift.starts_at' },
-    // `assigned_people` is how many signed up, `missing_people` how many are still needed.
-    variables: ['event_name', 'shift_name', 'shift_start', 'shift_end', 'location', 'assigned_people', 'missing_people', 'required_people'],
+    // One warning per event and lead time: `shift_list` holds every understaffed shift it covers,
+    // the counts are summed over them; `shift_name`/`shift_start`/`shift_end` are the first one.
+    variables: ['event_name', 'shift_list', 'shift_name', 'shift_start', 'shift_end', 'location', 'assigned_people', 'missing_people', 'required_people', 'lead_text'],
     link: shiftLink,
   },
   {
@@ -142,7 +149,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     descriptionKey: 'notifications.types.task.assigned.description',
     userConfigurable: true,
     audience: 'assignees',
-    variables: ['member_name', 'event_name', 'task_title', 'task_deadline'],
+    variables: ['member_name', 'event_name', 'task_list', 'task_title', 'task_deadline'],
     link: taskLink,
   },
   {
@@ -153,7 +160,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     userConfigurable: true,
     audience: 'assignees',
     schedule: { defaultLeadMinutes: [2880, 480], anchor: 'task.deadline' },
-    variables: ['member_name', 'event_name', 'task_title', 'task_deadline', 'lead_text'],
+    variables: ['member_name', 'event_name', 'task_list', 'task_title', 'task_deadline', 'lead_text'],
     link: taskLink,
   },
   {
@@ -163,7 +170,9 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     descriptionKey: 'notifications.types.task.overdue.description',
     userConfigurable: true,
     audience: 'organizers',
-    variables: ['event_name', 'task_title', 'task_deadline', 'days_overdue'],
+    // A digest per event: `task_list` holds every overdue task, `task_count` how many there are,
+    // `days_overdue` the longest overdue one.
+    variables: ['event_name', 'task_list', 'task_count', 'task_title', 'task_deadline', 'days_overdue'],
     link: taskLink,
   },
   {
@@ -286,5 +295,17 @@ export const MEMBER_WELCOME_TYPES = {
 } as const satisfies Record<string, NotificationTypeKey>
 
 export const MEMBER_WELCOME_TYPE_KEYS: NotificationTypeKey[] = Object.values(MEMBER_WELCOME_TYPES)
+
+/**
+ * Types that may carry the event's shift plan as PDF, with the recipient's own shifts highlighted —
+ * switched on per type in the settings (`shift_plan_pdf`). A custom message picks an event instead.
+ */
+export const SHIFT_PLAN_PDF_TYPES: NotificationTypeKey[] = ['shift.assigned', 'shift.removed', 'shift.changed', 'shift.reminder']
+
+/** Upper bound of the change bundling window — beyond two hours a "summary" turns into a stale surprise. */
+export const CHANGE_BUNDLE_MAX_MINUTES = 120
+
+/** Shift/task change types collected into one summary per person and event (changeDigest.ts). */
+export const SHIFT_CHANGE_TYPES: NotificationTypeKey[] = ['shift.assigned', 'shift.changed', 'shift.removed']
 
 export const SELF_ACTION_EXEMPT_TYPES: NotificationTypeKey[] = ['shift.assigned', 'shift.removed', 'task.assigned']

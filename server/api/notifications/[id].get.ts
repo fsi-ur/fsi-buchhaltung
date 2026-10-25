@@ -25,8 +25,8 @@ export default defineEventHandler(async (event): Promise<GetNotificationDetailRe
   const id = getNumericRouteParam(event)
   if (!id) return { ok: false, error: 'Invalid id' }
 
-  const [notificationRow] = await query<Array<{ id: number, type_key: string, subject_override: string | null, body_override: string | null, status: string, scheduled_for: string, recipient_rule: string, channels: string | null }>>(
-    `SELECT id, type_key, subject_override, body_override, status, scheduled_for, recipient_rule, channels
+  const [notificationRow] = await query<Array<{ id: number, type_key: string, subject_override: string | null, body_override: string | null, status: string, scheduled_for: string, recipient_rule: string, channels: string | null, payload: string | null }>>(
+    `SELECT id, type_key, subject_override, body_override, status, scheduled_for, recipient_rule, channels, payload
      FROM notifications WHERE id = ? LIMIT 1`,
     [id],
   )
@@ -43,6 +43,14 @@ export default defineEventHandler(async (event): Promise<GetNotificationDetailRe
   )
 
   const attachments = await loadAttachmentItems(await getNotificationAttachments(id))
+
+  let payload: Record<string, any> = {}
+  try {
+    payload = notificationRow.payload ? JSON.parse(notificationRow.payload) : {}
+  } catch {
+    payload = {}
+  }
+  const shiftPlanEventId = Number(payload.shift_plan_event_id)
 
   return {
     ok: true,
@@ -67,6 +75,9 @@ export default defineEventHandler(async (event): Promise<GetNotificationDetailRe
         sentAt: row.sent_at,
       })),
       attachments,
+      shiftPlan: Number.isInteger(shiftPlanEventId) && shiftPlanEventId > 0
+        ? { eventId: shiftPlanEventId, includeDescriptions: Boolean(payload.shift_plan_descriptions) }
+        : null,
     },
   }
 })

@@ -1,13 +1,11 @@
-export async function downloadShiftPlanPdf(
-  eventId: number,
-  options: { includeDescriptions: boolean, highlightOwn?: boolean },
+async function downloadPdf(
+  url: string,
+  query: Record<string, string>,
+  fallbackFileName: string,
 ): Promise<{ ok: true } | { ok: false, error?: string }> {
-  const response = await apiFetch.raw<Blob>(`/api/events/${eventId}/shifts/pdf`, {
+  const response = await apiFetch.raw<Blob>(url, {
     responseType: 'blob',
-    query: {
-      descriptions: options.includeDescriptions ? '1' : '0',
-      own: options.highlightOwn ? '1' : '0',
-    },
+    query,
   })
   const blob = response._data
 
@@ -21,7 +19,7 @@ export async function downloadShiftPlanPdf(
   }
 
   const disposition = response.headers.get('content-disposition') ?? ''
-  const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? `Schichtplan_${eventId}.pdf`
+  const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? fallbackFileName
 
   const objectUrl = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -33,4 +31,19 @@ export async function downloadShiftPlanPdf(
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
 
   return { ok: true }
+}
+
+export async function downloadShiftPlanPdf(
+  eventId: number,
+  options: { includeDescriptions: boolean, highlightOwn?: boolean },
+): Promise<{ ok: true } | { ok: false, error?: string }> {
+  return downloadPdf(`/api/events/${eventId}/shifts/pdf`, {
+    descriptions: options.includeDescriptions ? '1' : '0',
+    own: options.highlightOwn ? '1' : '0',
+  }, `Schichtplan_${eventId}.pdf`)
+}
+
+/** The personal shift plan an inbox entry came with (see server/api/notifications/inbox/[id]/shift-plan.get.ts). */
+export async function downloadNotificationShiftPlan(deliveryId: number): Promise<{ ok: true } | { ok: false, error?: string }> {
+  return downloadPdf(`/api/notifications/inbox/${deliveryId}/shift-plan`, {}, 'Schichtplan.pdf')
 }

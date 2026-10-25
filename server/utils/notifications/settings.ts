@@ -1,5 +1,5 @@
 import { query } from '~/server/utils/db'
-import { NOTIFICATION_TYPE_MAP, type NotificationTypeKey } from '~/config/notificationTypes'
+import { NOTIFICATION_TYPE_MAP, SHIFT_PLAN_PDF_TYPES, CHANGE_BUNDLE_MAX_MINUTES, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
 import { normalizeAttachmentSelection } from '~/server/utils/attachments'
@@ -14,6 +14,8 @@ const NOTIFICATION_SETTING_KEYS = {
   templates: 'notifications_templates',
   template_attachments: 'notifications_template_attachments',
   member_welcome: 'notifications_member_welcome',
+  change_bundle_minutes: 'notifications_change_bundle_minutes',
+  shift_plan_pdf: 'notifications_shift_plan_pdf',
   email_from_name: 'notifications_email_from_name',
   email_subject_prefix: 'notifications_email_subject_prefix',
   email_footer: 'notifications_email_footer',
@@ -41,6 +43,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   templates: {},
   template_attachments: {},
   member_welcome: { delay_days: 0, send_time: '09:00' },
+  change_bundle_minutes: 10,
+  shift_plan_pdf: {},
   email_from_name: '',
   email_subject_prefix: '',
   email_footer: '',
@@ -186,11 +190,32 @@ export function normalizeMemberWelcome(input: unknown): { ok: true, value: Notif
   return { ok: true, value: { delay_days: delayDays, send_time: sendTime } }
 }
 
+export function normalizeChangeBundleMinutes(input: unknown): { ok: true, value: number } | { ok: false, error: string } {
+  if (input === undefined || input === null || input === '') return { ok: true, value: DEFAULT_NOTIFICATION_SETTINGS.change_bundle_minutes }
+  const value = Number(input)
+  if (!Number.isInteger(value) || value < 0 || value > CHANGE_BUNDLE_MAX_MINUTES) {
+    return { ok: false, error: `Das Bündelungsfenster muss zwischen 0 und ${CHANGE_BUNDLE_MAX_MINUTES} Minuten liegen.` }
+  }
+  return { ok: true, value }
+}
+
+export function normalizeShiftPlanPdf(input: unknown): NotificationSettings['shift_plan_pdf'] {
+  if (!input || typeof input !== 'object') return {}
+  const result: NotificationSettings['shift_plan_pdf'] = {}
+  for (const [typeKey, raw] of Object.entries(input as Record<string, any>)) {
+    if (!SHIFT_PLAN_PDF_TYPES.includes(typeKey as NotificationTypeKey)) continue
+    if (!raw || typeof raw !== 'object') continue
+    result[typeKey as NotificationTypeKey] = { include_descriptions: Boolean(raw.include_descriptions) }
+  }
+  return result
+}
+
 export function normalizeNotificationSettings(input: Partial<NotificationSettings> | null | undefined): NotificationSettings {
   const leadTimes = normalizeLeadTimes(input?.lead_times)
   const templates = normalizeTemplates(input?.templates)
   const templateAttachments = normalizeTemplateAttachments(input?.template_attachments)
   const memberWelcome = normalizeMemberWelcome(input?.member_welcome)
+  const changeBundleMinutes = normalizeChangeBundleMinutes(input?.change_bundle_minutes)
   const retentionDays = Number(input?.retention_days)
   const inboxRetentionDays = Number(input?.inbox_retention_days)
   const quietHours = input?.quiet_hours && typeof input.quiet_hours === 'object' ? input.quiet_hours : DEFAULT_NOTIFICATION_SETTINGS.quiet_hours
@@ -209,6 +234,8 @@ export function normalizeNotificationSettings(input: Partial<NotificationSetting
     templates: templates.ok ? templates.value : DEFAULT_NOTIFICATION_SETTINGS.templates,
     template_attachments: templateAttachments.ok ? templateAttachments.value : DEFAULT_NOTIFICATION_SETTINGS.template_attachments,
     member_welcome: memberWelcome.ok ? memberWelcome.value : { ...DEFAULT_NOTIFICATION_SETTINGS.member_welcome },
+    change_bundle_minutes: changeBundleMinutes.ok ? changeBundleMinutes.value : DEFAULT_NOTIFICATION_SETTINGS.change_bundle_minutes,
+    shift_plan_pdf: normalizeShiftPlanPdf(input?.shift_plan_pdf),
     email_from_name: String(input?.email_from_name ?? DEFAULT_NOTIFICATION_SETTINGS.email_from_name).trim(),
     email_subject_prefix: String(input?.email_subject_prefix ?? DEFAULT_NOTIFICATION_SETTINGS.email_subject_prefix).trim(),
     email_footer: String(input?.email_footer ?? DEFAULT_NOTIFICATION_SETTINGS.email_footer),
@@ -234,6 +261,8 @@ export function validateNotificationSettings(input: Partial<NotificationSettings
   if (!templateAttachments.ok) return templateAttachments.error
   const memberWelcome = normalizeMemberWelcome(input?.member_welcome)
   if (!memberWelcome.ok) return memberWelcome.error
+  const changeBundleMinutes = normalizeChangeBundleMinutes(input?.change_bundle_minutes)
+  if (!changeBundleMinutes.ok) return changeBundleMinutes.error
   return null
 }
 
@@ -260,6 +289,10 @@ export async function getNotificationSettings(conn?: DbConn): Promise<Notificati
     templates: parseJson(values.get(NOTIFICATION_SETTING_KEYS.templates), DEFAULT_NOTIFICATION_SETTINGS.templates),
     template_attachments: parseJson(values.get(NOTIFICATION_SETTING_KEYS.template_attachments), DEFAULT_NOTIFICATION_SETTINGS.template_attachments),
     member_welcome: parseJson(values.get(NOTIFICATION_SETTING_KEYS.member_welcome), DEFAULT_NOTIFICATION_SETTINGS.member_welcome),
+    change_bundle_minutes: values.get(NOTIFICATION_SETTING_KEYS.change_bundle_minutes)
+      ? Number(values.get(NOTIFICATION_SETTING_KEYS.change_bundle_minutes))
+      : DEFAULT_NOTIFICATION_SETTINGS.change_bundle_minutes,
+    shift_plan_pdf: parseJson(values.get(NOTIFICATION_SETTING_KEYS.shift_plan_pdf), DEFAULT_NOTIFICATION_SETTINGS.shift_plan_pdf),
     email_from_name: values.get(NOTIFICATION_SETTING_KEYS.email_from_name),
     email_subject_prefix: values.get(NOTIFICATION_SETTING_KEYS.email_subject_prefix),
     email_footer: values.get(NOTIFICATION_SETTING_KEYS.email_footer),
@@ -287,6 +320,8 @@ export async function saveNotificationSettings(settings: Partial<NotificationSet
     [NOTIFICATION_SETTING_KEYS.templates, JSON.stringify(normalized.templates)],
     [NOTIFICATION_SETTING_KEYS.template_attachments, JSON.stringify(normalized.template_attachments)],
     [NOTIFICATION_SETTING_KEYS.member_welcome, JSON.stringify(normalized.member_welcome)],
+    [NOTIFICATION_SETTING_KEYS.change_bundle_minutes, String(normalized.change_bundle_minutes)],
+    [NOTIFICATION_SETTING_KEYS.shift_plan_pdf, JSON.stringify(normalized.shift_plan_pdf)],
     [NOTIFICATION_SETTING_KEYS.email_from_name, normalized.email_from_name],
     [NOTIFICATION_SETTING_KEYS.email_subject_prefix, normalized.email_subject_prefix],
     [NOTIFICATION_SETTING_KEYS.email_footer, normalized.email_footer],

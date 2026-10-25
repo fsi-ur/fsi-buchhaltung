@@ -6,7 +6,9 @@ import { normalizeDeadline } from '~/server/utils/eventTasks'
 import { isTypeEnabled } from '~/server/utils/notifications/settings'
 import type { NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationSettings } from '~/types/notification'
-import type { DbConn } from '~/server/utils/notifications/types'
+import type { DbConn, ShiftListEntry, TaskListEntry } from '~/server/utils/notifications/types'
+import { clusterByLeadTime, findCluster } from '~/server/utils/notifications/clusters'
+import { diffLocalDates } from '~/shared/time'
 
 function toMysqlDatetime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ')
@@ -52,6 +54,8 @@ async function sweepShiftReminders(now: Date, settings: NotificationSettings, pl
       await enqueueNotification({
         type: 'shift.reminder',
         payload: {
+          // The person's other shifts of the event are folded in at send time (dispatch.ts).
+          shift_id: shift.id,
           event_id: shift.event_id,
           event_name: shift.event_name,
           shift_name: shift.name,
@@ -131,6 +135,7 @@ async function sweepTaskDeadlineReminders(now: Date, settings: NotificationSetti
       await enqueueNotification({
         type: 'task.deadline_reminder',
         payload: {
+          task_id: task.id,
           event_id: task.event_id,
           event_name: task.event_name,
           task_title: task.title,
@@ -231,55 +236,146 @@ function parseLeadMinutesList(value: string | null): number[] | null {
   return parsed.length ? parsed : null
 }
 
+export interface StaffingShiftRow {
+  id: number
+  event_id: number
+  name: string
+  starts_at: string
+  ends_at: string
+  required_people: number
+  assigned_count: number
+}
+
+/** Every shift of the given events with its current head count. */
+export async function loadShiftStaffing(eventIds: number[], conn?: DbConn): Promise<StaffingShiftRow[]> {
+  if (!eventIds.length) return []
+  const rows = await query<StaffingShiftRow[]>(
+    `SELECT ess.id, ess.event_id, ess.name, ess.starts_at, ess.ends_at, ess.required_people,
+            (SELECT COUNT(*) FROM event_shift_members esm WHERE esm.shift_id = ess.id) AS assigned_count
+     FROM event_shift_slots ess
+     WHERE ess.event_id IN (${eventIds.map(() => '?').join(',')})`,
+    eventIds,
+    conn,
+  )
+  return rows.map(row => ({
+    ...row,
+    id: Number(row.id),
+    event_id: Number(row.event_id),
+    required_people: Number(row.required_people),
+    assigned_count: Number(row.assigned_count),
+  }))
+}
+
+/**
+ * The understaffed shifts one warning covers: the group of the event's shifts that `leaderId` leads
+ * for this lead time (see clusters.ts). null when `leaderId` does not lead a group — another
+ * warning of the same event covers it.
+ */
+export function understaffedShiftsOfCluster(shifts: StaffingShiftRow[], leadMinutes: number, leaderId: number): ShiftListEntry[] | null {
+  const cluster = findCluster(shifts.map(shift => ({ id: shift.id, start: shift.starts_at, end: shift.ends_at })), leadMinutes, 'span', leaderId)
+  if (!cluster || cluster.leaderId !== leaderId) return null
+
+  const ids = new Set(cluster.ids)
+  return shifts
+    .filter(shift => ids.has(shift.id) && shift.assigned_count < shift.required_people)
+    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))
+    .map(shift => ({
+      shift_id: shift.id,
+      name: shift.name,
+      start: shift.starts_at,
+      end: shift.ends_at,
+      assigned: shift.assigned_count,
+      required: shift.required_people,
+    }))
+}
+
+/** Payload fields of the understaffing warning that depend on the current head counts. */
+export function understaffedPayload(entries: ShiftListEntry[]) {
+  const first = entries[0]!
+  return {
+    shift_list: entries,
+    shift_name: first.name,
+    shift_start: first.start,
+    shift_end: first.end,
+    required_people: entries.reduce((sum, entry) => sum + (entry.required ?? 0), 0),
+    assigned_people: entries.reduce((sum, entry) => sum + (entry.assigned ?? 0), 0),
+    missing_people: entries.reduce((sum, entry) => sum + Math.max(0, (entry.required ?? 0) - (entry.assigned ?? 0)), 0),
+  }
+}
+
+/**
+ * One warning per event and lead time instead of one per shift: the event's shifts are grouped like
+ * a person's shift reminders (clusters.ts, `span`), and each group with at least one understaffed
+ * shift gets a single warning, keyed and timed on the group's first shift. Which shifts are still
+ * short is re-read when it is sent (dispatch.ts).
+ */
 async function sweepShiftUnderstaffed(now: Date, settings: NotificationSettings, planned: Set<string>, conn?: DbConn) {
   // Switching the warning off is done through the per-type switch in the settings, which
   // `enqueueNotification` already honours; no lead times configured also means nothing to plan.
   const leadMinutes = settings.lead_times['shift.understaffed'] || []
   if (!leadMinutes.length) return
 
-  const shifts = await query<Array<{ id: number, event_id: number, name: string, starts_at: string, ends_at: string, location: string | null, required_people: number, event_name: string, assigned_count: number }>>(
-    `SELECT ess.id, ess.event_id, ess.name, ess.starts_at, ess.ends_at, ess.required_people, e.location, e.name AS event_name,
-            (SELECT COUNT(*) FROM event_shift_members esm WHERE esm.shift_id = ess.id) AS assigned_count
-     FROM event_shift_slots ess
-     JOIN events e ON e.id = ess.event_id
-     WHERE ess.starts_at >= ?`,
+  const events = await query<Array<{ id: number, name: string, location: string | null }>>(
+    `SELECT e.id, e.name, e.location
+     FROM events e
+     WHERE EXISTS (SELECT 1 FROM event_shift_slots ess WHERE ess.event_id = e.id AND ess.starts_at >= ?)`,
     [toMysqlDatetime(now)],
     conn,
   )
+  if (!events.length) return
 
-  for (const shift of shifts) {
-    const missing = shift.required_people - shift.assigned_count
-    if (missing <= 0) continue
+  const shifts = await loadShiftStaffing(events.map(row => Number(row.id)), conn)
 
-    const startsAt = new Date(shift.starts_at.replace(' ', 'T') + 'Z')
+  for (const eventRow of events) {
+    const eventId = Number(eventRow.id)
+    const eventShifts = shifts.filter(shift => shift.event_id === eventId)
+
     for (const lead of leadMinutes) {
-      const scheduledFor = new Date(startsAt.getTime() - lead * 60000)
-      if (scheduledFor.getTime() < now.getTime() - 15 * 60000) continue
-      if (planned.has(`shift.understaffed:${shift.id}:${lead}`)) continue
+      const clusters = clusterByLeadTime(eventShifts.map(shift => ({ id: shift.id, start: shift.starts_at, end: shift.ends_at })), lead, 'span')
 
-      await enqueueNotification({
-        type: 'shift.understaffed',
-        payload: {
-          shift_id: shift.id,
-          event_id: shift.event_id,
-          event_name: shift.event_name,
-          shift_name: shift.name,
-          shift_start: shift.starts_at,
-          shift_end: shift.ends_at,
-          location: shift.location,
-          required_people: shift.required_people,
-          assigned_people: shift.assigned_count,
-          missing_people: missing,
-        },
-        recipients: { kind: 'eventOrganizers', eventId: shift.event_id },
-        scheduledFor,
-        dedupeKey: `shift.understaffed:${shift.id}:${lead}`,
-      }, conn)
+      for (const cluster of clusters) {
+        const dedupeKey = `shift.understaffed:${cluster.leaderId}:${lead}`
+        if (planned.has(dedupeKey)) continue
+
+        const entries = understaffedShiftsOfCluster(eventShifts, lead, cluster.leaderId)
+        if (!entries?.length) continue
+
+        const leader = eventShifts.find(shift => shift.id === cluster.leaderId)!
+        const startsAt = new Date(leader.starts_at.replace(' ', 'T') + 'Z')
+        const scheduledFor = new Date(startsAt.getTime() - lead * 60000)
+        if (scheduledFor.getTime() < now.getTime() - 15 * 60000) continue
+
+        await enqueueNotification({
+          type: 'shift.understaffed',
+          payload: {
+            shift_id: cluster.leaderId,
+            event_id: eventId,
+            event_name: eventRow.name,
+            location: eventRow.location,
+            lead_minutes: lead,
+            ...understaffedPayload(entries),
+          },
+          recipients: { kind: 'eventOrganizers', eventId },
+          scheduledFor,
+          dedupeKey,
+        }, conn)
+      }
     }
   }
 }
 
-async function sweepTaskOverdue(now: Date, conn?: DbConn) {
+/**
+ * Overdue tasks are reported per event, and less often the longer they stay overdue: on day 1, 3
+ * and 7, then weekly. A digest goes out whenever one of the event's tasks hits such a day and lists
+ * every overdue task of the event, so a new straggler also brings the older ones back to mind.
+ */
+export function isOverdueReminderDay(daysOverdue: number): boolean {
+  if (daysOverdue < 1) return false
+  if (daysOverdue === 1 || daysOverdue === 3 || daysOverdue === 7) return true
+  return daysOverdue > 7 && daysOverdue % 7 === 0
+}
+
+async function sweepTaskOverdue(now: Date, planned: Set<string>, conn?: DbConn) {
   const tasks = await query<Array<{ id: number, event_id: number, title: string, deadline: string | null, event_name: string }>>(
     `SELECT et.id, et.event_id, et.title, et.deadline, e.name AS event_name
      FROM event_tasks et
@@ -290,26 +386,46 @@ async function sweepTaskOverdue(now: Date, conn?: DbConn) {
   )
 
   const today = toMysqlDatetime(now).slice(0, 10)
+  const byEvent = new Map<number, { name: string, entries: TaskListEntry[] }>()
 
   for (const task of tasks) {
     const deadline = normalizeDeadline(task.deadline)
     if (!deadline || deadline.slice(0, 10) >= today) continue
 
-    const deadlineDate = new Date(`${deadline.length === 10 ? `${deadline}T00:00:00` : deadline.replace(' ', 'T')}Z`)
-    const daysOverdue = Math.max(1, Math.floor((now.getTime() - deadlineDate.getTime()) / 86400000))
+    const eventId = Number(task.event_id)
+    const group = byEvent.get(eventId) ?? { name: task.event_name, entries: [] }
+    group.entries.push({
+      task_id: Number(task.id),
+      title: task.title,
+      deadline,
+      days_overdue: diffLocalDates(deadline.slice(0, 10), today),
+    })
+    byEvent.set(eventId, group)
+  }
+
+  for (const [eventId, group] of byEvent) {
+    if (!group.entries.some(entry => isOverdueReminderDay(entry.days_overdue ?? 0))) continue
+
+    const dedupeKey = `task.overdue:event:${eventId}:${today}`
+    if (planned.has(dedupeKey)) continue
+
+    const entries = group.entries.sort((a, b) => (b.days_overdue ?? 0) - (a.days_overdue ?? 0))
+    const first = entries[0]!
 
     await enqueueNotification({
       type: 'task.overdue',
       payload: {
-        event_id: task.event_id,
-        event_name: task.event_name,
-        task_title: task.title,
-        task_deadline: task.deadline,
-        days_overdue: daysOverdue,
+        event_id: eventId,
+        event_name: group.name,
+        task_list: entries,
+        task_count: entries.length,
+        task_title: first.title,
+        task_deadline: first.deadline,
+        days_overdue: first.days_overdue,
       },
-      recipients: { kind: 'eventOrganizers', eventId: task.event_id },
+      recipients: { kind: 'eventOrganizers', eventId },
       scheduledFor: now,
-      dedupeKey: `task.overdue:${task.id}:${today}`,
+      dedupeKey,
     }, conn)
   }
 }
@@ -416,5 +532,5 @@ export async function sweepReminders(now: Date, settings: NotificationSettings, 
   await sweepTaskDeadlineReminders(now, settings, planned, conn)
   await sweepShiftUnderstaffed(now, settings, planned, conn)
   await sweepAppointmentReminders(now, settings, planned, conn)
-  await sweepTaskOverdue(now, conn)
+  await sweepTaskOverdue(now, planned, conn)
 }

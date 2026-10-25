@@ -2,6 +2,7 @@ import type mariadb from 'mariadb'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
 import type { MailAttachment } from '~/server/utils/attachments'
+import type { ChangedField } from '~/server/utils/notifications/changeDescription'
 
 export type RecipientRule =
   | { kind: 'members', memberIds: number[] }
@@ -46,3 +47,28 @@ export interface NotificationChannel {
 }
 
 export type DbConn = mariadb.PoolConnection
+
+/**
+ * One line of the `{shift_list}` variable. Stored structured in the payload and only turned into
+ * text by render.ts, once the recipient's locale is known.
+ *  - `change` is set by the bundled change summary (changeDigest.ts),
+ *  - `assigned`/`required` by the understaffing warning.
+ */
+export interface ShiftListEntry {
+  shift_id: number
+  name: string
+  start: string
+  end: string
+  change?: 'added' | 'removed' | 'changed'
+  changes?: ChangedField[]
+  assigned?: number
+  required?: number
+}
+
+/** One line of the `{task_list}` variable; `days_overdue` only in the overdue digest. */
+export interface TaskListEntry {
+  task_id: number
+  title: string
+  deadline: string | null
+  days_overdue?: number
+}
