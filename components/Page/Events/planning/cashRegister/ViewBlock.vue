@@ -1,5 +1,7 @@
 <template>
-  <div>
+  <!-- min-w-0: as a grid item this would otherwise grow to the chart's full
+       width instead of letting it scroll. -->
+  <div class="min-w-0">
     <h3 v-if="'title' in block && block.title" class="mb-2 text-sm font-semibold text-base-700">{{ block.title }}</h3>
 
     <template v-if="block.type === 'table'">

@@ -80,7 +80,7 @@
 
           <div
             v-else-if="section.type === 'card'"
-            class="-mx-6 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
+            class="-mx-6 min-w-0 bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg"
             :class="section.width === 'half' ? '' : 'lg:col-span-2'"
           >
             <div class="mb-3 flex items-center gap-2">

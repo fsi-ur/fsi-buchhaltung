@@ -38,12 +38,15 @@ const { toLocalDateTime } = useAppTimeZone()
 const MAX_BAR_HEIGHT = 160
 
 // `hour` is an instant (start of a UTC hour), shown as the wall clock of the
-// app time zone. Labels are derived once per change, not per render.
+// app time zone. Labels are derived once per change, not per render. Hours
+// without revenue are skipped — they only stretch the chart; the day label
+// still marks where a new day starts.
 const bars = computed(() => {
-  const max = props.points.reduce((highest, point) => Math.max(highest, point.value), 0)
+  const points = props.points.filter(point => point.value !== 0)
+  const max = points.reduce((highest, point) => Math.max(highest, point.value), 0)
   let previousDate = ''
 
-  return props.points.map((point) => {
+  return points.map((point) => {
     const local = toLocalDateTime(point.hour)
     const date = local.slice(0, 10)
     const dayLabel = date === previousDate ? '' : `${date.slice(8, 10)}.${date.slice(5, 7)}.`
