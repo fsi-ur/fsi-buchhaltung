@@ -192,23 +192,26 @@ describe('migrations', () => {
   })
 
   /**
-   * The `app` service in docker-compose.yml runs the migrations on every deploy. If its
-   * order and the shared list disagree, a fresh install and the test database get
-   * different schemas -- exactly the kind of drift that makes a green test run worthless.
+   * The `app` service in docker-compose.yml runs the migrations on every deploy. It must go
+   * through scripts/migrate.mjs (which walks the shared list) rather than naming scripts itself,
+   * or a fresh install and the test database get different schemas -- exactly the kind of drift
+   * that makes a green test run worthless.
    */
-  it('runs them in docker-compose.yml in the same order', () => {
+  it('runs them in docker-compose.yml through scripts/migrate.mjs only', () => {
     const command = compose.match(/command:\s*sh -c "([^"]+)"/)?.[1]
     expect(command, 'app service command not found in docker-compose.yml').toBeTruthy()
 
-    const inCompose = [...command!.matchAll(/node scripts\/(migrate-[\w-]+\.mjs)/g)].map(match => match[1]!)
-
-    expect(inCompose).toEqual(MIGRATION_SCRIPTS)
+    expect(command).toContain('node scripts/migrate.mjs')
+    expect(command!.match(/scripts\/migrate-[\w-]+\.mjs/g) ?? []).toEqual([])
   })
 
   it('runs the audit setup after every migration', () => {
-    const command = compose.match(/command:\s*sh -c "([^"]+)"/)![1]!
-    const lastMigration = command.lastIndexOf('migrate-')
-    expect(command.indexOf('setup:audit')).toBeGreaterThan(lastMigration)
+    const migrate = read('scripts/migrate.mjs')
+    expect(migrate).toContain('[...MIGRATION_SCRIPTS, \'ensure-audit-infrastructure.mjs\']')
+  })
+
+  it('exposes setup:migrate as the full migration run', () => {
+    expect(packageJson.scripts['setup:migrate']).toContain('scripts/migrate.mjs')
   })
 
   it('exposes a setup:migrate script in package.json for each migration', () => {
