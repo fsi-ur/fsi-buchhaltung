@@ -305,7 +305,7 @@ export const messages = {
       },
       cashDiscrepancyDefaults: {
         title: 'Kassendifferenzen: Standardzuordnung',
-        text: 'Kassendifferenzen fließen immer als „Sonstiges: Kassendifferenzen“ in den Saldo und alle Exporte ein. Gehört die Zählung zu einer Veranstaltung, wird die Differenz nach deren Kostenstellenaufteilung zugeordnet. Kassenbestandsprüfungen und Veranstaltungen ohne Aufteilung landen bei dieser Sphäre und Kostenstelle.',
+        text: 'Kassendifferenzen fließen immer als „Sonstiges: Kassendifferenzen“ in den Saldo ein, in den Rechnungsabschluss nach Kostenstellen aber erst nach Bestätigung. Gehört die Zählung zu einer Veranstaltung, wird die Differenz nach deren Kostenstellenaufteilung zugeordnet. Kassenbestandsprüfungen und Veranstaltungen ohne Aufteilung landen bei dieser Sphäre und Kostenstelle.',
         sphere: 'Sphäre',
         costCentre: 'Kostenstelle',
         spherePlaceholder: 'Sphäre suchen',
@@ -1518,7 +1518,7 @@ export const messages = {
     cashCount: {
       discrepancies: {
         title: 'Kassendifferenzen',
-        description: 'Abweichung zwischen Buchbestand (Soll) und gezähltem Bestand (Ist). In die Auswertungen geht die Summe über alle Kassen dieser Zählung ein – als „Sonstiges: Kassendifferenzen“ im Saldo, auch ohne Bestätigung. Mit dem Bestätigen wird sie akzeptiert und kann einer anderen Kostenstelle zugeordnet werden.',
+        description: 'Abweichung zwischen Buchbestand (Soll) und gezähltem Bestand (Ist). In die Auswertungen geht die Summe über alle Kassen dieser Zählung ein – als „Sonstiges: Kassendifferenzen“ im Saldo, auch ohne Bestätigung. In den Rechnungsabschluss nach Kostenstellen geht sie erst ein, wenn sie bestätigt ist; dabei kann sie einer anderen Kostenstelle zugeordnet werden.',
         savedStateHint: 'Berechnet aus dem gespeicherten Stand – Änderungen an der Zählung zuerst speichern.',
         register: 'Kasse {number}',
         registers: 'Kassen {numbers}',
@@ -3666,7 +3666,7 @@ export const messages = {
       },
       cashDiscrepancyDefaults: {
         title: 'Cash discrepancies: default assignment',
-        text: 'Cash discrepancies always count towards the net result and every export as "Other: cash discrepancies". When a count belongs to an event, the discrepancy follows the event\'s cost centre split. Register checks and events without a split go to this sphere and cost centre.',
+        text: 'Cash discrepancies always count towards the net result as "Other: cash discrepancies", but only reach the annual closing by cost centre once confirmed. When a count belongs to an event, the discrepancy follows the event\'s cost centre split. Register checks and events without a split go to this sphere and cost centre.',
         sphere: 'Sphere',
         costCentre: 'Cost centre',
         spherePlaceholder: 'Search sphere',
@@ -4879,7 +4879,7 @@ export const messages = {
     cashCount: {
       discrepancies: {
         title: 'Cash discrepancies',
-        description: 'Difference between the book balance (expected) and the counted amount (counted). Reports use the sum over all registers of this count — as "Other: cash discrepancies" in the net result, even unconfirmed. Confirming accepts it and lets you assign it to another cost centre.',
+        description: 'Difference between the book balance (expected) and the counted amount (counted). Reports use the sum over all registers of this count — as "Other: cash discrepancies" in the net result, even unconfirmed. It only reaches the annual closing by cost centre once confirmed; confirming also lets you assign it to another cost centre.',
         savedStateHint: 'Calculated from the saved state — save changes to the count first.',
         register: 'Register {number}',
         registers: 'Registers {numbers}',

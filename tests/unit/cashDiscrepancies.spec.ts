@@ -222,9 +222,23 @@ describe('aggregateCashDiscrepancyBreakdown', () => {
 
 describe('allocateCashDiscrepancies', () => {
   it('books a shortfall as expense and a surplus as income of each cost centre share', () => {
-    const items = buildCashDiscrepancyItems([discrepancy({ amount: -10 }), discrepancy({ cash_count_id: 2, event_id: null, amount: 2 })], context())
+    const items = buildCashDiscrepancyItems(
+      [discrepancy({ amount: -10 }), discrepancy({ cash_count_id: 2, event_id: null, amount: 2 })],
+      context({ bookings: new Map([[1, booking({ amount: -10 })], [2, booking({ cash_count_id: 2, amount: 2 })]]) }),
+    )
     const booked: Array<[number, number, number]> = []
     allocateCashDiscrepancies(items, (costCentreId, expense, income) => booked.push([costCentreId, expense, income]))
     expect(booked).toEqual([[10, 6, 0], [11, 4, 0], [90, 0, 2]])
+  })
+
+  it('leaves unconfirmed and stale differences out of the annual closing', () => {
+    const items = buildCashDiscrepancyItems(
+      [discrepancy({ amount: -10 }), discrepancy({ cash_count_id: 2, event_id: null, amount: 2 })],
+      context({ bookings: new Map([[2, booking({ cash_count_id: 2, amount: 3 })]]) }),
+    )
+    expect(items.map(item => item.status)).toEqual(['unconfirmed', 'stale'])
+    const booked: Array<[number, number, number]> = []
+    allocateCashDiscrepancies(items, (costCentreId, expense, income) => booked.push([costCentreId, expense, income]))
+    expect(booked).toEqual([])
   })
 })

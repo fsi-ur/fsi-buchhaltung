@@ -141,14 +141,16 @@ export function aggregateCashDiscrepancyBreakdown(
 }
 
 /**
- * Books each difference into the annual closing of its cost centres: a surplus as income, a
- * shortfall as expense. Unassigned differences have no cost centre row to land in.
+ * Books each confirmed difference into the annual closing of its cost centres: a surplus as
+ * income, a shortfall as expense. Unconfirmed and stale differences stay out until someone accepts
+ * them; unassigned ones have no cost centre row to land in.
  */
 export function allocateCashDiscrepancies(
   items: FinanceAnalysisCashDiscrepancyItem[],
   add: (costCentreId: number, expense: number, income: number) => void,
 ) {
   for (const item of items) {
+    if (item.status !== 'confirmed') continue
     for (const split of item.cost_centres) {
       const share = roundCurrency(item.amount * (Number(split.allocation_percentage || 0) / 100))
       if (share >= 0) add(split.cost_centre_id, 0, share)
