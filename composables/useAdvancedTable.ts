@@ -354,6 +354,8 @@ export function useAdvancedTable<T, K extends string>(
     pageSize,
     totalCount,
     totalPages,
+    /** All rows matching search and filters, sorted, across every page. */
+    filteredRows: sortedRows,
     processedRows,
     getFilter,
     isFilterActive,

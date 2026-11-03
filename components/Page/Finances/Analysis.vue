@@ -92,6 +92,8 @@
             :receipt-status-labels="filters.receiptStatusLabels.value"
             :invoice-status-labels="filters.invoiceStatusLabels.value"
             :can-view-bank-statements="canViewBankStatements"
+            :cost-centre-scope="appliedCostCentreScope"
+            :cost-centre-scope-label="appliedCostCentreScopeLabel"
             @open="openRecord"
           />
         </template>
@@ -120,6 +122,7 @@ import {
 } from '~/composables/useFinanceAnalysisExport'
 import type { DetailTabKey } from '~/components/Page/Finances/Analysis/DetailTables.vue'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
+import type { DocumentExportCostCentreScope } from '~/shared/documentExport'
 
 defineEmits<{
   (e: 'openMenu'): void
@@ -184,6 +187,22 @@ const appliedCostCentreLabel = computed(() => {
   return appliedState.value.includeChildCostCentres
     ? `${t('financeAnalysis.costCentre')}: ${label} ${t('financeAnalysis.includingChildrenSuffix')}`
     : `${t('financeAnalysis.costCentre')}: ${label}`
+})
+
+/**
+ * The cost centre the loaded figures are filtered to (the applied filters, not the ones being edited):
+ * a receipt export from the table is made in its context, so split receipts show their share for it.
+ */
+const appliedCostCentreScope = computed<DocumentExportCostCentreScope | null>(() => {
+  const id = appliedState.value?.selectedCostCentreId
+  if (typeof id !== 'number') return null
+  return { id, includeChildren: Boolean(appliedState.value?.includeChildCostCentres) }
+})
+
+const appliedCostCentreScopeLabel = computed(() => {
+  const id = appliedCostCentreScope.value?.id
+  const costCentre = id ? filters.costCentres.value.find(row => row.id === id) : null
+  return costCentre ? filters.costCentreOptionLabel(costCentre) : ''
 })
 
 /** Only the fields that actually change the figures — panel expansion state must not count. */

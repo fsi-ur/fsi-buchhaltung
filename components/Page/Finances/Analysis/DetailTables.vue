@@ -26,6 +26,8 @@
     <CommonAdvancedTable
       v-else-if="activeTabKey === 'receipts'"
       v-model:search="search"
+      v-model:selected="selectedReceiptIds"
+      :selectable="canExportReceipts"
       :rows="analysis.receipts"
       :columns="receiptColumns"
       :loading="loading"
@@ -33,6 +35,17 @@
       table-class="min-w-3xl"
       @row-open="$emit('open', { page: 'ReceiptCreate', id: $event.id })"
     >
+      <template #selection-actions="{ selectedRows, clearSelection }">
+        <CommonDocumentExportButton
+          source="receipts"
+          :rows="selectedRows"
+          :amount="(row: FinanceAnalysisReceiptItem) => row.total_amount"
+          :cost-centre="costCentreScope"
+          :cost-centre-label="costCentreScopeLabel"
+          @exported="clearSelection"
+        />
+      </template>
+
       <template #cell-status="{ row }">
         <CommonStatusBadge :label="receiptStatusLabels[row.status]" :tone="financeStatusTone(row.status)" />
       </template>
@@ -129,6 +142,8 @@ import type {
 import type { InvoiceStatus } from '~/types/invoice'
 import type { ReceiptStatus } from '~/types/receipt'
 import type { InvoiceDateField, ReceiptDateField } from '~/composables/useFinanceAnalysisFilters'
+import { useDocumentExport } from '~/composables/useDocumentExport'
+import type { DocumentExportCostCentreScope } from '~/shared/documentExport'
 
 export type DetailTabKey = 'receipts' | 'invoices' | 'cashCounts' | 'cashDiscrepancies' | 'bankStatements' | 'liquidity'
 
@@ -142,6 +157,9 @@ const props = defineProps<{
   receiptStatusLabels: Record<ReceiptStatus, string>
   invoiceStatusLabels: Record<InvoiceStatus, string>
   canViewBankStatements: boolean
+  /** Cost centre the analysis is filtered to; receipt exports from the table are made in its context. */
+  costCentreScope?: DocumentExportCostCentreScope | null
+  costCentreScopeLabel?: string
 }>()
 
 defineEmits<{
@@ -154,6 +172,8 @@ const { t } = useI18n()
 const { formatCurrency, formatDate, formatDateTime } = useLocaleFormatters()
 
 const search = ref('')
+const selectedReceiptIds = ref<Array<string | number>>([])
+const { canExport: canExportReceipts } = useDocumentExport('receipts')
 
 function canOpenBankStatement() {
   return props.canViewBankStatements

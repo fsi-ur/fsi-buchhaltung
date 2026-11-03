@@ -1,61 +1,120 @@
 <template>
   <div class="space-y-3">
-    <!-- Mobile toolbar: sorting, filtering, active filter chips -->
+    <!--
+      Toolbar: sorting, filtering and active filter chips (compact view — the table has them in its
+      header) plus the row selection with the consumer's bulk actions. In table view the row only
+      appears while something is selected.
+    -->
     <div
-      v-if="sortableColumns.length > 0 || filterableColumns.length > 0"
+      v-if="showToolbar"
       class="flex flex-wrap items-center gap-2"
-      :class="{ 'xl:hidden': viewMode === 'table' }"
+      :class="{ 'xl:hidden': viewMode === 'table' && !selectionActive }"
     >
-      <button
-        v-if="sortableColumns.length > 0"
-        type="button"
-        class="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-sm transition cursor-pointer hover:bg-base-50"
-        :class="activeSortColumn ? 'border-link-500 text-link-600' : 'border-base-300 text-base-600'"
-        @click="sortOpen = true"
+      <div
+        v-if="sortableColumns.length > 0 || filterableColumns.length > 0"
+        class="contents"
+        :class="{ 'xl:hidden': viewMode === 'table' }"
       >
-        <Icon name="material-symbols:swap-vert-rounded" class="text-base" />
-        <span>{{ activeSortColumn ? activeSortColumn.label : t('common.sort') }}</span>
-        <Icon v-if="activeSortColumn" :name="sortDirectionIcon" class="text-base" />
-      </button>
-
-      <button
-        v-if="filterableColumns.length > 0"
-        type="button"
-        class="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-sm transition cursor-pointer hover:bg-base-50"
-        :class="activeFilterColumns.length > 0 ? 'border-link-500 text-link-600' : 'border-base-300 text-base-600'"
-        @click="filterOpen = true"
-      >
-        <Icon name="material-symbols:filter-list-rounded" class="text-base" />
-        <span>{{ t('common.filter') }}</span>
-        <span
-          v-if="activeFilterColumns.length > 0"
-          class="rounded-full bg-link-600 px-1.5 text-xs font-medium text-white"
+        <button
+          v-if="sortableColumns.length > 0"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-sm transition cursor-pointer hover:bg-base-50"
+          :class="activeSortColumn ? 'border-link-500 text-link-600' : 'border-base-300 text-base-600'"
+          @click="sortOpen = true"
         >
-          {{ activeFilterColumns.length }}
+          <Icon name="material-symbols:swap-vert-rounded" class="text-base" />
+          <span>{{ activeSortColumn ? activeSortColumn.label : t('common.sort') }}</span>
+          <Icon v-if="activeSortColumn" :name="sortDirectionIcon" class="text-base" />
+        </button>
+
+        <button
+          v-if="filterableColumns.length > 0"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-sm transition cursor-pointer hover:bg-base-50"
+          :class="activeFilterColumns.length > 0 ? 'border-link-500 text-link-600' : 'border-base-300 text-base-600'"
+          @click="filterOpen = true"
+        >
+          <Icon name="material-symbols:filter-list-rounded" class="text-base" />
+          <span>{{ t('common.filter') }}</span>
+          <span
+            v-if="activeFilterColumns.length > 0"
+            class="rounded-full bg-link-600 px-1.5 text-xs font-medium text-white"
+          >
+            {{ activeFilterColumns.length }}
+          </span>
+        </button>
+
+        <button
+          v-for="column in activeFilterColumns"
+          :key="column.key"
+          type="button"
+          class="inline-flex max-w-full items-center gap-1 rounded-full bg-link-50 px-2.5 py-1 text-xs text-link-700 transition cursor-pointer hover:bg-link-100"
+          :title="t('common.removeFilter', { label: column.label })"
+          @click="resetFilter(column.key)"
+        >
+          <span class="font-medium">{{ column.label }}:</span>
+          <span class="min-w-0 truncate">{{ filterSummary(column.key) }}</span>
+          <Icon name="material-symbols:close-rounded" class="shrink-0 text-sm" />
+        </button>
+
+        <button
+          v-if="activeFilterColumns.length > 1"
+          type="button"
+          class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-base-500 underline-offset-2 transition cursor-pointer hover:text-base-700 hover:underline"
+          @click="resetAllFilters"
+        >
+          {{ t('common.resetAllFilters') }}
+        </button>
+      </div>
+
+      <template v-if="selectable">
+        <!-- Select all matches (across pages); the table view has the header checkbox for this -->
+        <label
+          class="inline-flex items-center gap-2 rounded-lg border bg-white py-1.5 pl-1.75 pr-3 text-sm transition"
+          :class="[
+            someFilteredSelected ? 'border-link-500 text-link-600' : 'border-base-300 text-base-600',
+            loading || filteredRows.length === 0 ? 'opacity-40' : 'cursor-pointer hover:bg-base-50',
+            { 'xl:hidden': viewMode === 'table' },
+          ]"
+        >
+          <input
+            type="checkbox"
+            class="checkbox"
+            :checked="allFilteredSelected"
+            :indeterminate="someFilteredSelected && !allFilteredSelected"
+            :disabled="loading || filteredRows.length === 0"
+            :aria-label="t('common.selectAllMatches', { count: filteredRows.length })"
+            @change="toggleAllFiltered"
+          >
+          <span>{{ t('common.selectAll') }}</span>
+          <span class="text-xs text-base-400 tabular-nums">{{ filteredRows.length }}</span>
+        </label>
+
+        <span
+          v-if="selectionActive"
+          class="inline-flex max-w-full items-center gap-1 rounded-full bg-link-600 py-1 pl-2.5 pr-1 text-xs font-medium text-white"
+        >
+          <span class="truncate">
+            {{ t('common.selectedCount', { count: selectedKeys.length }) }}
+            <span v-if="hiddenSelectedCount > 0" class="font-normal opacity-80">
+              · {{ t('common.selectionHidden', { count: hiddenSelectedCount }) }}
+            </span>
+          </span>
+          <button
+            type="button"
+            class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition cursor-pointer hover:bg-white/20"
+            :title="t('common.deselectAll')"
+            :aria-label="t('common.deselectAll')"
+            @click="clearSelection"
+          >
+            <Icon name="material-symbols:close-rounded" class="text-sm" />
+          </button>
         </span>
-      </button>
 
-      <button
-        v-for="column in activeFilterColumns"
-        :key="column.key"
-        type="button"
-        class="inline-flex max-w-full items-center gap-1 rounded-full bg-link-50 px-2.5 py-1 text-xs text-link-700 transition cursor-pointer hover:bg-link-100"
-        :title="t('common.removeFilter', { label: column.label })"
-        @click="resetFilter(column.key)"
-      >
-        <span class="font-medium">{{ column.label }}:</span>
-        <span class="min-w-0 truncate">{{ filterSummary(column.key) }}</span>
-        <Icon name="material-symbols:close-rounded" class="shrink-0 text-sm" />
-      </button>
-
-      <button
-        v-if="activeFilterColumns.length > 1"
-        type="button"
-        class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-base-500 underline-offset-2 transition cursor-pointer hover:text-base-700 hover:underline"
-        @click="resetAllFilters"
-      >
-        {{ t('common.resetAllFilters') }}
-      </button>
+        <div v-if="selectionActive && $slots['selection-actions']" class="ml-auto flex flex-wrap items-center gap-2">
+          <slot name="selection-actions" :selected-rows="selectedRows" :clear-selection="clearSelection" />
+        </div>
+      </template>
     </div>
 
     <!-- Desktop table -->
@@ -63,6 +122,17 @@
       <table class="w-full text-sm border-collapse" :class="tableClass">
         <thead>
           <tr class="text-left border-b">
+            <th v-if="selectable" class="w-8 py-2 pr-2">
+              <input
+                type="checkbox"
+                class="checkbox"
+                :checked="allFilteredSelected"
+                :indeterminate="someFilteredSelected && !allFilteredSelected"
+                :disabled="filteredRows.length === 0"
+                :aria-label="t('common.selectAllMatches', { count: filteredRows.length })"
+                @change="toggleAllFiltered"
+              >
+            </th>
             <th
               v-for="column in visibleColumns"
               :key="column.key"
@@ -93,6 +163,7 @@
         <tbody>
           <template v-if="loading">
             <tr v-for="n in SKELETON_ROWS" :key="`skeleton-${n}`" class="border-b last:border-b-0">
+              <td v-if="selectable" class="py-3" />
               <td v-for="column in visibleColumns" :key="column.key" class="py-3">
                 <div class="h-3 w-full max-w-40 animate-pulse rounded bg-base-200" />
               </td>
@@ -109,6 +180,15 @@
             :class="canOpen(row) ? 'cursor-pointer hover:bg-base-50' : ''"
             @click="onRowClick(row, $event)"
           >
+            <td v-if="selectable" class="py-2 pr-2">
+              <input
+                type="checkbox"
+                class="checkbox"
+                :checked="isSelected(row, index)"
+                :aria-label="t('common.selectRow')"
+                @change="toggleRow(row, index)"
+              >
+            </td>
             <td
               v-for="column in visibleColumns"
               :key="column.key"
@@ -133,7 +213,7 @@
           </tr>
 
           <tr v-if="!loading && processedRows.length === 0">
-            <td :colspan="visibleColumns.length + (showActions ? 1 : 0)">
+            <td :colspan="visibleColumns.length + (showActions ? 1 : 0) + (selectable ? 1 : 0)">
               <CommonTableEmptyState
                 :title="emptyState.title"
                 :hint="emptyState.hint"
@@ -162,6 +242,19 @@
       </template>
 
       <li v-for="(row, index) in loading ? [] : processedRows" :key="rowKeyOf(row, index)" class="flex items-stretch">
+        <label
+          v-if="selectable"
+          class="flex shrink-0 cursor-pointer items-center border-r border-base-100 pl-3 pr-2.5"
+          :class="isSelected(row, index) ? 'bg-link-50' : 'bg-white'"
+        >
+          <input
+            type="checkbox"
+            class="checkbox"
+            :checked="isSelected(row, index)"
+            :aria-label="t('common.selectRow')"
+            @change="toggleRow(row, index)"
+          >
+        </label>
         <button
           type="button"
           class="flex min-w-0 flex-1 items-center gap-3 bg-white px-3 py-2.5 text-left transition not-disabled:cursor-pointer not-disabled:hover:bg-base-50 disabled:cursor-default"
@@ -392,7 +485,7 @@
 </template>
 
 <script setup lang="ts" generic="T">
-import { computed, ref, toRef, watchEffect } from 'vue'
+import { computed, ref, toRef, watch, watchEffect } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import {
   useAdvancedTable,
@@ -417,6 +510,8 @@ const props = withDefaults(defineProps<{
   tableClass?: string
   /** Unique, stable key to persist sort/filter/search state across page navigation. Omit to keep state local to this mount. */
   persistKey?: string
+  /** Adds row checkboxes and a selection bar; the selection (row keys) is bound via `v-model:selected`. */
+  selectable?: boolean
 }>(), {
   loading: false,
   emptyIcon: 'material-symbols:inbox-rounded',
@@ -437,9 +532,12 @@ defineSlots<{
   'mobile-title'?: (props: { row: T }) => any
   'mobile-meta'?: (props: { row: T }) => any
   'actions'?: (props: { row: T }) => any
+  'selection-actions'?: (props: { selectedRows: T[], clearSelection: () => void }) => any
 }>()
 
 const search = defineModel<string>('search', { default: '' })
+/** Keys (see `rowKey`) of the selected rows. Survives search/filter changes so a selection can be built up across several searches. */
+const selectedKeys = defineModel<Array<string | number>>('selected', { default: () => [] })
 
 const { t } = useI18n()
 const { formatDate } = useLocaleFormatters()
@@ -454,6 +552,7 @@ const {
   pageSize,
   totalCount,
   totalPages,
+  filteredRows,
   processedRows,
   getFilter,
   isFilterActive,
@@ -515,6 +614,51 @@ function rowKeyOf(row: T, index: number): string | number {
   const id = (row as { id?: string | number }).id
   return id ?? index
 }
+
+const selectedKeySet = computed(() => new Set(selectedKeys.value))
+const filteredKeys = computed(() => filteredRows.value.map((row, index) => rowKeyOf(row, index)))
+const allFilteredSelected = computed(() => filteredKeys.value.length > 0 && filteredKeys.value.every(key => selectedKeySet.value.has(key)))
+const someFilteredSelected = computed(() => filteredKeys.value.some(key => selectedKeySet.value.has(key)))
+const hiddenSelectedCount = computed(() => {
+  const visible = new Set(filteredKeys.value)
+  return selectedKeys.value.filter(key => !visible.has(key)).length
+})
+const selectionActive = computed(() => props.selectable && selectedKeys.value.length > 0)
+const showToolbar = computed(() => props.selectable || sortableColumns.value.length > 0 || filterableColumns.value.length > 0)
+/** Selected rows in the order of `rows` (not the current sort), including ones hidden by search/filters. */
+const selectedRows = computed(() => props.rows.filter((row, index) => selectedKeySet.value.has(rowKeyOf(row, index))))
+
+function isSelected(row: T, index: number) {
+  return selectedKeySet.value.has(rowKeyOf(row, index))
+}
+
+function toggleRow(row: T, index: number) {
+  const key = rowKeyOf(row, index)
+  selectedKeys.value = selectedKeySet.value.has(key)
+    ? selectedKeys.value.filter(existing => existing !== key)
+    : [...selectedKeys.value, key]
+}
+
+function toggleAllFiltered() {
+  if (allFilteredSelected.value) {
+    const visible = new Set(filteredKeys.value)
+    selectedKeys.value = selectedKeys.value.filter(key => !visible.has(key))
+  } else {
+    selectedKeys.value = [...new Set([...selectedKeys.value, ...filteredKeys.value])]
+  }
+}
+
+function clearSelection() {
+  selectedKeys.value = []
+}
+
+// Drop keys of rows that no longer exist (e.g. after a reload), so the count never includes ghosts.
+watch(() => props.rows, (rows) => {
+  if (!selectedKeys.value.length) return
+  const existing = new Set(rows.map((row, index) => rowKeyOf(row, index)))
+  const kept = selectedKeys.value.filter(key => existing.has(key))
+  if (kept.length !== selectedKeys.value.length) selectedKeys.value = kept
+})
 
 function canOpen(row: T): boolean {
   return props.canOpenRow ? props.canOpenRow(row) : true

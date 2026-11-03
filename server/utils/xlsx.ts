@@ -1,6 +1,7 @@
-import { deflateRawSync, deflateSync } from 'zlib'
+import { deflateSync } from 'zlib'
 import { readImageSize, wrapText } from '~/server/utils/pdf'
 import type { LocalDateTime } from '~/shared/time'
+import { buildZip, crc32 } from '~/server/utils/zip'
 
 /**
  * Minimal XLSX writer, hand-rolled like the PDF writer in `server/utils/pdf.ts`
@@ -17,89 +18,6 @@ export interface XlsxColumn {
   hint?: string
   /** Column width in Excel character units. */
   width?: number
-}
-
-const CRC_TABLE = (() => {
-  const table = new Uint32Array(256)
-  for (let n = 0; n < 256; n += 1) {
-    let c = n
-    for (let k = 0; k < 8; k += 1) {
-      c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
-    }
-    table[n] = c >>> 0
-  }
-  return table
-})()
-
-function crc32(data: Buffer) {
-  let crc = 0xFFFFFFFF
-  for (let index = 0; index < data.length; index += 1) {
-    crc = CRC_TABLE[(crc ^ data[index]!) & 0xFF]! ^ (crc >>> 8)
-  }
-  return (crc ^ 0xFFFFFFFF) >>> 0
-}
-
-/** ZIP entry times are zone-less DOS wall clocks; fill them from a wall clock in the app time zone. */
-function dosDateTime(value: LocalDateTime) {
-  const [year, month, day, hour, minute, second] = value.split(/[- :]/).map(Number) as [number, number, number, number, number, number]
-  const time = (hour << 11) | (minute << 5) | Math.floor(second / 2)
-  const date = ((Math.max(year, 1980) - 1980) << 9) | (month << 5) | day
-  return { time, day: date }
-}
-
-/** Builds a stored/deflated ZIP archive (the container format of .xlsx). */
-function buildZip(entries: Array<{ name: string, data: Buffer }>, modifiedAt: LocalDateTime) {
-  const { time, day } = dosDateTime(modifiedAt)
-  const localParts: Buffer[] = []
-  const centralParts: Buffer[] = []
-  let offset = 0
-
-  for (const entry of entries) {
-    const nameBytes = Buffer.from(entry.name, 'utf8')
-    const compressed = deflateRawSync(entry.data)
-    const checksum = crc32(entry.data)
-
-    const localHeader = Buffer.alloc(30)
-    localHeader.writeUInt32LE(0x04034B50, 0)
-    localHeader.writeUInt16LE(20, 4)
-    localHeader.writeUInt16LE(0, 6)
-    localHeader.writeUInt16LE(8, 8)
-    localHeader.writeUInt16LE(time, 10)
-    localHeader.writeUInt16LE(day, 12)
-    localHeader.writeUInt32LE(checksum, 14)
-    localHeader.writeUInt32LE(compressed.length, 18)
-    localHeader.writeUInt32LE(entry.data.length, 22)
-    localHeader.writeUInt16LE(nameBytes.length, 26)
-    localHeader.writeUInt16LE(0, 28)
-
-    const centralHeader = Buffer.alloc(46)
-    centralHeader.writeUInt32LE(0x02014B50, 0)
-    centralHeader.writeUInt16LE(20, 4)
-    centralHeader.writeUInt16LE(20, 6)
-    centralHeader.writeUInt16LE(0, 8)
-    centralHeader.writeUInt16LE(8, 10)
-    centralHeader.writeUInt16LE(time, 12)
-    centralHeader.writeUInt16LE(day, 14)
-    centralHeader.writeUInt32LE(checksum, 16)
-    centralHeader.writeUInt32LE(compressed.length, 20)
-    centralHeader.writeUInt32LE(entry.data.length, 24)
-    centralHeader.writeUInt16LE(nameBytes.length, 28)
-    centralHeader.writeUInt32LE(offset, 42)
-
-    localParts.push(localHeader, nameBytes, compressed)
-    centralParts.push(centralHeader, nameBytes)
-    offset += localHeader.length + nameBytes.length + compressed.length
-  }
-
-  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0)
-  const end = Buffer.alloc(22)
-  end.writeUInt32LE(0x06054B50, 0)
-  end.writeUInt16LE(entries.length, 8)
-  end.writeUInt16LE(entries.length, 10)
-  end.writeUInt32LE(centralSize, 12)
-  end.writeUInt32LE(offset, 16)
-
-  return Buffer.concat([...localParts, ...centralParts, end])
 }
 
 function escapeXml(value: string) {
@@ -173,6 +91,12 @@ const EMU_PER_PIXEL = 9525
 /** A4 page width in points per orientation, matching `pageSetup paperSize="9"`. */
 const A4_WIDTH_PT = { portrait: 595.3, landscape: 841.9 } as const
 const PAGE_MARGIN_LR_PT = 0.6 * 72
+/**
+ * Excel prints a footer picture ~7.4% wider than the VML width it is given (the height is kept),
+ * centred on the page — measured from Excel's own PDF export at several widths (400 → 429.5 pt,
+ * 508.9 → 547.1 pt, 755.5 → 811.3 pt). Dividing by this factor makes the rule end exactly at the margins.
+ */
+const FOOTER_PICTURE_WIDTH_STRETCH = 1.0737
 
 function pngChunk(type: string, data: Buffer) {
   const header = Buffer.alloc(8)
@@ -391,7 +315,7 @@ export function buildXlsxWorkbook(params: {
   const drawing = logo ? buildLogoDrawing({ logo, columnWidths: columns.map(column => column.width ?? 18) }) : null
 
   const footerRuleWidthPt = A4_WIDTH_PT[orientation] - (2 * PAGE_MARGIN_LR_PT)
-  const footerRuleVml = buildFooterRuleVml(footerRuleWidthPt, 14)
+  const footerRuleVml = buildFooterRuleVml(footerRuleWidthPt / FOOTER_PICTURE_WIDTH_STRETCH, 14)
 
   const footerLeft = footerLabel ? `&amp;L&amp;9${escapeXml(footerLabel)}` : ''
   const worksheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -405,7 +329,7 @@ export function buildXlsxWorkbook(params: {
 <autoFilter ref="A${headerRowIndex}:${lastColLetter}${lastRowIndex}"/>
 <pageMargins left="0.6" right="0.6" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
 <pageSetup paperSize="9" orientation="${orientation}" fitToWidth="1" fitToHeight="0"/>
-<headerFooter><oddFooter>${footerLeft}&amp;C&amp;G&amp;R&amp;9Seite &amp;P von &amp;N</oddFooter></headerFooter>
+<headerFooter scaleWithDoc="0"><oddFooter>${footerLeft}&amp;C&amp;G&amp;R&amp;9Seite &amp;P von &amp;N</oddFooter></headerFooter>
 ${drawing ? '<drawing r:id="rId1"/>' : ''}<legacyDrawingHF r:id="rId2"/></worksheet>`
 
   const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

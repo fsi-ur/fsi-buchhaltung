@@ -192,13 +192,18 @@ export function createPdfDocumentLayout(params: {
       return Math.min(textY, logoBottom) - 10
     },
 
-    /** Draws the standard footer (separator, label, page numbers) on every page and assembles the final document. */
-    finish(footerLabel: string) {
+    /**
+     * Draws the standard footer (separator, label, page numbers) on every page and assembles the final document.
+     * `pageNumbering` numbers the pages as part of a larger document they will be merged into.
+     */
+    finish(footerLabel: string, pageNumbering?: { firstPage: number, totalPages: number }) {
+      const firstPage = pageNumbering?.firstPage ?? 1
+      const totalPages = pageNumbering?.totalPages ?? pageBuffers.length
       pageBuffers.forEach((buffer, index) => {
         buffer.lines.push({ x1: PDF_LAYOUT.contentLeft, y1: 58, x2: PDF_LAYOUT.contentRight, y2: 58, width: 0.8 })
         buffer.texts.push(
           { x: PDF_LAYOUT.contentLeft, y: 46, size: 8.5, text: footerLabel, gray: 0.35 },
-          { x: PDF_LAYOUT.contentRight, y: 46, size: 8.5, text: `Seite ${index + 1} von ${pageBuffers.length}`, align: 'right', gray: 0.35 },
+          { x: PDF_LAYOUT.contentRight, y: 46, size: 8.5, text: `Seite ${firstPage + index} von ${totalPages}`, align: 'right', gray: 0.35 },
         )
       })
 

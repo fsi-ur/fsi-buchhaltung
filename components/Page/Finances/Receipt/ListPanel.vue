@@ -16,12 +16,24 @@
     <CommonAdvancedTable
       :loading="loading"
       v-model:search="search"
+      v-model:selected="selectedIds"
+      :selectable="canExport"
       persist-key="receipts-list"
       :rows="receipts"
       :columns="columns"
       :empty-text="t('receipt.none')"
       @row-open="openReceipt($event.id)"
     >
+      <template #selection-actions="{ selectedRows, clearSelection }">
+        <CommonDocumentExportButton
+          source="receipts"
+          :rows="selectedRows"
+          :has-document="(row: ReceiptRow) => row.has_file"
+          :amount="(row: ReceiptRow) => row.total_amount"
+          @exported="clearSelection"
+        />
+      </template>
+
       <template #cell-status="{ row }">
         <CommonStatusBadge :label="statusLabels[row.status]" :tone="statusTone(row.status)" />
       </template>
@@ -33,6 +45,7 @@
 import { computed, ref } from 'vue'
 import type { AdvancedTableColumn } from '~/composables/useAdvancedTable'
 import { useAuth } from '~/composables/useAuth'
+import { useDocumentExport } from '~/composables/useDocumentExport'
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { usePage } from '~/composables/usePage'
@@ -50,11 +63,13 @@ const { formatDate, formatCurrency } = useLocaleFormatters()
 const { hasPermission } = useAuth()
 
 const canEdit = computed(() => hasPermission('receipts.edit'))
+const { canExport } = useDocumentExport('receipts')
 const resolvedReturnTarget = computed(() => cloneReturnTarget(props.returnTarget) ?? buildReturnTarget('ReceiptList'))
 
 const receipts = ref<ReceiptRow[]>([])
 const loading = ref(true)
 const search = ref('')
+const selectedIds = ref<Array<string | number>>([])
 
 const statusLabels = computed<Record<ReceiptStatus, string>>(() => ({
   draft: t('receipt.states.draft'),
