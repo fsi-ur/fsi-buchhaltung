@@ -242,7 +242,7 @@ import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
 import { useI18n } from '~/composables/useI18n'
 import { focusAndSelectInput, sanitizeCurrencyInput } from '~/composables/useCurrencyInput'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
-import type { MemberListItem } from '~/types/member'
+import type { FinanceMemberOption } from '~/types/member'
 import type { CreateCashCountBody, CreateCashCountPositionBody } from '~/types/cashCount'
 import type { EventRow } from '~/types/event'
 import { normalizeLocalDateTime } from '~/shared/time'
@@ -288,7 +288,7 @@ const isRegisterCheck = computed({
     form.value.counted_before_at = ''
   },
 })
-const members = ref<MemberListItem[]>([])
+const members = ref<FinanceMemberOption[]>([])
 const events = ref<EventRow[]>([])
 const eventQuery = ref('')
 const countedByFirstQuery = ref('')
@@ -314,7 +314,7 @@ const eventOptions = computed<SearchSelectOption<EventRow>[]>(() => events.value
   value: event,
 })))
 
-const memberOptions = computed<SearchSelectOption<MemberListItem>[]>(() => members.value.map(member => ({
+const memberOptions = computed<SearchSelectOption<FinanceMemberOption>[]>(() => members.value.map(member => ({
   key: member.id,
   label: memberLabel(member),
   value: member,
@@ -390,8 +390,8 @@ function hasValidDateOrder() {
   return Boolean(before && after && after > before)
 }
 
-function memberLabel(member: MemberListItem) {
-  return `${member.first_name} ${member.last_name}`
+function memberLabel(member: FinanceMemberOption) {
+  return member.full_name
 }
 
 function eventLabel(event: EventRow) {
@@ -415,7 +415,7 @@ function onEventSelect(value: unknown) {
   eventQuery.value = eventLabel(event)
 }
 
-function selectMember(field: MemberField, member: MemberListItem) {
+function selectMember(field: MemberField, member: FinanceMemberOption) {
   if (field === 'counted_by_first') {
     form.value.counted_by_first = member.id
     countedByFirstQuery.value = memberLabel(member)
@@ -433,19 +433,19 @@ function selectMember(field: MemberField, member: MemberListItem) {
 }
 
 function onCountedByFirstSelect(value: unknown) {
-  selectMember('counted_by_first', value as MemberListItem)
+  selectMember('counted_by_first', value as FinanceMemberOption)
 }
 
 function onCountedBySecondSelect(value: unknown) {
-  selectMember('counted_by_second', value as MemberListItem)
+  selectMember('counted_by_second', value as FinanceMemberOption)
 }
 
 function onCheckedBySelect(value: unknown) {
-  selectMember('checked_by', value as MemberListItem)
+  selectMember('checked_by', value as FinanceMemberOption)
 }
 
 async function loadMembers() {
-  const res = await apiFetch<ApiResponse<'/api/members'>>('/api/members', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/finances/member-options'>>('/api/finances/member-options', { method: 'GET' })
   if (res.ok) members.value = res.members
 }
 

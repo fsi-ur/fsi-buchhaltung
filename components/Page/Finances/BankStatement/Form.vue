@@ -240,7 +240,7 @@ import { focusAndSelectInput, sanitizeCurrencyInput } from '~/composables/useCur
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { buildReturnTarget, useReturnTarget } from '~/composables/useReturnTarget'
 import { usePage } from '~/composables/usePage'
-import type { MemberListItem } from '~/types/member'
+import type { FinanceMemberOption } from '~/types/member'
 import type {
   CreateBankStatementBody,
   CreateBankStatementPositionBody,
@@ -290,7 +290,7 @@ const canEditInvoice = computed(() => props.canEditInvoice === true)
 const canViewReceipt = computed(() => props.canViewReceipt === true)
 const canViewInvoice = computed(() => props.canViewInvoice === true)
 
-const members = ref<MemberListItem[]>([])
+const members = ref<FinanceMemberOption[]>([])
 const receipts = ref<BankStatementReceiptOption[]>([])
 const invoices = ref<BankStatementInvoiceOption[]>([])
 const events = ref<BankStatementEventOption[]>([])
@@ -305,7 +305,7 @@ const statementDateInput = computed({
   set: (value: string | null) => { form.value.statement_date = value || '' },
 })
 
-const memberOptions = computed<SearchSelectOption<MemberListItem>[]>(() =>
+const memberOptions = computed<SearchSelectOption<FinanceMemberOption>[]>(() =>
   members.value.map(m => ({
     key: m.id,
     label: memberLabel(m),
@@ -359,8 +359,8 @@ const validationErrors = computed(() => {
 
 const saveDisabled = computed(() => disabled.value || Boolean(props.saving) || validationErrors.value.length > 0)
 
-function memberLabel(m: MemberListItem) {
-  return `${m.first_name} ${m.last_name}`
+function memberLabel(m: FinanceMemberOption) {
+  return m.full_name
 }
 
 function selectedMemberLabel(id: number) {
@@ -369,7 +369,7 @@ function selectedMemberLabel(id: number) {
 }
 
 function onCheckedBySelect(value: unknown) {
-  const m = value as MemberListItem
+  const m = value as FinanceMemberOption
   form.value.checked_by = m.id
   checkedByQuery.value = memberLabel(m)
 }
@@ -628,7 +628,7 @@ function viewSelectedInvoice(index: number) {
 async function loadSupportData() {
   const currentStatementId = pageMeta.value?.bankStatementId || undefined
   const [membersRes, optionsRes] = await Promise.all([
-    apiFetch<ApiResponse<'/api/members'>>('/api/members', { method: 'GET' }),
+    apiFetch<ApiResponse<'/api/finances/member-options'>>('/api/finances/member-options', { method: 'GET' }),
     apiFetch<ApiResponse<'/api/bank_statements/options'>>('/api/bank_statements/options', {
       method: 'GET',
       query: currentStatementId ? { currentStatementId } : undefined,

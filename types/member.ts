@@ -19,6 +19,12 @@ export interface MemberListItem {
   account_is_active?: boolean | null
 }
 
+/** Name-only member reference for finance forms, so they don't need members.view */
+export interface FinanceMemberOption {
+  id: number
+  full_name: string
+}
+
 export type MemberExportDataColumnKey =
   | 'last_name'
   | 'first_name'

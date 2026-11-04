@@ -224,7 +224,7 @@ import { focusAndSelectInput, sanitizeCurrencyInput } from '~/composables/useCur
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { Receipt, ReceiptRow } from '~/types/receipt'
 import type { CreateReimbursementBody } from '~/types/reimbursement'
-import type { MemberListItem } from '~/types/member'
+import type { FinanceMemberOption } from '~/types/member'
 import { buildReturnTarget, useReturnTarget } from '~/composables/useReturnTarget'
 import { usePage } from '~/composables/usePage'
 const { today: appToday } = useAppTimeZone()
@@ -307,7 +307,7 @@ const validationErrors = computed(() => {
 })
 
 const saveDisabled = computed(() => disabled.value || Boolean(props.saving) || validationErrors.value.length > 0)
-const members = ref<MemberListItem[]>([])
+const members = ref<FinanceMemberOption[]>([])
 const receipts = ref<ReceiptRow[]>([])
 const receiptAssignments = ref<{ receipt_id: number, reimbursement_id: number }[]>([])
 const paidByQuery = ref('')
@@ -316,7 +316,7 @@ const disbursedByQuery = ref('')
 const receiptQueries = ref<Record<number, string>>({})
 const advanceFocused = ref(false)
 
-const memberOptions = computed<SearchSelectOption<MemberListItem>[]>(() => members.value.map(member => ({
+const memberOptions = computed<SearchSelectOption<FinanceMemberOption>[]>(() => members.value.map(member => ({
   key: member.id,
   label: memberLabel(member),
   value: member,
@@ -350,7 +350,7 @@ const disbursedAtDate = computed({
 })
 
 async function loadMembers() {
-  const res = await apiFetch<ApiResponse<'/api/members'>>('/api/members', { method: 'GET' })
+  const res = await apiFetch<ApiResponse<'/api/finances/member-options'>>('/api/finances/member-options', { method: 'GET' })
   if (res.ok) members.value = res.members
 }
 
@@ -368,8 +368,8 @@ async function loadSupportData() {
   await Promise.all([loadMembers(), loadReceipts(), loadReceiptAssignments()])
 }
 
-function memberLabel(member: MemberListItem) {
-  return `${member.first_name} ${member.last_name}`
+function memberLabel(member: FinanceMemberOption) {
+  return member.full_name
 }
 
 function selectedMemberLabel(memberId: number | null) {
@@ -377,7 +377,7 @@ function selectedMemberLabel(memberId: number | null) {
   return member ? memberLabel(member) : ''
 }
 
-function selectMember(field: MemberField, member: MemberListItem) {
+function selectMember(field: MemberField, member: FinanceMemberOption) {
   if (field === 'paid_by') {
     form.value.paid_by = member.id
     paidByQuery.value = memberLabel(member)
@@ -393,15 +393,15 @@ function selectMember(field: MemberField, member: MemberListItem) {
 }
 
 function onPaidBySelect(value: unknown) {
-  selectMember('paid_by', value as MemberListItem)
+  selectMember('paid_by', value as FinanceMemberOption)
 }
 
 function onCheckedBySelect(value: unknown) {
-  selectMember('checked_by', value as MemberListItem)
+  selectMember('checked_by', value as FinanceMemberOption)
 }
 
 function onDisbursedBySelect(value: unknown) {
-  selectMember('disbursed_by', value as MemberListItem)
+  selectMember('disbursed_by', value as FinanceMemberOption)
 }
 
 function receiptLabel(receipt: Pick<ReceiptRow, 'receipt_date' | 'receipt_number' | 'company_name' | 'total_amount'>) {
