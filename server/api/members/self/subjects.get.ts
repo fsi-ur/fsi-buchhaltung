@@ -16,7 +16,7 @@ interface GetSubjectsError {
 type GetSelfSubjectsResponse = GetSubjectsSuccess | GetSubjectsError
 
 export default defineEventHandler(async (event): Promise<GetSelfSubjectsResponse> => {
-  const current = await requirePermission(event, 'members.editOwnData')
+  const current = await requirePermission(event, ['members.editOwnData', 'members.approveChanges'])
   if (!current.ok) return current
 
   const rows = await query<SubjectRow[]>(`

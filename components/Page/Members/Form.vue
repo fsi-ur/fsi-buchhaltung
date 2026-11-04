@@ -166,7 +166,7 @@
       </div>
     </section>
 
-    <section v-if="canManageSubdivisions" class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 space-y-3">
+    <section v-if="canManageSubdivisions || selectedSubdivisionItems.length" class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 space-y-3">
       <h3 class="font-semibold">{{ t('member.subdivisions') }}</h3>
 
       <CommonSelectionListField
@@ -177,8 +177,8 @@
         :empty-text="t('member.noSubdivisions')"
         :empty-selection-text="t('member.noSubdivisionsAssigned')"
         :remove-label="t('actions.remove')"
-        :helper-text="t('member.subdivisionHelper')"
-        :disabled="disabled"
+        :helper-text="canManageSubdivisions ? t('member.subdivisionHelper') : undefined"
+        :disabled="disabled || !canManageSubdivisions"
         @update:query="subdivisionQuery = $event"
         @select="selectSubdivision"
         @clear-selection="subdivisionQuery = ''"
@@ -330,6 +330,8 @@ const props = defineProps<{
   canEditSubjects?: boolean
   canManageUsers?: boolean
   canManageSubdivisions?: boolean
+  /** Subdivisions already assigned to the member, so they can be shown without the catalog */
+  assignedSubdivisions?: SubdivisionOption[]
   showAccountCreation?: boolean
 }>()
 
@@ -406,7 +408,7 @@ const positionOptions = computed<SearchSelectOption<PositionRow>[]>(() => positi
     searchText: `${position.code} ${position.name} ${position.is_active ? '' : t('common.inactive')}`.trim(),
   })))
 const subdivisionsById = computed(() => {
-  return new Map(subdivisions.value.map(subdivision => [subdivision.id, subdivision]))
+  return new Map([...(props.assignedSubdivisions ?? []), ...subdivisions.value].map(subdivision => [subdivision.id, subdivision]))
 })
 const selectedSubdivisionItems = computed<SelectionListItem[]>(() => {
   return (form.value.subdivision_ids ?? [])

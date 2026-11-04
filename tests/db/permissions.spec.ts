@@ -112,20 +112,29 @@ describe('permission resolution', () => {
     expect(permissions).toEqual(expect.arrayContaining(['wiki.manage', 'wiki.review', 'wiki.edit', 'wiki.view']))
   })
 
+  // Viewing a record must include the lookups needed to label it (e.g. an auditor reading receipts).
+  it('grants the lookup permissions a record view needs to show labels', async () => {
+    const auditor = await createUser({ permissions: ['receipts.view', 'invoices.view', 'cash_counts.view'] })
+    const memberViewer = await createUser({ permissions: ['members.view'] })
+
+    expect(await permissionsOf(auditor.id)).toEqual(expect.arrayContaining(['companies.view', 'spheres.view', 'cost_centres.view']))
+    expect(await permissionsOf(memberViewer.id)).toEqual(expect.arrayContaining(['positions.view']))
+  })
+
   it('drops a permission key that is no longer valid', async () => {
     const user = await createUser()
     // A key left behind by a rename must not leak through as an unknown capability.
     await query('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)', [user.id, 'legacy.key'])
-    await grantUserPermissions(user.id, ['members.view'])
+    await grantUserPermissions(user.id, ['files.view'])
 
-    expect(await permissionsOf(user.id)).toEqual(['members.view'])
+    expect(await permissionsOf(user.id)).toEqual(['files.view'])
   })
 
   it('keeps users isolated from one another', async () => {
-    const first = await createUser({ permissions: ['members.view'] })
-    const second = await createUser({ permissions: ['invoices.view'] })
+    const first = await createUser({ permissions: ['files.view'] })
+    const second = await createUser({ permissions: ['audit.view'] })
 
-    expect(await permissionsOf(first.id)).toEqual(['members.view'])
-    expect(await permissionsOf(second.id)).toEqual(['invoices.view'])
+    expect(await permissionsOf(first.id)).toEqual(['files.view'])
+    expect(await permissionsOf(second.id)).toEqual(['audit.view'])
   })
 })

@@ -13,6 +13,7 @@
           :can-edit-subjects="canEditSubjects"
           :can-manage-users="canManageUsers"
           :can-manage-subdivisions="canManageSubdivisions"
+          :assigned-subdivisions="assignedSubdivisions"
           :show-account-creation="!isEditMode"
           @submit="submit"
           @cancel="cancel"
@@ -268,6 +269,7 @@ const memberId = ref<number | null>(null)
 const originalStatus = ref<MemberStatus | null>(null)
 const positionCatalog = ref<PositionRow[]>([])
 const subdivisionCatalog = ref<SubdivisionOption[]>([])
+const assignedSubdivisions = ref<SubdivisionOption[]>([])
 const showLeftStatusConfirmModal = ref(false)
 const showLeftStatusResultModal = ref(false)
 const leftStatusResult = ref<MemberStatusActionSummary | null>(null)
@@ -345,6 +347,7 @@ onMounted(async () => {
   }
 
   originalStatus.value = res.member.status
+  assignedSubdivisions.value = res.member.subdivisions || []
   form.value = {
     account: res.member.account,
     new_account: null,
@@ -395,7 +398,7 @@ const positionLabelById = computed(() => {
 })
 
 const subdivisionLabelById = computed(() => {
-  return new Map(subdivisionCatalog.value.map(subdivision => [subdivision.id, `${subdivision.code} - ${subdivision.name}`]))
+  return new Map([...assignedSubdivisions.value, ...subdivisionCatalog.value].map(subdivision => [subdivision.id, `${subdivision.code} - ${subdivision.name}`]))
 })
 
 const leftStatusPreview = computed(() => {
@@ -498,7 +501,8 @@ async function persistMember(showStatusActionsModal: boolean) {
     if (isEditMode.value && memberId.value) {
       response = await apiFetch<MemberSaveResponse>(String(`/api/members/${memberId.value}`), {
         method: 'PUT',
-        body: form.value,
+        // Without settings.subdivisions.manage the assignments are read-only; omitting them leaves them untouched
+        body: canManageSubdivisions.value ? form.value : { ...form.value, subdivision_ids: undefined },
       })
 
       if (!response.ok) throw new Error(response.error || t('member.saved.failedUpdate'))

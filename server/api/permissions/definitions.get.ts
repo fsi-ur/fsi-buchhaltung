@@ -15,7 +15,7 @@ interface DefinitionsError {
 type DefinitionsResponse = DefinitionsSuccess | DefinitionsError
 
 export default defineEventHandler(async (event): Promise<DefinitionsResponse> => {
-  const current = await requirePermission(event, 'permissions.manage')
+  const current = await requirePermission(event, ['permissions.manage', 'settings.viewAs'])
   if (!current.ok) return current
 
   return { ok: true, permissions: PERMISSIONS }

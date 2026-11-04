@@ -44,16 +44,14 @@ export default defineEventHandler(async (event): Promise<GetMemberResponse> => {
     [id]
   )
 
-  const subdivisions = current.user.permissions.includes('settings.subdivisions.manage')
-    ? await query<MemberSubdivisionAssignment[]>(
-        `SELECT s.id, s.code, s.name, s.is_active
-         FROM subdivision_members sm
-         JOIN subdivisions s ON s.id = sm.subdivision_id
-         WHERE sm.member_id = ?
-         ORDER BY s.code ASC, s.name ASC`,
-        [id]
-      )
-    : []
+  const subdivisions = await query<MemberSubdivisionAssignment[]>(
+    `SELECT s.id, s.code, s.name, s.is_active
+     FROM subdivision_members sm
+     JOIN subdivisions s ON s.id = sm.subdivision_id
+     WHERE sm.member_id = ?
+     ORDER BY s.code ASC, s.name ASC`,
+    [id]
+  )
 
   return {
     ok: true,
