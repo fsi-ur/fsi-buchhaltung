@@ -157,9 +157,12 @@
       </div>
     </section>
 
-    <section class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 flex items-center gap-4">
+    <section class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 flex flex-wrap items-center gap-4">
       <span class="font-medium">{{ t('receipt.paymentStatus') }}</span>
       <PageFinancesPaymentStatus v-model="form.status" :disabled="disabled || statusDisabled" />
+      <div v-if="$slots['status-links']" class="flex flex-wrap items-center gap-4 sm:ml-auto">
+        <slot name="status-links" />
+      </div>
     </section>
 
     <CommonFormActions

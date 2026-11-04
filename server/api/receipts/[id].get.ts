@@ -12,6 +12,8 @@ interface GetReceiptSuccess {
   receipt: Receipt
   file: FileRow | null
   statusLocked: boolean
+  reimbursementId: number | null
+  bankStatementId: number | null
 }
 
 interface GetReceiptError {
@@ -96,6 +98,8 @@ export default defineEventHandler(async (event): Promise<GetReceiptResponse> => 
       }),
       file: file ? normalizeBigInt(file) : null,
       statusLocked: reimbursementLinks.length > 0 || bankStatementLinks.length > 0,
+      reimbursementId: reimbursementLinks[0] ? Number(reimbursementLinks[0].reimbursement_id) : null,
+      bankStatementId: bankStatementLinks[0] ? Number(bankStatementLinks[0].bank_statement_id) : null,
     }
   } catch (err: any) {
     return { ok: false, error: `An error occurred while fetching a receipt: ${err}` }

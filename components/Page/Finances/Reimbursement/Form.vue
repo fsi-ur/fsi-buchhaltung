@@ -85,11 +85,20 @@
             <button
               v-if="canEditSelectedReceipt(i)"
               type="button"
-              class="p-2 h-10 w-10 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer"
+              class="inline-flex items-center justify-center self-stretch w-9.5 shrink-0 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer"
               :title="t('actions.edit')"
               @click.stop.prevent="editSelectedReceipt(i)"
             >
               <Icon name="material-symbols:edit-square-outline-rounded" class="text-xl" />
+            </button>
+            <button
+              v-else-if="canViewSelectedReceipt(i)"
+              type="button"
+              class="inline-flex items-center justify-center self-stretch w-9.5 shrink-0 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer"
+              :title="t('actions.view')"
+              @click.stop.prevent="viewSelectedReceipt(i)"
+            >
+              <Icon name="material-symbols:visibility-outline-rounded" class="text-xl" />
             </button>
           </template>
         </CommonSearchSelect>
@@ -231,6 +240,7 @@ const props = defineProps<{
   removeExistingFile?: boolean
   canCreateReceipt?: boolean
   canEditReceipt?: boolean
+  canViewReceipt?: boolean
   externalValidationErrors?: string[]
 }>()
 
@@ -253,6 +263,7 @@ const form = computed({
 const disabled = computed(() => Boolean(props.disabled))
 const canCreateReceipt = computed(() => props.canCreateReceipt !== false)
 const canEditReceipt = computed(() => props.canEditReceipt === true)
+const canViewReceipt = computed(() => props.canViewReceipt === true)
 
 const validationErrors = computed(() => {
   const errors: string[] = []
@@ -506,6 +517,7 @@ function buildReceiptReturnMeta() {
   if (pageMeta.value?.reimbursementId) nestedReturnTargetMeta.reimbursementId = pageMeta.value.reimbursementId
   if (props.file) nestedReturnTargetMeta.reimbursementFile = props.file
   if (props.removeExistingFile) nestedReturnTargetMeta.reimbursementRemoveExistingFile = true
+  if (pageMeta.value?.forceReadonly) nestedReturnTargetMeta.forceReadonly = true
   nestedReturnTargetMeta.returnTarget = returnTarget.value
 
   return nestedReturnTargetMeta
@@ -525,16 +537,28 @@ function canEditSelectedReceipt(index: number) {
   return canEditReceipt.value && Boolean(selectedReceipt(index))
 }
 
-function editSelectedReceipt(index: number) {
+function canViewSelectedReceipt(index: number) {
+  return canViewReceipt.value && Boolean(selectedReceipt(index))
+}
+
+function openSelectedReceipt(index: number, readonly: boolean) {
   const receipt = selectedReceipt(index)
   if (!receipt) return
 
   const nestedReturnTargetMeta = buildReceiptReturnMeta()
   setPageWithReturnTarget(
     'ReceiptCreate',
-    { receiptId: receipt.id },
+    readonly ? { receiptId: receipt.id, forceReadonly: true } : { receiptId: receipt.id },
     buildReturnTarget('ReimbursementCreate', nestedReturnTargetMeta),
   )
+}
+
+function editSelectedReceipt(index: number) {
+  openSelectedReceipt(index, false)
+}
+
+function viewSelectedReceipt(index: number) {
+  openSelectedReceipt(index, true)
 }
 
 const receiptsTotal = computed(() => form.value.positions.reduce((sum, _, index) => {

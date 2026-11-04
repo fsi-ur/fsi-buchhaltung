@@ -25,6 +25,8 @@
       :can-create-invoice="canCreateInvoice"
       :can-edit-receipt="canEditReceipt"
       :can-edit-invoice="canEditInvoice"
+      :can-view-receipt="canViewReceipt"
+      :can-view-invoice="canViewInvoice"
       @submit="submit"
       @cancel="cancel"
     />
@@ -56,8 +58,10 @@ const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('
 const canViewFiles = computed(() => hasPermission('files.view') && (canEdit.value || existingFile.value !== null))
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
 const canCreateInvoice = computed(() => hasPermission('invoices.edit'))
-const canEditReceipt = computed(() => hasPermission('receipts.edit'))
-const canEditInvoice = computed(() => hasPermission('invoices.edit'))
+const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
+const canViewReceipt = computed(() => hasPermission('receipts.view'))
+const canEditInvoice = computed(() => !pageMeta.value?.forceReadonly && hasPermission('invoices.edit'))
+const canViewInvoice = computed(() => hasPermission('invoices.view'))
 
 const isEditMode = ref(false)
 const bankStatementId = ref<number | null>(null)

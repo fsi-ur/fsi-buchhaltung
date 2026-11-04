@@ -23,7 +23,20 @@
       :saving="isSaving"
       @submit="submit"
       @cancel="cancel"
-    />
+    >
+      <template v-if="canViewReimbursement || canViewBankStatement" #status-links>
+        <PageFinancesLinkedRecordButton
+          v-if="canViewReimbursement && reimbursementId"
+          :label="t('receipt.viewReimbursement')"
+          @click="openLinkedRecord('ReimbursementCreate', 'reimbursementId', reimbursementId)"
+        />
+        <PageFinancesLinkedRecordButton
+          v-if="canViewBankStatement && bankStatementId"
+          :label="t('receipt.viewBankStatement')"
+          @click="openLinkedRecord('BankStatementCreate', 'bankStatementId', bankStatementId)"
+        />
+      </template>
+    </ReceiptForm>
   </PageFinancesEditorLayout>
 </template>
 
@@ -31,6 +44,7 @@
 import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import { useReturnTarget } from '~/composables/useReturnTarget'
+import { useLinkedRecord } from '~/composables/useLinkedRecord'
 import ReceiptForm from './Form.vue'
 import { ReceiptStatus, type CreateReceiptBody } from '~/types/receipt'
 import { usePage } from '~/composables/usePage'
@@ -47,6 +61,7 @@ const { t } = useI18n()
 const toast = useToast()
 const { hasPermission } = useAuth()
 const { returnTarget, goToReturnTarget } = useReturnTarget('ReceiptList')
+const { openLinkedRecord } = useLinkedRecord('ReceiptCreate', 'ReceiptList')
 
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
 const canEditCompany = computed(() => canEdit.value && hasPermission('companies.edit'))
@@ -58,7 +73,12 @@ const file = ref<File | null>(null)
 const existingFile = ref<{ id: number, url: string, name: string, mime_type: string, size: number } | null>(null)
 const removeExistingFile = ref(false)
 const statusLockedFromAssociation = ref(false)
+const reimbursementId = ref<number | null>(null)
+const bankStatementId = ref<number | null>(null)
 const isSaving = ref(false)
+
+const canViewReimbursement = computed(() => Boolean(reimbursementId.value) && hasPermission('reimbursements.view'))
+const canViewBankStatement = computed(() => Boolean(bankStatementId.value) && hasPermission('bank_statements.view'))
 
 const form = ref<CreateReceiptBody>({
   receipt_date: '',
@@ -112,11 +132,13 @@ onMounted(async () => {
     receipt_date: res.receipt.receipt_date,
     receipt_number: res.receipt.receipt_number,
     description: res.receipt.description,
-    status: statusLockedByDraft.value ? statusFromReimbursementDraft(reimbursementDraftContext.value) : res.receipt.status,
+    status: statusLockedByDraft.value && canEdit.value ? statusFromReimbursementDraft(reimbursementDraftContext.value) : res.receipt.status,
     company_id: res.receipt.company_id,
     positions: res.receipt.positions,
   }
   statusLockedFromAssociation.value = Boolean(res.statusLocked)
+  reimbursementId.value = res.reimbursementId
+  bankStatementId.value = res.bankStatementId
 
   if (!res.file) return
   existingFile.value = {

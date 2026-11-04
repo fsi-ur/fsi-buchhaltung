@@ -11,6 +11,7 @@ interface GetInvoiceSuccess {
   invoice: Invoice
   file: FileRow | null
   statusLocked: boolean
+  bankStatementId: number | null
 }
 
 interface GetInvoiceError {
@@ -73,6 +74,7 @@ export default defineEventHandler(async (event): Promise<GetInvoiceResponse> => 
     return {
       ok: true,
       statusLocked: bankStatementLinks.length > 0,
+      bankStatementId: bankStatementLinks[0] ? Number(bankStatementLinks[0].bank_statement_id) : null,
       invoice: {
         id: Number(invoiceRows[0].id),
         company_id: Number(invoiceRows[0].company_id),

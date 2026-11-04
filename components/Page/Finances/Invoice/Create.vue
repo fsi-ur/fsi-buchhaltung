@@ -41,7 +41,14 @@
       @submit="submit(false)"
       @submit-and-exit="submit(true)"
       @cancel="cancel"
-    />
+    >
+      <template v-if="canViewBankStatement && bankStatementId" #status-links>
+        <PageFinancesLinkedRecordButton
+          :label="t('invoice.viewBankStatement')"
+          @click="openLinkedRecord('BankStatementCreate', 'bankStatementId', bankStatementId)"
+        />
+      </template>
+    </InvoiceForm>
   </PageFinancesEditorLayout>
 
   <CommonModal
@@ -72,6 +79,7 @@ import { useAuth } from '~/composables/useAuth'
 import { useI18n } from '~/composables/useI18n'
 import { usePage } from '~/composables/usePage'
 import { useReturnTarget } from '~/composables/useReturnTarget'
+import { useLinkedRecord } from '~/composables/useLinkedRecord'
 import { useToast } from '~/composables/useToast'
 import type { GetInvoiceResponse } from '~/server/api/invoices/[id].get'
 import type { InvoiceTextSettings } from '~/types/appSettings'
@@ -87,9 +95,12 @@ const toast = useToast()
 const { pageMeta } = usePage()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('InvoiceList')
+const { openLinkedRecord } = useLinkedRecord('InvoiceCreate', 'InvoiceList')
 
 const persistedStatus = ref<InvoiceStatus | null>(null)
 const bankStatementLocked = ref(false)
+const bankStatementId = ref<number | null>(null)
+const canViewBankStatement = computed(() => Boolean(bankStatementId.value) && hasPermission('bank_statements.view'))
 const isLocked = computed(() => isEditMode.value && persistedStatus.value !== InvoiceStatus.Draft)
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('invoices.edit') && !isLocked.value)
 const canEditStatus = computed(() => !pageMeta.value?.forceReadonly && hasPermission('invoices.edit') && !bankStatementLocked.value)
@@ -260,6 +271,7 @@ async function loadInvoice(id: number) {
   }
   persistedStatus.value = res.invoice.status
   bankStatementLocked.value = res.statusLocked ?? false
+  bankStatementId.value = res.bankStatementId
 
   file.value = null
   removeExistingFile.value = false

@@ -105,20 +105,38 @@
                 <button
                   v-if="!disabled && canEditSelectedReceipt(i)"
                   type="button"
-                  class="p-2 h-9.5 w-9.5 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer shrink-0"
+                  class="inline-flex items-center justify-center self-stretch w-9.5 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer shrink-0"
                   :title="t('actions.edit')"
                   @click.stop.prevent="editSelectedReceipt(i)"
                 >
                   <Icon name="material-symbols:edit-square-outline-rounded" class="text-xl" />
                 </button>
                 <button
+                  v-else-if="canViewSelectedReceipt(i)"
+                  type="button"
+                  class="inline-flex items-center justify-center self-stretch w-9.5 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer shrink-0"
+                  :title="t('actions.view')"
+                  @click.stop.prevent="viewSelectedReceipt(i)"
+                >
+                  <Icon name="material-symbols:visibility-outline-rounded" class="text-xl" />
+                </button>
+                <button
                   v-if="!disabled && canEditSelectedInvoice(i)"
                   type="button"
-                  class="p-2 h-9.5 w-9.5 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer shrink-0"
+                  class="inline-flex items-center justify-center self-stretch w-9.5 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer shrink-0"
                   :title="t('actions.edit')"
                   @click.stop.prevent="editSelectedInvoice(i)"
                 >
                   <Icon name="material-symbols:edit-square-outline-rounded" class="text-xl" />
+                </button>
+                <button
+                  v-else-if="canViewSelectedInvoice(i)"
+                  type="button"
+                  class="inline-flex items-center justify-center self-stretch w-9.5 rounded-md hover:bg-base-100 text-accent-500 cursor-pointer shrink-0"
+                  :title="t('actions.view')"
+                  @click.stop.prevent="viewSelectedInvoice(i)"
+                >
+                  <Icon name="material-symbols:visibility-outline-rounded" class="text-xl" />
                 </button>
               </template>
             </CommonSearchSelect>
@@ -244,6 +262,8 @@ const props = defineProps<{
   canCreateInvoice?: boolean
   canEditReceipt?: boolean
   canEditInvoice?: boolean
+  canViewReceipt?: boolean
+  canViewInvoice?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -267,6 +287,8 @@ const canCreateReceipt = computed(() => props.canCreateReceipt === true)
 const canCreateInvoice = computed(() => props.canCreateInvoice === true)
 const canEditReceipt = computed(() => props.canEditReceipt === true)
 const canEditInvoice = computed(() => props.canEditInvoice === true)
+const canViewReceipt = computed(() => props.canViewReceipt === true)
+const canViewInvoice = computed(() => props.canViewInvoice === true)
 
 const members = ref<MemberListItem[]>([])
 const receipts = ref<BankStatementReceiptOption[]>([])
@@ -530,6 +552,7 @@ function buildEntityReturnMeta(positionIndex: number) {
   if (pageMeta.value?.bankStatementId) meta.bankStatementId = pageMeta.value.bankStatementId
   if (props.file) meta.bankStatementFile = props.file
   if (props.removeExistingFile) meta.bankStatementRemoveExistingFile = true
+  if (pageMeta.value?.forceReadonly) meta.forceReadonly = true
   meta.returnTarget = returnTarget.value
   return meta
 }
@@ -558,24 +581,48 @@ function canEditSelectedInvoice(index: number) {
   return canEditInvoice.value && Boolean(form.value.positions[index]?.invoice_id)
 }
 
-function editSelectedReceipt(index: number) {
+function canViewSelectedReceipt(index: number) {
+  return canViewReceipt.value && Boolean(form.value.positions[index]?.receipt_id)
+}
+
+function canViewSelectedInvoice(index: number) {
+  return canViewInvoice.value && Boolean(form.value.positions[index]?.invoice_id)
+}
+
+function openSelectedReceipt(index: number, readonly: boolean) {
   const position = form.value.positions[index]
   if (!position?.receipt_id) return
   setPageWithReturnTarget(
     'ReceiptCreate',
-    { receiptId: position.receipt_id },
+    readonly ? { receiptId: position.receipt_id, forceReadonly: true } : { receiptId: position.receipt_id },
     buildReturnTarget('BankStatementCreate', buildEntityReturnMeta(index)),
   )
 }
 
-function editSelectedInvoice(index: number) {
+function openSelectedInvoice(index: number, readonly: boolean) {
   const position = form.value.positions[index]
   if (!position?.invoice_id) return
   setPageWithReturnTarget(
     'InvoiceCreate',
-    { invoiceId: position.invoice_id },
+    readonly ? { invoiceId: position.invoice_id, forceReadonly: true } : { invoiceId: position.invoice_id },
     buildReturnTarget('BankStatementCreate', buildEntityReturnMeta(index)),
   )
+}
+
+function editSelectedReceipt(index: number) {
+  openSelectedReceipt(index, false)
+}
+
+function viewSelectedReceipt(index: number) {
+  openSelectedReceipt(index, true)
+}
+
+function editSelectedInvoice(index: number) {
+  openSelectedInvoice(index, false)
+}
+
+function viewSelectedInvoice(index: number) {
+  openSelectedInvoice(index, true)
 }
 
 async function loadSupportData() {

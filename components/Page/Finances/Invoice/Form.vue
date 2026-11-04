@@ -41,6 +41,9 @@
             :allowed-targets="statusTargets"
             class="h-10"
           />
+          <div v-if="$slots['status-links']" class="flex flex-wrap items-center gap-4 pt-1">
+            <slot name="status-links" />
+          </div>
         </div>
         <div v-if="form.status === InvoiceStatus.Paid" class="field">
           <label>{{ t('invoice.paidAt') }}</label>

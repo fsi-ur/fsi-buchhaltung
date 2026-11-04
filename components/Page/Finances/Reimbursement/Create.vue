@@ -20,7 +20,8 @@
       :remove-existing-file="removeExistingFile"
       :disabled="!canEdit"
       :can-create-receipt="canCreateReceipt"
-      :can-edit-receipt="canCreateReceipt"
+      :can-edit-receipt="canEditReceipt"
+      :can-view-receipt="canViewReceipt"
       :external-validation-errors="externalValidationErrors"
       :saving="isSaving"
       @submit="submit"
@@ -50,9 +51,11 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('ReimbursementList')
 
-const canEdit = computed(() => hasPermission('reimbursements.edit'))
+const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit'))
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
-const canViewFiles = computed(() => hasPermission('files.view') && (hasPermission('reimbursements.edit') || existingFile.value !== null))
+const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
+const canViewReceipt = computed(() => hasPermission('receipts.view'))
+const canViewFiles = computed(() => hasPermission('files.view') && (canEdit.value || existingFile.value !== null))
 
 const isEditMode = ref(false)
 const reimbursementId = ref<number | null>(null)
