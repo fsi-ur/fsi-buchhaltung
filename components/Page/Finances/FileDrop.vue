@@ -98,11 +98,14 @@
         <div v-if="isPdf" class="relative shadow-2xl bg-white transition-all duration-200">
           <VuePdfEmbed
             :source="previewUrl"
-            :page="currentPage"
-            :width="computedWidth"
+            :page="pdfRenderPage"
+            :width="pdfRenderWidth"
             :text-layer="true"
             class="relative"
             @loaded="onPdfLoaded"
+            @rendered="onPdfRenderSettled"
+            @rendering-failed="onPdfRenderSettled"
+            @loading-failed="onPdfRenderSettled"
           />
         </div>
 
@@ -200,8 +203,28 @@ const NORMALIZED_IMAGE_EXTENSION = 'jpg'
 const NORMALIZED_IMAGE_QUALITY = 0.85
 
 const computedWidth = computed<number>(() => {
-  return containerWidth.value * zoomLevel.value
+  return Math.floor(containerWidth.value * zoomLevel.value)
 })
+
+// vue-pdf-embed breaks (and clears all pages) when its width/page props change again while
+// a previous change is still rendering, so prop updates are held back until the render settles.
+const pdfRenderWidth = ref<number>(computedWidth.value)
+const pdfRenderPage = ref<number>(currentPage.value)
+let pdfRendering = false
+
+const syncPdfRenderProps = (): void => {
+  if (pdfRendering) return
+  if (pdfRenderWidth.value === computedWidth.value && pdfRenderPage.value === currentPage.value) return
+
+  pdfRendering = Boolean(pdfDocument.value)
+  pdfRenderWidth.value = computedWidth.value
+  pdfRenderPage.value = currentPage.value
+}
+
+function onPdfRenderSettled() {
+  pdfRendering = false
+  syncPdfRenderProps()
+}
 
 const allowedMimeTypes = computed(() => [...new Set(props.allowedFileTypes.flatMap((type) => FILE_TYPE_MIME_MAP[type]))])
 const acceptAttribute = computed(() => allowedMimeTypes.value.join(','))
@@ -378,6 +401,9 @@ watch(
 
     intrinsicContentHeight.value = 800
     pdfDocument.value = null
+    pdfRendering = isPdf.value
+    pdfRenderWidth.value = computedWidth.value
+    pdfRenderPage.value = currentPage.value
     updateLayout()
     initializeObservers()
     void updateIntrinsicHeight()
@@ -386,6 +412,7 @@ watch(
 )
 
 watch([computedWidth, currentPage], async () => {
+  syncPdfRenderProps()
   await nextTick()
   void updateIntrinsicHeight()
 })
@@ -641,6 +668,7 @@ function prevPage() {
 }
 
 .custom-scrollbar {
+  scrollbar-gutter: stable;
   scrollbar-width: auto;
   scrollbar-color: #475569 #1e293b;
 }
