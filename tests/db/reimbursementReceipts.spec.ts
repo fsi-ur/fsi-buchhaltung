@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getDbConnection, query } from '~/server/utils/db'
+import { query, withTransaction } from '~/server/utils/db'
 import { releaseRemovedReimbursementReceipts, validateReimbursableReceipts, REIMBURSEMENT_RECEIPT_CANCELLED } from '~/server/utils/reimbursements'
 import { resetDatabase } from '../helpers/db'
 import { createMember, createReceipt, resetFixtureCounter } from '../helpers/fixtures'
@@ -26,17 +26,16 @@ describe('reimbursement receipts', () => {
 
   it('refuses cancelled receipts and releases removed ones', async () => {
     const memberId = await createMember()
-    const conn = await getDbConnection()
-    try {
-      const cancelled = await createReceipt({ status: 'cancelled' })
-      expect(await validateReimbursableReceipts([cancelled], conn)).toBe(REIMBURSEMENT_RECEIPT_CANCELLED)
+    const cancelled = await createReceipt({ status: 'cancelled' })
+    const paid = await createReceipt({ status: 'paid' })
+    const reimbursementId = await reimbursement(memberId)
 
-      const paid = await createReceipt({ status: 'paid' })
-      await releaseRemovedReimbursementReceipts(await reimbursement(memberId), [paid], conn)
-      const [row] = await query<any[]>('SELECT status FROM receipts WHERE id = ?', [paid])
-      expect(row.status).toBe('open')
-    } finally {
-      conn.release()
-    }
+    await withTransaction(async (conn) => {
+      expect(await validateReimbursableReceipts([cancelled], conn)).toBe(REIMBURSEMENT_RECEIPT_CANCELLED)
+      await releaseRemovedReimbursementReceipts(reimbursementId, [paid], conn)
+    })
+
+    const [row] = await query<any[]>('SELECT status FROM receipts WHERE id = ?', [paid])
+    expect(row.status).toBe('open')
   })
 })
