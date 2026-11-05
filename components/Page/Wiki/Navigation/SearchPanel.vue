@@ -163,15 +163,19 @@ function escapeHtml(value: string) {
 }
 
 function highlight(value: string) {
-  const escaped = escapeHtml(value)
-  const words = searchedTerms.value
-  if (!words.length) return escaped
+  const words = searchedTerms.value.filter(Boolean)
+  if (!words.length) return escapeHtml(value)
 
+  // Matched on the raw text and escaped per segment — matching the escaped text broke entities for
+  // searches like "amp" (SEC-33).
   const alternatives = words
-    .map(word => escapeHtml(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('|')
   const pattern = new RegExp(`(${alternatives})`, 'gi')
-  return escaped.replace(pattern, '<mark class="search-hit-mark">$1</mark>')
+  return value
+    .split(pattern)
+    .map((part, index) => (index % 2 === 1 ? `<mark class="search-hit-mark">${escapeHtml(part)}</mark>` : escapeHtml(part)))
+    .join('')
 }
 
 function clear() {

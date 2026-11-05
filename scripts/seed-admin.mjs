@@ -103,7 +103,6 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'members.editOwnData',
     'receipts.view',
     'invoices.view',
-    'reimbursements.view',
     'companies.view',
     'subjects.view',
     'positions.view',

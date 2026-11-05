@@ -189,6 +189,11 @@ function buildToolLink(attributes: Record<string, string>, env: RenderEnv): Wiki
     try {
       const parsed = JSON.parse(attributes.meta)
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object')
+      // Page meta drives navigation state: only flat ids/flags, never nested objects such as a
+      // forged returnTarget chain (SEC-33).
+      const entries = Object.entries(parsed)
+      if (entries.some(([key, value]) => !/^[A-Za-z][A-Za-z0-9]*$/.test(key) || key === 'returnTarget'
+        || !['string', 'number', 'boolean'].includes(typeof value))) throw new Error('unsupported meta')
       meta = parsed
     } catch {
       env.errors.push(`Die meta-Angabe des Tool-Links „${page}" ist kein gültiges JSON-Objekt.`)

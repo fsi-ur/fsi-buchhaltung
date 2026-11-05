@@ -50,7 +50,7 @@ onUnmounted(() => {
 })
 
 const currentComponent = computed(() => {
-  const page = PAGES[currentPage.value]
+  const page = Object.hasOwn(PAGES, currentPage.value) ? PAGES[currentPage.value] : undefined
   if (!page) return LoginPage
   if (page.allowGuest) return page.component
   if (!user.value) return LoginPage
@@ -64,7 +64,7 @@ const currentComponent = computed(() => {
 })
 
 const componentKey = computed(() => {
-  const page = PAGES[currentPage.value]
+  const page = Object.hasOwn(PAGES, currentPage.value) ? PAGES[currentPage.value] : undefined
   if (page?.preserveOnRefresh) return currentPage.value
 
   return `${currentPage.value}:${refreshKey.value}`
