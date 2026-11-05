@@ -68,6 +68,7 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
           existingAssignments: existingAssignmentRows,
           incomingAssignments: normalizedAssignments,
           userId: current.user.id,
+          actorPermissions: current.user.permissions,
           conn,
         })
         if (!syncedAssignments.ok) return { ok: false, error: syncedAssignments.error }
@@ -92,6 +93,7 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
         existingAssignments: [],
         incomingAssignments: normalizedAssignments,
         userId: current.user.id,
+        actorPermissions: current.user.permissions,
         conn,
       })
       if (!syncedAssignments.ok) return { ok: false, error: syncedAssignments.error }

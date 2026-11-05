@@ -38,6 +38,7 @@ const ALL_PERMISSION_KEYS = [
   'subjects.view',
   'subjects.edit',
   'positions.view',
+  'positions.assign',
   'receipts.view',
   'receipts.edit',
   'invoices.view',

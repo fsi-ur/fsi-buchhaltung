@@ -4,6 +4,8 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { toggleActiveRecord } from '~/server/utils/api/toggle'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { appTodayLocalDate } from '~/server/utils/time'
+import { getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
+import { POSITION_ASSIGN_EXCEEDS_OWN } from '~/server/utils/positions'
 
 interface PositionActivateBody {
   id: number
@@ -52,6 +54,11 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
 
   try {
     if (is_active) {
+      // Re-activating hands the position's permissions back to everyone holding it (SEC-01).
+      if (!current.user.permissions.includes('permissions.manage')) {
+        const keys = (await getPositionPermissionKeys([Number(id)])).get(Number(id)) ?? []
+        if (permissionsBeyond(keys, current.user.permissions).length) return { ok: false, error: POSITION_ASSIGN_EXCEEDS_OWN }
+      }
       return await toggleActiveRecord({
         table: 'positions',
         entityType: 'position',

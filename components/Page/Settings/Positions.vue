@@ -48,8 +48,12 @@
         <div class="rounded-lg overflow-hidden border border-base-200 p-4 space-y-3 relative z-20">
           <div class="space-y-3">
             <h4 class="font-medium text-base-900">{{ t('settings.positions.manageAssignments') }}</h4>
+            <p v-if="!canAssignPositions" class="text-sm text-base-500">
+              {{ t('member.positionsAssignNotAllowed') }}
+            </p>
 
             <CommonSearchSelect
+              v-if="canAssignPositions"
               v-model="memberQuery"
               :options="memberSearchOptions(editingItem)"
               :placeholder="t('settings.positions.memberPlaceholder')"
@@ -94,6 +98,7 @@
                   </div>
 
                   <button
+                    v-if="canAssignPositions"
                     type="button"
                     class="shrink-0 text-sm text-danger-500 hover:underline cursor-pointer"
                     @click="removeAssignment(index, editingItem)"
@@ -105,7 +110,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <label class="flex items-center gap-2 text-sm text-base-700">
                     <span class="shrink-0">{{ t('common.from') }}</span>
-                    <CommonDateInput v-model="assignment.since" class="min-w-0" />
+                    <CommonDateInput v-model="assignment.since" class="min-w-0" :disabled="!canAssignPositions" />
                   </label>
 
                   <label class="flex items-center gap-2 text-sm text-base-700">
@@ -114,6 +119,7 @@
                       v-model="assignment.until"
                       class="min-w-0"
                       :empty-value="null"
+                      :disabled="!canAssignPositions"
                     />
                   </label>
                 </div>
@@ -248,6 +254,7 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 
 const hasAccess = computed(() => hasPermission('settings.positions.manage'))
+const canAssignPositions = computed(() => hasPermission('positions.assign'))
 const entityManagerRef = ref<{ loadItems: () => Promise<void> } | null>(null)
 const memberOptions = ref<PositionMemberOption[]>([])
 const memberQuery = ref('')

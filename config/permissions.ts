@@ -10,6 +10,7 @@ export type PermissionKey =
   | 'subjects.view'
   | 'subjects.edit'
   | 'positions.view'
+  | 'positions.assign'
   | 'receipts.view'
   | 'receipts.edit'
   | 'invoices.view'
@@ -81,6 +82,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'subjects.view', labelKey: 'permissions.items.subjectsView', categoryKey: 'permissions.categories.members' },
   { key: 'subjects.edit', labelKey: 'permissions.items.subjectsEdit', categoryKey: 'permissions.categories.members' },
   { key: 'positions.view', labelKey: 'permissions.items.positionsView', categoryKey: 'permissions.categories.members' },
+  { key: 'positions.assign', labelKey: 'permissions.items.positionsAssign', categoryKey: 'permissions.categories.members' },
   { key: 'receipts.view', labelKey: 'permissions.items.receiptsView', categoryKey: 'permissions.categories.receipts' },
   { key: 'receipts.edit', labelKey: 'permissions.items.receiptsEdit', categoryKey: 'permissions.categories.receipts' },
   { key: 'invoices.view', labelKey: 'permissions.items.invoicesView', categoryKey: 'permissions.categories.invoices' },
@@ -162,7 +164,9 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'settings.app.access': ['settings.access'],
   'settings.app.snapshots.manage': ['settings.app.access'],
   'settings.apiKeys.manage': ['settings.app.access'],
-  'permissions.manage': ['settings.access', 'users.view'],
+  // Whoever may edit every permission can also hand out positions (SEC-01).
+  'permissions.manage': ['settings.access', 'users.view', 'positions.assign'],
+  'positions.assign': ['positions.view'],
   'users.manage': ['users.view'],
   'bank_statements.edit': ['bank_statements.view'],
   'notifications.send': ['notifications.view'],

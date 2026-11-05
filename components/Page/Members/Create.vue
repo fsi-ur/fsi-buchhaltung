@@ -12,6 +12,7 @@
           :saving="isSaving"
           :can-edit-subjects="canEditSubjects"
           :can-manage-users="canManageUsers"
+          :can-assign-positions="canAssignPositions"
           :can-manage-subdivisions="canManageSubdivisions"
           :assigned-subdivisions="assignedSubdivisions"
           :show-account-creation="!isEditMode"
@@ -262,6 +263,7 @@ const { hasPermission } = useAuth()
 const canEdit = computed(() => hasPermission('members.edit'))
 const canEditSubjects = computed(() => hasPermission('subjects.edit'))
 const canManageUsers = computed(() => hasPermission('users.manage'))
+const canAssignPositions = computed(() => hasPermission('positions.assign'))
 const canManageSubdivisions = computed(() => hasPermission('settings.subdivisions.manage'))
 
 const isEditMode = ref(false)

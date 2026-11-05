@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS members (
   applied_at DATE NOT NULL,
   joined_at DATE NOT NULL,
   left_at DATE,
+  UNIQUE KEY uq_members_account (account),
   FOREIGN KEY (account) REFERENCES users(id),
   FOREIGN KEY (subject) REFERENCES subjects(id)
 );

@@ -9,6 +9,7 @@ import { normalizePositionAssignments, syncPositionAssignments, type PositionAss
 import { clearPendingChangeForField } from '~/server/utils/memberSelfEdit'
 import { retargetPendingMemberWelcome } from '~/server/utils/memberWelcome'
 import { SELF_EDIT_ELIGIBLE_FIELDS } from '~/config/memberSelfEdit'
+import { authorizeMemberAccountLink } from '~/server/utils/userAccounts'
 
 interface UpdateMemberSuccess {
   ok: true
@@ -50,10 +51,23 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
       const existing = existingRows[0]
       if (!existing) return { ok: false, error: 'Member not found' }
 
+      const existingAccount = existing.account === null || existing.account === undefined ? null : Number(existing.account)
+      // An omitted `account` keeps the link; changing it is a users.manage matter (SEC-01).
+      const nextAccount = body.account === undefined ? existingAccount : (body.account === null ? null : Number(body.account))
+      if (nextAccount !== existingAccount) {
+        const linkError = await authorizeMemberAccountLink({
+          memberId,
+          accountId: nextAccount,
+          actorPermissions: current.user.permissions,
+          conn,
+        })
+        if (linkError) return { ok: false, error: linkError }
+      }
+
       const subjectId = await ensureSubjectId(body.subject_name, conn)
 
       const updatedFields = {
-        account: body.account ?? null,
+        account: nextAccount,
         last_name: body.last_name,
         first_name: body.first_name,
         birthdate: body.birthdate,
@@ -103,23 +117,27 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         SELF_EDIT_ELIGIBLE_FIELDS.map(field => clearPendingChangeForField(memberId, field, conn)),
       )
 
-      const existingPositionRows = await query<PositionAssignmentRow[]>(
-        `SELECT id, member_id, position_id, since, until
-         FROM member_positions
-         WHERE member_id = ?`,
-        [memberId],
-        conn,
-      )
+      // An omitted list means "leave the assignments alone", never "remove them all".
+      if (body.positions !== undefined) {
+        const existingPositionRows = await query<PositionAssignmentRow[]>(
+          `SELECT id, member_id, position_id, since, until
+           FROM member_positions
+           WHERE member_id = ?`,
+          [memberId],
+          conn,
+        )
 
-      const syncedPositions = await syncPositionAssignments({
-        scope: 'member',
-        ownerId: memberId,
-        existingAssignments: existingPositionRows,
-        incomingAssignments: positionAssignments ?? [],
-        userId: current.user.id,
-        conn,
-      })
-      if (!syncedPositions.ok) return { ok: false, error: syncedPositions.error }
+        const syncedPositions = await syncPositionAssignments({
+          scope: 'member',
+          ownerId: memberId,
+          existingAssignments: existingPositionRows,
+          incomingAssignments: positionAssignments ?? [],
+          userId: current.user.id,
+          actorPermissions: current.user.permissions,
+          conn,
+        })
+        if (!syncedPositions.ok) return { ok: false, error: syncedPositions.error }
+      }
 
       if (canManageSubdivisions && subdivisionIds !== undefined) {
         const existingSubdivisionRows = await query<{ subdivision_id: number }[]>(
@@ -159,9 +177,7 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         })
       }
 
-      const memberAccountId = body.account ?? (existing.account === null || existing.account === undefined
-        ? null
-        : Number(existing.account))
+      const memberAccountId = nextAccount
 
       const statusActions = await applyMemberStatusActions({
         memberId,
