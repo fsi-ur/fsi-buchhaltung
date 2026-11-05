@@ -1,3 +1,4 @@
+import { sessionCookieOptions } from '~/server/utils/sessionCookie'
 import { defineEventHandler, readBody, setCookie, setResponseHeader, setResponseStatus } from 'h3'
 import { query } from '~/server/utils/db'
 import { makeToken, createSession, comparePassword, compareAgainstDummyHash, cleanupExpiredSessions } from '~/server/utils/auth'
@@ -83,14 +84,7 @@ export default defineEventHandler(async (event): Promise<LoginResponse> => {
     const cookieName = process.env.SESSION_COOKIE_NAME || 'app_session'
     const maxAgeSeconds = parseInt(process.env.SESSION_MAX_AGE_MINUTES || '1440') * 60
 
-    setCookie(event, cookieName, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: maxAgeSeconds,
-      ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
-    })
+    setCookie(event, cookieName, token, sessionCookieOptions(maxAgeSeconds))
 
     const roles = await getUserRoleIds(user.id)
     const positionIds = await getUserPositionIds(user.id)

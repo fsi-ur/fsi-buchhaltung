@@ -2644,6 +2644,8 @@ export const messages = {
       },
       unsubscribe: {
         title: 'Abmeldung',
+        confirmQuestion: 'Möchtest du keine E-Mails dieser Art mehr erhalten?',
+        confirmButton: 'Abmelden',
         success: 'Du erhältst diese Art von Benachrichtigung per E-Mail nicht mehr.',
         error: 'Der Link ist ungültig oder abgelaufen.',
       },
@@ -6065,6 +6067,8 @@ export const messages = {
       },
       unsubscribe: {
         title: 'Unsubscribe',
+        confirmQuestion: 'Do you no longer want to receive e-mails of this kind?',
+        confirmButton: 'Unsubscribe',
         success: 'You will no longer receive this type of notification by e-mail.',
         error: 'This link is invalid or has expired.',
       },

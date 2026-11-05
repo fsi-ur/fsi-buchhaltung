@@ -42,10 +42,16 @@ export const emailChannel: NotificationChannel = {
     let unsubscribeUrl: string | null = null
 
     if (unsubscribeToken) {
-      const baseUrl = (process.env.APP_BASE_URL || '/').replace(/\/$/, '')
+      // APP_PUBLIC_URL (absolute) makes the link work in every mail client; APP_BASE_URL alone is
+      // only a path (SEC-33).
+      const baseUrl = (process.env.APP_PUBLIC_URL || process.env.APP_BASE_URL || '/').replace(/\/$/, '')
       unsubscribeUrl = `${baseUrl}/api/notifications/unsubscribe?token=${unsubscribeToken}`
       body = `${body}\n\n---\n\nAbmelden: ${unsubscribeUrl}`
     }
+    // RFC 8058 one-click unsubscribe (POST); mail clients require an absolute https URL.
+    const listUnsubscribe = unsubscribeUrl && /^https:\/\//.test(unsubscribeUrl)
+      ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+      : undefined
 
     const bodyHtml = renderNotificationBodyHtml(body)
 
@@ -55,6 +61,7 @@ export const emailChannel: NotificationChannel = {
       subject: rendered.subject,
       text: body,
       html: bodyHtml,
+      headers: listUnsubscribe,
       attachments: attachments?.length
         ? attachments.map(attachment => ({
             filename: attachment.filename,

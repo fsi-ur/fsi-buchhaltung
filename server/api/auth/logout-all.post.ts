@@ -1,3 +1,4 @@
+import { sessionCookieOptions } from '~/server/utils/sessionCookie'
 import { defineEventHandler, setCookie } from 'h3'
 import { query } from '~/server/utils/db'
 import { getCurrentUserFromEvent } from '~/server/utils/sessionGuard'
@@ -25,14 +26,7 @@ export default defineEventHandler(async (event): Promise<LogoutAllResponse> => {
   }
 
   const cookieName = process.env.SESSION_COOKIE_NAME || 'app_session'
-  setCookie(event, cookieName, '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    path: '/',
-    maxAge: 0,
-    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
-  })
+  setCookie(event, cookieName, '', sessionCookieOptions(0))
 
   return { ok: true }
 })
