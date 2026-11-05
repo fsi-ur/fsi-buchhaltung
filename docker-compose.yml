@@ -3,7 +3,7 @@ services:
   # users. It is the only container that receives the root/setup credentials (SEC-10); the app
   # starts after it exited successfully.
   migrate:
-    image: node:22-alpine
+    image: node:24-alpine
     working_dir: /app
     volumes:
       - .:/app
@@ -28,7 +28,7 @@ services:
     restart: "no"
 
   app:
-    image: node:22-alpine
+    image: node:24-alpine
     working_dir: /app
     volumes:
       - .:/app
