@@ -37,7 +37,7 @@ export default defineEventHandler(async (event): Promise<PreviewFilesSnapshotRes
       const archiveFile = multipart.formData.find(field => field.name === 'archive' && field.filename)
       if (!archiveFile) throw new Error('Missing files archive')
 
-      const { snapshot } = getSnapshotRestoreSession(multipart.getField('restoreToken'))
+      const { snapshot } = getSnapshotRestoreSession(current.user.id, multipart.getField('restoreToken'))
 
       return {
         ok: true,

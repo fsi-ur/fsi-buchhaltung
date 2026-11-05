@@ -25,6 +25,8 @@ const {
 } = process.env
 
 const AUDIT_TABLE = 'entity_versions'
+// Append-only for the app (restore log, SEC-09).
+const APPEND_ONLY_TABLES = new Set(['system_events'])
 
 if (!DB_RUNTIME_USER || !DB_RUNTIME_PASSWORD) {
   console.log('create-runtime-db-user: skipped (DB_RUNTIME_USER or DB_RUNTIME_PASSWORD not set)')
@@ -73,7 +75,9 @@ async function createRuntimeUser() {
     )
 
     for (const { name } of tables) {
-      const privileges = name === AUDIT_TABLE ? 'SELECT, INSERT, DELETE' : 'SELECT, INSERT, UPDATE, DELETE'
+      const privileges = name === AUDIT_TABLE
+        ? 'SELECT, INSERT, DELETE'
+        : APPEND_ONLY_TABLES.has(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE, DELETE'
       await conn.query(`GRANT ${privileges} ON ${quoteTable(name)} TO ?@'%'`, [DB_RUNTIME_USER])
     }
 

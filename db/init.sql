@@ -465,6 +465,17 @@ CREATE TABLE IF NOT EXISTS invoice_positions (
   FOREIGN KEY (cost_centre) REFERENCES cost_centres(id)
 );
 
+-- Durable log that survives snapshot restores (excluded from snapshots and audit triggers).
+CREATE TABLE IF NOT EXISTS system_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event_type VARCHAR(100) NOT NULL,
+  actor_user_id BIGINT UNSIGNED NULL,
+  actor_username VARCHAR(255) NULL,
+  details LONGTEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_system_events_created (created_at)
+);
+
 CREATE TABLE IF NOT EXISTS receipts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   company_id BIGINT UNSIGNED NOT NULL,

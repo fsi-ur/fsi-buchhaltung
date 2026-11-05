@@ -42,7 +42,7 @@ export default defineEventHandler(async (event): Promise<PreviewSnapshotResponse
       const password = multipart.getField('password')
       const snapshot = parseEncryptedDatabaseSnapshot(snapshotFile.data, password)
       const preview = await previewDatabaseSnapshotForCurrentSchema(snapshot)
-      const restoreToken = createSnapshotRestoreSession(snapshot, preview)
+      const restoreToken = createSnapshotRestoreSession(current.user.id, snapshot, preview)
 
       return { ...preview, restoreToken, filesArchive: { provided: false, fileCount: 0, archiveFileCount: 0 } }
     }

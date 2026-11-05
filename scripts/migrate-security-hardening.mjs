@@ -6,6 +6,7 @@ import mariadb from 'mariadb'
  * - SEC-01: `members.account` becomes UNIQUE — one account per member record, so linking can't be
  *   used to inherit another member's positions. Duplicates are NOT resolved automatically: the
  *   migration fails and lists them, an admin has to unlink the surplus records first.
+ * - SEC-09: `system_events` — durable log (snapshot restores) that a restore itself never touches.
  */
 
 const {
@@ -51,6 +52,21 @@ async function uniqueMemberAccount(conn) {
   console.log(`${LOG}: added UNIQUE members.account`)
 }
 
+async function systemEvents(conn) {
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS system_events (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      event_type VARCHAR(100) NOT NULL,
+      actor_user_id BIGINT UNSIGNED NULL,
+      actor_username VARCHAR(255) NULL,
+      details LONGTEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_system_events_created (created_at)
+    )
+  `)
+  console.log(`${LOG}: ensured system_events`)
+}
+
 async function migrate() {
   const migrationUser = DB_AUDIT_SETUP_USER || DB_USER
   const migrationPassword = DB_AUDIT_SETUP_USER
@@ -70,6 +86,7 @@ async function migrate() {
   try {
     conn = await pool.getConnection()
     await uniqueMemberAccount(conn)
+    await systemEvents(conn)
     console.log(`${LOG}: done`)
   } finally {
     if (conn) conn.release()

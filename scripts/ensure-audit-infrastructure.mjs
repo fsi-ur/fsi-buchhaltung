@@ -14,6 +14,8 @@ const {
 const EXCLUDED_AUDIT_TABLES = new Set([
   'entity_versions',
   'sessions',
+  // Restore log (SEC-09): must not end up in entity_versions, which a restore replaces.
+  'system_events',
   // High-churn, low-value wiki state -- auditing it would only bloat entity_versions.
   'wiki_path_progress',
   'wiki_checklist_personal_state',

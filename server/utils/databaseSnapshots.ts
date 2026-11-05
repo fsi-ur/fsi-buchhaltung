@@ -12,6 +12,12 @@ const ENCRYPTED_SNAPSHOT_FORMAT = 'fsi-buchhaltung.encrypted-database-snapshot'
 const SNAPSHOT_VERSION = 3
 const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3])
 const CONTENT_EXCLUDED_TABLES = new Set(['sessions'])
+/**
+ * Tables that are not part of a snapshot at all — neither exported nor deleted/replaced on restore.
+ * `system_events` is the restore log itself (SEC-09): it must survive the restore it records.
+ */
+export const SNAPSHOT_EXCLUDED_TABLES = new Set(['system_events'])
+const SIGNATURE_ALGORITHM = 'hmac-sha256'
 const ENCRYPTED_SNAPSHOT_MAGIC = Buffer.from('FSI-DB-SNAPSHOT-ENC\0', 'utf8')
 const ENCRYPTED_SNAPSHOT_TAG_LENGTH = 16
 const ENCRYPTED_SNAPSHOT_SCRYPT_OPTIONS = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
@@ -27,6 +33,7 @@ export type SnapshotErrorCode =
   | 'archiveInvalid'
   | 'archiveFilesMissing'
   | 'previewExpired'
+  | 'untrustedSnapshot'
 
 export class SnapshotError extends Error {
   constructor(
@@ -87,6 +94,11 @@ export interface DatabaseSnapshot {
     algorithm: 'sha256'
     checksum: string
   }
+  /** HMAC of `integrity.checksum` with this server's signing key (SEC-09). */
+  signature?: {
+    algorithm: typeof SIGNATURE_ALGORITHM
+    value: string
+  }
   excludedContent?: string[]
   tables: SnapshotTable[]
 }
@@ -120,6 +132,11 @@ export interface SnapshotPreview {
     valid: boolean
     algorithm: string | null
     checksum: string | null
+  }
+  /** `valid` = created and signed by this server (same signing key) and unmodified since. */
+  signature: {
+    present: boolean
+    valid: boolean
   }
 }
 
@@ -256,8 +273,33 @@ export function parseEncryptedDatabaseSnapshot(encryptedSnapshot: Buffer, passwo
   }
 }
 
+function snapshotSigningKey() {
+  const explicit = process.env.SNAPSHOT_SIGNING_KEY
+  if (explicit) return Buffer.from(explicit, 'utf8')
+  const sessionSecret = process.env.SESSION_SECRET
+  if (!sessionSecret) throw new Error('Missing SNAPSHOT_SIGNING_KEY / SESSION_SECRET env var')
+  return crypto.createHmac('sha256', sessionSecret).update('fsi-buchhaltung snapshot signing v1').digest()
+}
+
+function signChecksum(checksum: string) {
+  return crypto.createHmac('sha256', snapshotSigningKey()).update(checksum).digest('hex')
+}
+
+function snapshotSignature(checksum: string) {
+  return { algorithm: SIGNATURE_ALGORITHM, value: signChecksum(checksum) } as const
+}
+
+function isSignatureValid(snapshot: DatabaseSnapshot, integrityValid: boolean) {
+  const value = snapshot.signature?.value
+  const checksum = snapshot.integrity?.checksum
+  if (!integrityValid || !checksum || snapshot.signature?.algorithm !== SIGNATURE_ALGORITHM || typeof value !== 'string') return false
+  const expected = Buffer.from(signChecksum(checksum), 'hex')
+  const actual = Buffer.from(value, 'hex')
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected)
+}
+
 function checksumSnapshot(snapshot: DatabaseSnapshot) {
-  const { integrity, ...snapshotWithoutIntegrity } = snapshot
+  const { integrity, signature: _signature, ...snapshotWithoutIntegrity } = snapshot
   if (Number(snapshot.version) >= 3) {
     return sha256({
       ...snapshotWithoutIntegrity,
@@ -380,6 +422,7 @@ export function createDatabaseSnapshotStream() {
     yield `  "app": ${JSON.stringify(snapshotMeta.app, null, 2).replace(/\n/g, '\n  ')},\n`
     yield `  "schema": ${JSON.stringify(snapshotMeta.schema, null, 2).replace(/\n/g, '\n  ')},\n`
     yield `  "integrity": ${JSON.stringify(integrity, null, 2).replace(/\n/g, '\n  ')},\n`
+    yield `  "signature": ${JSON.stringify(snapshotSignature(integrity.checksum), null, 2).replace(/\n/g, '\n  ')},\n`
     yield `  "excludedContent": ${JSON.stringify(snapshotMeta.excludedContent, null, 2).replace(/\n/g, '\n  ')},\n`
     yield '  "tables": [\n'
 
@@ -531,6 +574,7 @@ async function getTableColumns(conn?: mariadb.PoolConnection) {
 
   const tables = new Map<string, string[]>()
   for (const row of rows) {
+    if (SNAPSHOT_EXCLUDED_TABLES.has(row.table_name)) continue
     if (!tables.has(row.table_name)) tables.set(row.table_name, [])
     tables.get(row.table_name)!.push(row.column_name)
   }
@@ -577,6 +621,7 @@ export async function createDatabaseSnapshot(): Promise<DatabaseSnapshot> {
     algorithm: 'sha256',
     checksum: checksumSnapshot(snapshot),
   }
+  snapshot.signature = snapshotSignature(snapshot.integrity.checksum)
 
   return snapshot
 }
@@ -612,6 +657,7 @@ export function previewDatabaseSnapshot(value: unknown): SnapshotPreview {
   const snapshot = validateSnapshot(value)
   const integrityChecksum = snapshot.integrity?.checksum || null
   const integrityValid = integrityChecksum ? checksumSnapshot(snapshot) === integrityChecksum : false
+  const signatureValid = isSignatureValid(snapshot, integrityValid)
 
   if (snapshot.integrity && snapshot.integrity.algorithm !== 'sha256') {
     throw new SnapshotError('unsupportedFormat', 'Unsupported snapshot checksum algorithm')
@@ -643,6 +689,10 @@ export function previewDatabaseSnapshot(value: unknown): SnapshotPreview {
       valid: integrityValid,
       algorithm: snapshot.integrity?.algorithm || null,
       checksum: integrityChecksum,
+    },
+    signature: {
+      present: Boolean(snapshot.signature),
+      valid: signatureValid,
     },
   }
 }
@@ -688,12 +738,21 @@ export async function previewDatabaseSnapshotForCurrentSchema(value: unknown) {
   return preview
 }
 
-export async function restoreDatabaseSnapshot(value: unknown, beforeCommit?: () => Promise<void>) {
+export async function restoreDatabaseSnapshot(
+  value: unknown,
+  beforeCommit?: () => Promise<void>,
+  options: { allowForeign?: boolean } = {},
+) {
   const snapshot = validateSnapshot(value)
   assertSnapshotFilePaths(snapshot)
   const preview = previewDatabaseSnapshot(snapshot)
   if (preview.integrity.present && !preview.integrity.valid) {
     throw new SnapshotError('integrityFailed', 'Snapshot integrity check failed')
+  }
+  // Unsigned (old) or foreign snapshots need an explicit confirmation — a restore rewrites users,
+  // permissions and the audit history (SEC-09).
+  if (!preview.signature.valid && !options.allowForeign) {
+    throw new SnapshotError('untrustedSnapshot', 'Snapshot was not signed by this server')
   }
 
   return await withTransaction(async (conn) => {
