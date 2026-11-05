@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { canManageUser } from '~/server/utils/userAccounts'
 
 interface ChangeUsernameBody {
   user_id?: number
@@ -32,6 +33,9 @@ export default defineEventHandler(async (event): Promise<ChangeUsernameResponse>
 
   if (!Number.isInteger(userId) || userId <= 0) return { ok: false, error: 'Missing fields' }
   if (!username) return { ok: false, error: 'Username required' }
+
+  const manageError = await canManageUser(current.user.permissions, userId)
+  if (manageError) return { ok: false, error: manageError }
 
   try {
     await withAuditTransaction(current.user, async (conn) => {

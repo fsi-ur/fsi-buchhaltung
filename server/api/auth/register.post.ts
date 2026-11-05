@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { MIN_PASSWORD_LENGTH } from '~/config/validation'
 import {
   assignMemberToUser,
+  checkMemberPositionsWithinCaller,
   createUserAccount,
   DuplicateUsernameError,
   MemberAlreadyLinkedError,
@@ -38,12 +39,18 @@ export default defineEventHandler(async (event): Promise<RegisterResponse> => {
   if (body.password.length < MIN_PASSWORD_LENGTH) return { ok: false, error: 'Password too short' }
 
   try {
-    await withAuditTransaction(current.user, async (conn) => {
+    const result = await withAuditTransaction(current.user, async (conn) => {
+      if (body.member_id !== undefined && body.member_id !== null) {
+        const positionError = await checkMemberPositionsWithinCaller(Number(body.member_id), current.user.permissions, conn)
+        if (positionError) return { ok: false as const, error: positionError }
+      }
       const userId = await createUserAccount(body, conn)
       if (body.member_id !== undefined) {
         await assignMemberToUser(userId, body.member_id ?? null, current.user.id, conn)
       }
+      return { ok: true as const }
     })
+    if (!result.ok) return result
   } catch (err: any) {
     if (err instanceof DuplicateUsernameError) {
       return { ok: false, error: 'Username already exists' }

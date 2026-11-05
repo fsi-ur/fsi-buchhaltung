@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toggleActiveRecord } from '~/server/utils/api/toggle'
 import type { ActivateBody, ActivateResponse } from '~/types/activate'
+import { canManageUser } from '~/server/utils/userAccounts'
 
 export default defineEventHandler(async (event): Promise<ActivateResponse> => {
   const current = await requirePermission(event, 'users.manage')
@@ -11,6 +12,9 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
   if (id === undefined || id === null || is_active === undefined || is_active === null) {
     return { ok: false, error: 'Missing fields' }
   }
+
+  const manageError = await canManageUser(current.user.permissions, Number(id))
+  if (manageError) return { ok: false, error: manageError }
 
   try {
     return await toggleActiveRecord({

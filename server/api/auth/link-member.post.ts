@@ -1,7 +1,13 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { assignMemberToUser, MemberAlreadyLinkedError, MemberNotFoundError } from '~/server/utils/userAccounts'
+import {
+  assignMemberToUser,
+  canManageUser,
+  checkMemberPositionsWithinCaller,
+  MemberAlreadyLinkedError,
+  MemberNotFoundError,
+} from '~/server/utils/userAccounts'
 
 interface LinkMemberBody {
   user_id: number
@@ -33,6 +39,15 @@ export default defineEventHandler(async (event): Promise<LinkMemberResponse> => 
   return withAuditTransaction(current.user, async (conn) => {
     const userRows = await query<{ id: number }[]>(`SELECT id FROM users WHERE id = ? LIMIT 1`, [userId], conn)
     if (!userRows[0]) return { ok: false, error: 'User not found' }
+
+    // SEC-03: the account must be manageable, and the member's positions must not hand it more
+    // than the caller holds.
+    const manageError = await canManageUser(current.user.permissions, userId, conn)
+    if (manageError) return { ok: false, error: manageError }
+    if (memberId !== null) {
+      const positionError = await checkMemberPositionsWithinCaller(memberId, current.user.permissions, conn)
+      if (positionError) return { ok: false, error: positionError }
+    }
 
     try {
       await assignMemberToUser(userId, memberId, current.user.id, conn)

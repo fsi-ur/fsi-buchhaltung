@@ -58,6 +58,7 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         const linkError = await authorizeMemberAccountLink({
           memberId,
           accountId: nextAccount,
+          previousAccountId: existingAccount,
           actorPermissions: current.user.permissions,
           conn,
         })

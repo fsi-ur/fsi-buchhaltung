@@ -3,6 +3,7 @@ import { hashPassword } from '~/server/utils/auth'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { canManageUser } from '~/server/utils/userAccounts'
 
 interface AdminSetPasswordBody {
   user_id?: number
@@ -34,6 +35,9 @@ export default defineEventHandler(async (event): Promise<AdminSetPasswordRespons
   if (!newPassword || !confirmPassword) return { ok: false, error: 'Missing fields' }
   if (newPassword.length < MIN_PASSWORD_LENGTH) return { ok: false, error: 'Password too short' }
   if (newPassword !== confirmPassword) return { ok: false, error: 'Passwords do not match' }
+
+  const manageError = await canManageUser(current.user.permissions, userId)
+  if (manageError) return { ok: false, error: manageError }
 
   const newPasswordHash = await hashPassword(newPassword)
 
