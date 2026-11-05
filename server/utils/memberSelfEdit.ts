@@ -1,3 +1,4 @@
+import { memberFieldError } from '~/server/utils/members'
 import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import {
@@ -93,7 +94,7 @@ function validateSelfEditFieldValue(field: SelfEditFieldName, value: unknown): s
   }
 
   if (typeof value !== 'string' || !value.trim()) return `Missing value for ${field}`
-  return null
+  return memberFieldError(field, value)
 }
 
 async function subjectExists(subjectId: number, conn: mariadb.PoolConnection) {

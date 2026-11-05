@@ -1,3 +1,4 @@
+import { isSingleEmailAddress } from '~/shared/email'
 import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getPositionLabels, type PositionAssignmentRow } from '~/server/utils/positions'
@@ -24,9 +25,35 @@ export function parseMemberStatus(value: unknown): MemberStatus {
   return isMemberStatus(value) ? value : MemberStatus.Active
 }
 
+/** Column sizes of `members` (db/init.sql); longer values would be cut or rejected by the DB. */
+const MEMBER_FIELD_MAX_LENGTH: Record<string, number> = {
+  first_name: 127,
+  last_name: 127,
+  street: 255,
+  street_number: 20,
+  postal_code: 20,
+  city: 127,
+  phone: 63,
+  email: 254,
+}
+
+/** Per-field check shared by the member editor and the members' own self-edit (SEC-28). */
+export function memberFieldError(field: string, value: unknown): string | null {
+  const max = MEMBER_FIELD_MAX_LENGTH[field]
+  if (max === undefined) return null
+  if (typeof value !== 'string' || !value.trim()) return `Missing value for ${field}`
+  if (value.length > max) return `Der Wert für ${field} ist zu lang (höchstens ${max} Zeichen).`
+  if (field === 'email' && !isSingleEmailAddress(value)) return 'Bitte genau eine gültige E-Mail-Adresse angeben.'
+  return null
+}
+
 export function validateMemberPayload(body: SaveMemberBody) {
   if (!body.first_name || !body.last_name || !body.birthdate || !body.street || !body.street_number || !body.postal_code || !body.city || !body.phone || !body.email || !body.status || !body.applied_at || !body.joined_at || !body.subject_name?.trim()) {
     return 'Missing fields'
+  }
+  for (const field of Object.keys(MEMBER_FIELD_MAX_LENGTH)) {
+    const fieldError = memberFieldError(field, (body as unknown as Record<string, unknown>)[field])
+    if (fieldError) return fieldError
   }
   if (!isMemberStatus(body.status)) return 'Invalid status'
   if (body.status === MemberStatus.Left && !body.left_at) return 'Status left requires left_at'

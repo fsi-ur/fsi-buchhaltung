@@ -1,3 +1,4 @@
+import { isSingleEmailAddress } from '~/shared/email'
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import type { NotificationChannel } from '~/server/utils/notifications/types'
@@ -36,6 +37,7 @@ export const emailChannel: NotificationChannel = {
     const client = getTransporter()
     if (!client) throw new Error('SMTP is not configured')
     if (!recipient.email) throw new Error('Recipient has no e-mail address')
+    if (!isSingleEmailAddress(recipient.email)) throw new Error('Recipient e-mail address is invalid')
 
     const fromName = settings.email_from_name || 'FSi'
     let body = rendered.body
@@ -56,8 +58,9 @@ export const emailChannel: NotificationChannel = {
     const bodyHtml = renderNotificationBodyHtml(body)
 
     await client.sendMail({
-      from: `"${fromName}" <${process.env.SMTP_FROM || 'noreply@example.com'}>`,
-      to: recipient.email,
+      // Structured addresses: no string building, so a name with quotes or <> can't add recipients (SEC-28).
+      from: { name: fromName, address: process.env.SMTP_FROM || 'noreply@example.com' },
+      to: { name: '', address: recipient.email.trim() },
       subject: rendered.subject,
       text: body,
       html: bodyHtml,
