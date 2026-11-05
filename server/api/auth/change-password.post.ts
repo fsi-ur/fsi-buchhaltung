@@ -2,7 +2,7 @@ import { defineEventHandler, getCookie, readBody } from 'h3'
 import { comparePassword, hashPassword, hmacToken } from '~/server/utils/auth'
 import { withAuditTransaction, query } from '~/server/utils/db'
 import { getCurrentUserFromEvent } from '~/server/utils/sessionGuard'
-import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { passwordPolicyError } from '~/config/validation'
 import { internalError } from '~/server/utils/api/errors'
 
 interface ChangePasswordBody {
@@ -39,8 +39,9 @@ export default defineEventHandler(async (event): Promise<ChangePasswordResponse>
     return { ok: false, error: 'Missing fields' }
   }
 
-  if (newPassword.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, error: 'Password too short' }
+  const policyError = passwordPolicyError(newPassword)
+  if (policyError) {
+    return { ok: false, error: policyError }
   }
 
   if (newPassword !== confirmPassword) {

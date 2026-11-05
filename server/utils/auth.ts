@@ -10,6 +10,11 @@ const {
 } = process.env
 
 if (!SESSION_SECRET) throw new Error('Missing SESSION_SECRET env var')
+// Sessions, API keys, calendar and unsubscribe tokens are all HMACed with it (SEC-25).
+const PLACEHOLDER_SECRETS = new Set(['replace_me_with_random', 'dev_change_me'])
+if (process.env.NODE_ENV === 'production' && (SESSION_SECRET.length < 32 || PLACEHOLDER_SECRETS.has(SESSION_SECRET))) {
+  throw new Error('SESSION_SECRET must be a random value of at least 32 characters in production')
+}
 
 export const inactivityMinutes = parseInt(SESSION_INACTIVITY_MINUTES as string)
 export const maxAgeMinutes = parseInt(SESSION_MAX_AGE_MINUTES as string)

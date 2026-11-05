@@ -2,7 +2,7 @@ import type * as mariadb from 'mariadb'
 import { hashPassword } from '~/server/utils/auth'
 import { query } from '~/server/utils/db'
 import { assignDefaultRoleToUser } from '~/server/utils/roles'
-import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { passwordPolicyError } from '~/config/validation'
 import type { PermissionKey } from '~/config/permissions'
 import { getEffectivePermissions, getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
 import { appTodayLocalDate } from '~/server/utils/time'
@@ -46,7 +46,8 @@ export async function createUserAccount(input: CreateUserAccountInput, conn?: ma
   const mustChangePassword = input.must_change_password === true
 
   if (!username || !password) throw new Error('Missing fields')
-  if (password.length < MIN_PASSWORD_LENGTH) throw new Error('Password too short')
+  const policyError = passwordPolicyError(password)
+  if (policyError) throw new Error(policyError)
 
   const passwordHash = await hashPassword(password)
 

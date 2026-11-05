@@ -201,7 +201,7 @@ import type { AdvancedTableColumn } from '~/composables/useAdvancedTable'
 import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import { useAuth } from '~/composables/useAuth'
-import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, passwordPolicyError } from '~/config/validation'
 
 interface UserListRow {
   id: number
@@ -369,6 +369,10 @@ async function createUser() {
     return
   }
 
+  if (passwordPolicyError(payload.password) === 'Password too long') {
+    toast.error(t('settings.general.passwordTooLong', { max: MAX_PASSWORD_BYTES }))
+    return
+  }
   if (payload.password.length < MIN_PASSWORD_LENGTH) {
     toast.error(t('settings.users.setPasswordTooShort', { min: MIN_PASSWORD_LENGTH }))
     return
@@ -384,6 +388,10 @@ async function createUser() {
     if (!res.ok) {
       if (res.error === 'Username already exists') {
         toast.error(t('settings.users.usernameExists'))
+        return
+      }
+      if (res.error === 'Password too long') {
+        toast.error(t('settings.general.passwordTooLong', { max: MAX_PASSWORD_BYTES }))
         return
       }
       if (res.error === 'Password too short') {
@@ -421,6 +429,10 @@ async function saveUserEdit() {
   }
 
   if (editingPasswordNew.value) {
+    if (passwordPolicyError(editingPasswordNew.value) === 'Password too long') {
+      toast.error(t('settings.general.passwordTooLong', { max: MAX_PASSWORD_BYTES }))
+      return
+    }
     if (editingPasswordNew.value.length < MIN_PASSWORD_LENGTH) {
       toast.error(t('settings.users.setPasswordTooShort', { min: MIN_PASSWORD_LENGTH }))
       return
