@@ -17,8 +17,10 @@ export default defineConfig({
     include: ['tests/db/**/*.spec.ts'],
     setupFiles: ['tests/setup/db-env.ts'],
     globalSetup: ['tests/setup/global-db.ts'],
+    // One worker, files one after another: the suites share one test database (Vitest 4 dropped
+    // poolOptions.forks.singleFork).
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
+    maxWorkers: 1,
     fileParallelism: false,
     testTimeout: 20000,
     hookTimeout: 30000,
