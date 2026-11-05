@@ -51,3 +51,36 @@ describe('login hardening', () => {
     expect((await attempt('ok', 'richtig123')).result.ok).toBe(true)
   })
 })
+
+describe('session hygiene (SEC-24)', () => {
+  beforeEach(async () => {
+    await resetDatabase()
+    resetFixtureCounter()
+    loginLockout.reset()
+    loginIpLimiter.reset()
+  })
+
+  it('logging in removes expired sessions, and an expired session is deleted when used', async () => {
+    const { query } = await import('~/server/utils/db')
+    const { createSession, makeToken } = await import('~/server/utils/auth')
+    const { getCurrentUserFromEvent } = await import('~/server/utils/sessionGuard')
+    const { eventWithToken } = await import('../helpers/auth')
+
+    const user = await createUser({ username: 'sitzung', password: 'richtig123' })
+    const stale = makeToken()
+    await createSession(user.id, stale)
+    await query(`UPDATE sessions SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`, [user.id])
+
+    expect((await getCurrentUserFromEvent(eventWithToken(stale), false)).ok).toBe(false)
+    const [{ c: afterUse }] = await query<any[]>('SELECT COUNT(*) AS c FROM sessions WHERE user_id = ?', [user.id])
+    expect(Number(afterUse)).toBe(0)
+
+    const other = makeToken()
+    await createSession(user.id, other)
+    await query(`UPDATE sessions SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`, [user.id])
+    expect((await attempt('sitzung', 'richtig123')).result.ok).toBe(true)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const [{ c: afterLogin }] = await query<any[]>('SELECT COUNT(*) AS c FROM sessions WHERE user_id = ? AND expires_at < ?', [user.id, '2001-01-01 00:00:00'])
+    expect(Number(afterLogin)).toBe(0)
+  })
+})

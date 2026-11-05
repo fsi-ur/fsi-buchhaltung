@@ -1,6 +1,6 @@
 import { defineEventHandler, readBody, setCookie, setResponseHeader, setResponseStatus } from 'h3'
 import { query } from '~/server/utils/db'
-import { makeToken, createSession, comparePassword, compareAgainstDummyHash } from '~/server/utils/auth'
+import { makeToken, createSession, comparePassword, compareAgainstDummyHash, cleanupExpiredSessions } from '~/server/utils/auth'
 import { getClientIp, loginIpLimiter, loginLockout } from '~/server/utils/rateLimit'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import { getUserPermissions, getUserPositionIds, getUserRoleIds } from '~/server/utils/permissions'
@@ -76,6 +76,9 @@ export default defineEventHandler(async (event): Promise<LoginResponse> => {
 
     const token = makeToken()
     await createSession(user.id, token)
+    // Expired rows are otherwise only removed on logout (SEC-24). Only expired ones: the sessions
+    // table is shared with the kassensystem, whose idle limit may differ from ours.
+    cleanupExpiredSessions().catch(err => console.error('auth: session cleanup failed', err))
 
     const cookieName = process.env.SESSION_COOKIE_NAME || 'app_session'
     const maxAgeSeconds = parseInt(process.env.SESSION_MAX_AGE_MINUTES || '1440') * 60

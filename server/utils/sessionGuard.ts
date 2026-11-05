@@ -36,6 +36,7 @@ export async function getCurrentUserFromEvent(event: any, touch: boolean): Promi
   const now = new Date()
   const expiresAt = parseInstant(session.expires_at)
   if (expiresAt && expiresAt < now) {
+    await deleteSessionByToken(token)
     return { ok: false, error: "session expired" }
   }
 
