@@ -13,12 +13,11 @@
       <PageAuditHistoryButton table="cash_counts" :record-id="cashCountId" />
     </div>
 
-    <p
-      v-if="lockedForUser && hasPermission('cash_counts.edit')"
-      class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
-    >
-      {{ t('finances.recordLockedHint') }}
-    </p>
+    <PageFinancesRecordLockBanner
+      v-if="recordLocked && !pageMeta?.forceReadonly && hasPermission('cash_counts.edit')"
+      v-model="unlocked"
+      :can-unlock="hasPermission('cash_counts.unlock')"
+    />
 
     <CashCountForm
       v-model="form"
@@ -34,6 +33,8 @@
       class="mt-6"
       :cash-count-id="cashCountId"
       :can-edit="canEdit"
+      :unlock="recordLocked && unlocked"
+      @locked-change="onLockedChange"
     />
   </PageFinancesEditorLayout>
 </template>
@@ -60,9 +61,10 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('CashCountList')
 
-// Booked records are read-only without the unlock permission (SEC-22).
+// Booked records are read-only until an unlock holder deliberately unlocks them (SEC-22).
 const recordLocked = ref(false)
-const lockedForUser = computed(() => recordLocked.value && !hasPermission('cash_counts.unlock'))
+const unlocked = ref(false)
+const lockedForUser = computed(() => recordLocked.value && !(unlocked.value && hasPermission('cash_counts.unlock')))
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('cash_counts.edit') && !lockedForUser.value)
 const canViewFiles = computed(() => hasPermission(['files.view', 'cash_counts.view']) && (canEdit.value || existingFile.value !== null))
 
@@ -153,6 +155,12 @@ function hasUniqueRegisterNumbers() {
   return new Set(registerNumbers).size === registerNumbers.length
 }
 
+function onLockedChange(locked: boolean) {
+  recordLocked.value = locked
+  // Confirming afresh closes the record again; the next change needs a new deliberate unlock.
+  if (locked) unlocked.value = false
+}
+
 async function submit() {
   if (isSaving.value) return
   if (!canEdit.value) {
@@ -218,6 +226,7 @@ async function submit() {
     isSaving.value = true
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
+      if (recordLocked.value && unlocked.value) body.append('unlock', 'true')
       const updateRes = await apiFetch<{ ok: boolean, error?: string }>(String(`/api/cash_counts/${cashCountId.value}`), {
         method: 'PUT',
         body,

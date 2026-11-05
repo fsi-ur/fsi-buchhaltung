@@ -27,7 +27,8 @@ These override the "Fix" text of the individual findings where they differ.
 - **SEC-16:** when locked, only description/notes stay editable (no file replacement either).
 - **SEC-17:** feed shows what the in-app calendar shows; `calendar.view` required. No automatic token revocation on password change.
 - **SEC-19/24:** gated member-"left" deactivation; last-admin guard; calendar-feed revoke button.
-- **SEC-22:** per-domain `reimbursements.unlock`, `bank_statements.unlock`, `cash_counts.unlock` — seed-admin only, **no migration**.
+- **SEC-22:** per-domain `reimbursements.unlock`, `bank_statements.unlock`, `cash_counts.unlock` — seed-admin only, **no migration**. The permission does not make a record editable by itself: the editor shows an "Entsperren" button with a confirmation, and only saves sent after that (`unlock=true`) pass; without the flag the server answers `RECORD_UNLOCK_REQUIRED_ERROR`.
+- **SEC-01 (revised):** `positions.assign` is **not** implied by `permissions.manage` (different tasks). `migrate-security-hardening.mjs` grants it once to every role/position/user holding `permissions.manage` (marker row in `system_events`, so later deploys don't re-grant it after an admin removed it).
 - **SEC-25:** minimum 10 characters, maximum 72 bytes.
 - **SEC-26:** unsubscribe = confirmation page + POST + RFC 8058 header.
 - **SEC-27:** only `bild:` images; validation error on save/publish.

@@ -13,12 +13,11 @@
       <PageAuditHistoryButton table="bank_statements" :record-id="bankStatementId" />
     </div>
 
-    <p
-      v-if="lockedForUser && hasPermission('bank_statements.edit')"
-      class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
-    >
-      {{ t('finances.recordLockedHint') }}
-    </p>
+    <PageFinancesRecordLockBanner
+      v-if="recordLocked && !pageMeta?.forceReadonly && hasPermission('bank_statements.edit')"
+      v-model="unlocked"
+      :can-unlock="hasPermission('bank_statements.unlock')"
+    />
 
     <BankStatementForm
       v-model="form"
@@ -61,9 +60,10 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('BankStatementList')
 
-// Booked records are read-only without the unlock permission (SEC-22).
+// Booked records are read-only until an unlock holder deliberately unlocks them (SEC-22).
 const recordLocked = ref(false)
-const lockedForUser = computed(() => recordLocked.value && !hasPermission('bank_statements.unlock'))
+const unlocked = ref(false)
+const lockedForUser = computed(() => recordLocked.value && !(unlocked.value && hasPermission('bank_statements.unlock')))
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('bank_statements.edit') && !lockedForUser.value)
 const canViewFiles = computed(() => hasPermission(['files.view', 'bank_statements.view']) && (canEdit.value || existingFile.value !== null))
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
@@ -245,6 +245,7 @@ async function submit() {
 
     if (isEditMode.value && bankStatementId.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
+      if (recordLocked.value && unlocked.value) body.append('unlock', 'true')
       const res = await apiFetch<{ ok: boolean, error?: string }>(String(`/api/bank_statements/${bankStatementId.value}`), {
         method: 'PUT',
         body,

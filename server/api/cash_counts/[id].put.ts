@@ -1,5 +1,5 @@
 import { parseJsonField } from '~/server/utils/api/request'
-import { isCashCountLocked, lockError } from '~/server/utils/recordLocks'
+import { isCashCountLocked, isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -39,6 +39,8 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
   const multipart = await readMultipart(event)
   if (!multipart) return { ok: false, error: 'Missing form data' }
 
+  const unlockRequested = isUnlockRequested(multipart.getField('unlock'))
+
   const cashCountJson = multipart.getField('cashCount')
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
 
@@ -61,7 +63,7 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
       )
 
       if (!existingRows.length) return { ok: false, error: 'Cash count not found' }
-      const locked = lockError(await isCashCountLocked(cashCountId, conn), current.user.permissions, 'cash_counts.unlock')
+      const locked = lockError(await isCashCountLocked(cashCountId, conn), current.user.permissions, 'cash_counts.unlock', unlockRequested)
       if (locked) return { ok: false, error: locked }
       const relationError = await validateCashCountRelations(updated, conn)
       if (relationError) return { ok: false, error: relationError }

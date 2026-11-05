@@ -1,6 +1,6 @@
 import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, releaseRemovedReimbursementReceipts, validateReimbursableReceipts } from '~/server/utils/reimbursements'
 import { parseJsonField } from '~/server/utils/api/request'
-import { isCashCountLocked, isReimbursementLocked, lockError } from '~/server/utils/recordLocks'
+import { isCashCountLocked, isReimbursementLocked, isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -34,13 +34,14 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
   const reimbursementId = getNumericRouteParam(event)
   if (!reimbursementId) return { ok: false, error: 'Invalid reimbursement id' }
 
-  // Locked records answer "locked" before any payload validation (re-checked in the transaction).
-  const [lockRow] = await query<Array<{ disbursed_at: string | null }>>(`SELECT disbursed_at FROM reimbursements WHERE id = ? LIMIT 1`, [reimbursementId])
-  const earlyLock = lockRow ? lockError(isReimbursementLocked(lockRow), current.user.permissions, 'reimbursements.unlock') : null
-  if (earlyLock) return { ok: false, error: earlyLock }
-
   const multipart = await readMultipart(event)
   if (!multipart) return { ok: false, error: 'Missing form data' }
+  const unlockRequested = isUnlockRequested(multipart.getField('unlock'))
+
+  // Locked records answer "locked" before any payload validation (re-checked in the transaction).
+  const [lockRow] = await query<Array<{ disbursed_at: string | null }>>(`SELECT disbursed_at FROM reimbursements WHERE id = ? LIMIT 1`, [reimbursementId])
+  const earlyLock = lockRow ? lockError(isReimbursementLocked(lockRow), current.user.permissions, 'reimbursements.unlock', unlockRequested) : null
+  if (earlyLock) return { ok: false, error: earlyLock }
 
   const reimbursementJson = multipart.getField('reimbursement')
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
       )
 
       if (!existingRows.length) return { ok: false, error: 'Reimbursement not found' }
-      const locked = lockError(isReimbursementLocked(existingRows[0]!), current.user.permissions, 'reimbursements.unlock')
+      const locked = lockError(isReimbursementLocked(existingRows[0]!), current.user.permissions, 'reimbursements.unlock', unlockRequested)
       if (locked) return { ok: false, error: locked }
       const incomingReceiptIds = updated.positions
         .map((position: any) => Number(position.receipt_id))

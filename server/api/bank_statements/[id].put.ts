@@ -1,5 +1,5 @@
 import { parseJsonField } from '~/server/utils/api/request'
-import { lockError } from '~/server/utils/recordLocks'
+import { isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -39,12 +39,15 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
   const id = getNumericRouteParam(event)
   if (!id) return { ok: false, error: 'Invalid bank statement id' }
 
-  // Saved statements are locked (SEC-22); answer that before any payload validation.
-  const earlyLock = lockError(true, current.user.permissions, 'bank_statements.unlock')
-  if (earlyLock) return { ok: false, error: earlyLock }
+  // Saved statements are locked (SEC-22); without the permission, answer that before parsing anything.
+  const noPermission = lockError(true, current.user.permissions, 'bank_statements.unlock', true)
+  if (noPermission) return { ok: false, error: noPermission }
 
   const multipart = await readMultipart(event)
   if (!multipart) return { ok: false, error: 'Missing form data' }
+  const unlockRequested = isUnlockRequested(multipart.getField('unlock'))
+  const earlyLock = lockError(true, current.user.permissions, 'bank_statements.unlock', unlockRequested)
+  if (earlyLock) return { ok: false, error: earlyLock }
 
   const bankStatementJson = multipart.getField('bankStatement')
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
@@ -67,7 +70,7 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
         conn,
       )
       if (!existingRows.length) return { ok: false, error: 'Bank statement not found' }
-      const locked = lockError(true, current.user.permissions, 'bank_statements.unlock')
+      const locked = lockError(true, current.user.permissions, 'bank_statements.unlock', unlockRequested)
       if (locked) return { ok: false, error: locked }
 
       const relationError = await validateBankStatementRelations(body, conn, id)

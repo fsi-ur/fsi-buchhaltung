@@ -236,6 +236,15 @@ export const messages = {
     finances: {
       title: 'Finanzen',
       recordLockedHint: 'Dieser Datensatz ist abgeschlossen und kann nur mit der Berechtigung zum nachträglichen Ändern bearbeitet werden.',
+      recordLock: {
+        lockedHint: 'Dieser Datensatz ist abgeschlossen. Entsperre ihn, wenn du ihn nachträglich ändern musst.',
+        unlockedHint: 'Entsperrt: Du änderst einen abgeschlossenen Datensatz. Jede Änderung wird im Änderungsprotokoll mit deinem Namen festgehalten.',
+        unlock: 'Entsperren',
+        relock: 'Wieder sperren',
+        confirmTitle: 'Abgeschlossenen Datensatz entsperren?',
+        confirmText: 'Dieser Datensatz ist bereits abgeschlossen. Ändere ihn nur, wenn eine Korrektur wirklich nötig ist. Alle Änderungen werden im Änderungsprotokoll festgehalten.',
+        confirm: 'Entsperren und bearbeiten',
+      },
     },
     settings: {
       title: 'Einstellungen',
@@ -3664,6 +3673,15 @@ export const messages = {
     finances: {
       title: 'Finances',
       recordLockedHint: 'This record is closed and can only be changed with the permission to edit it afterwards.',
+      recordLock: {
+        lockedHint: 'This record is closed. Unlock it if you need to change it afterwards.',
+        unlockedHint: 'Unlocked: you are changing a closed record. Every change is recorded in the change log under your name.',
+        unlock: 'Unlock',
+        relock: 'Lock again',
+        confirmTitle: 'Unlock closed record?',
+        confirmText: 'This record is already closed. Only change it if a correction is really necessary. All changes are recorded in the change log.',
+        confirm: 'Unlock and edit',
+      },
     },
     settings: {
       title: 'Settings',
