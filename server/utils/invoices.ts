@@ -1,3 +1,4 @@
+import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import fs from 'fs/promises'
 import path from 'path'
 import { query } from '~/server/utils/db'
@@ -21,6 +22,7 @@ export function validateInvoicePayload(invoice: any) {
   if (invoice.status === InvoiceStatus.Paid && !invoice.paid_at) return 'Paid invoices require a payment date'
   if (invoice.status !== InvoiceStatus.Paid && invoice.paid_at) return 'Only paid invoices can have a payment date'
   if (!Array.isArray(invoice.positions) || invoice.positions.length === 0) return 'At least one invoice position is required'
+  if (invoice.positions.length > MAX_RECORD_POSITIONS) return TOO_MANY_POSITIONS
 
   for (const position of invoice.positions) {
     if (!position?.name || String(position.name).trim().length < 1) {

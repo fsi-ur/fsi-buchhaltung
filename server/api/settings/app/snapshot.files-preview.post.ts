@@ -1,6 +1,7 @@
 import { createError, defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
+import { snapshotBodyLimit } from '~/server/utils/bodyLimit'
 import {
   previewFilesArchiveForSnapshot,
   SnapshotError,
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event): Promise<PreviewFilesSnapshotRes
   try {
     const contentType = event.node.req.headers['content-type'] || ''
     if (contentType.includes('multipart/form-data')) {
-      const multipart = await readMultipart(event)
+      const multipart = await readMultipart(event, { maxBytes: snapshotBodyLimit() })
       if (!multipart) throw new Error('Missing files archive preview payload')
 
       const archiveFile = multipart.formData.find(field => field.name === 'archive' && field.filename)

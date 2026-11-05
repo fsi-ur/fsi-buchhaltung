@@ -1,3 +1,4 @@
+import { MAX_RECIPIENT_IDS, TOO_MANY_RECIPIENTS } from '~/server/utils/api/limits'
 import { localWallClockNow, shiftWallClock } from '~/server/utils/notifications/time'
 import type { CustomNotificationDraft } from '~/types/notification'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
@@ -35,6 +36,10 @@ export function validateCustomNotification(input: Partial<CustomNotificationDraf
     || (input.subdivisionIds?.length ?? 0) > 0
     || (input.userIds?.length ?? 0) > 0
   if (!hasRecipients) return 'Bitte mindestens einen Empfänger auswählen.'
+  for (const list of [input.memberIds, input.subdivisionIds, input.userIds]) {
+    if (list !== undefined && !Array.isArray(list)) return 'Ungültige Empfängerliste.'
+    if ((list?.length ?? 0) > MAX_RECIPIENT_IDS) return TOO_MANY_RECIPIENTS
+  }
 
   const channels = (input.channels ?? []).filter(channel => VALID_CHANNELS.includes(channel))
   if (!channels.length) return 'Bitte mindestens einen Kanal auswählen.'

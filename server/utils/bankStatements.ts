@@ -1,3 +1,4 @@
+import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import type mariadb from 'mariadb'
 import type { CreateBankStatementBody, CreateBankStatementPositionBody } from '~/types/bankStatement'
 import { query } from '~/server/utils/db'
@@ -28,7 +29,7 @@ export function normalizeBankStatementBody(body: CreateBankStatementBody) {
     checked_by: Number(body.checked_by || 0),
     statement_date: normalizeLocalDateTime(body.statement_date) ?? String(body.statement_date || ''),
     positions: Array.isArray(body.positions)
-      ? body.positions.map(p => normalizeBankStatementPosition(p))
+      ? body.positions.slice(0, MAX_RECORD_POSITIONS + 1).map(p => normalizeBankStatementPosition(p))
       : [],
   }
 }
@@ -38,6 +39,7 @@ export function validateBankStatementBody(body: ReturnType<typeof normalizeBankS
   if (!body.checked_by) return 'checked_by is required'
   if (!normalizeLocalDateTime(body.statement_date)) return 'Valid statement_date is required'
   if (!body.positions.length) return 'At least one position is required'
+  if (body.positions.length > MAX_RECORD_POSITIONS) return TOO_MANY_POSITIONS
 
   for (const position of body.positions) {
     if (!isLocalDate(String(position.position_date ?? '').slice(0, 10))) {

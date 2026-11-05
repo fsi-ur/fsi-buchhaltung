@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { getRequestHeader, getRouterParam, readRawBody } from 'h3'
+import { multipartBodyLimit } from '~/server/utils/bodyLimit'
 
 export function getNumericRouteParam(
   event: H3Event,
@@ -66,13 +67,20 @@ function parseMultipartBuffer(body: Buffer, boundary: string) {
   return formData
 }
 
-export async function readMultipart(event: H3Event) {
+export async function readMultipart(event: H3Event, options: { maxBytes?: number } = {}) {
   const contentType = getRequestHeader(event, 'content-type') || ''
   const boundary = contentType.match(/boundary=([^;]*)(;|$)/i)?.[1]?.replace(/^"|"$/g, '')
   if (!contentType.startsWith('multipart/form-data') || !boundary) return null
 
+  // The body-limit middleware already refused oversized requests by Content-Length; this is the
+  // defensive re-check on what was actually buffered (SEC-07).
+  const maxBytes = options.maxBytes ?? multipartBodyLimit()
+  const declared = Number(getRequestHeader(event, 'content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) return null
+
   const body = await readRawBody(event, false)
   if (!body) return null
+  if (body.length > maxBytes) return null
 
   const formData = parseMultipartBuffer(Buffer.isBuffer(body) ? body : Buffer.from(body), boundary)
 

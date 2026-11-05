@@ -1,3 +1,4 @@
+import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import type { CreateReimbursementBody } from '~/types/reimbursement'
 import { ReceiptStatus } from '~/types/receipt'
 import { isLocalDate } from '~/shared/time'
@@ -12,6 +13,7 @@ export function validateReimbursementBody(reimbursement: CreateReimbursementBody
   if (!reimbursement.paid_by || !reimbursement.submitted_at || !Array.isArray(reimbursement.positions) || !reimbursement.positions.length) {
     return 'Missing required reimbursement fields'
   }
+  if (reimbursement.positions.length > MAX_RECORD_POSITIONS) return TOO_MANY_POSITIONS
   if (typeof reimbursement.cash !== 'boolean') {
     return 'cash is required and must be boolean'
   }

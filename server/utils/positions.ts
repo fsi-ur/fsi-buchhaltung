@@ -1,3 +1,4 @@
+import { MAX_POSITION_ASSIGNMENTS } from '~/server/utils/api/limits'
 import type mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getMemberLabels } from '~/server/utils/subdivisions'
@@ -46,7 +47,7 @@ export function normalizePositionAssignments(
   fixed: Partial<Pick<PositionAssignmentInput, 'member_id' | 'position_id'>> = {},
 ) {
   if (value === undefined || value === null) return []
-  if (!Array.isArray(value)) return null
+  if (!Array.isArray(value) || value.length > MAX_POSITION_ASSIGNMENTS) return null
 
   const normalized: PositionAssignmentInput[] = []
 
