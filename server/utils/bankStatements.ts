@@ -1,3 +1,4 @@
+import { getActiveFileAttachment } from '~/server/utils/files'
 import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import type * as mariadb from 'mariadb'
 import type { CreateBankStatementBody, CreateBankStatementPositionBody } from '~/types/bankStatement'
@@ -54,6 +55,43 @@ export function validateBankStatementBody(body: ReturnType<typeof normalizeBankS
   return null
 }
 
+const LINKABLE_STATUSES = new Set<string>(['open', 'paid'])
+
+/**
+ * Status of receipts/invoices that were removed from a bank statement (SEC-15): still "paid" when
+ * another payment record (reimbursement, other statement) references them, otherwise back to
+ * "open" — never blindly "open".
+ */
+export async function restoreUnlinkedRecordStatuses(
+  bankStatementId: number,
+  removedReceiptIds: number[],
+  removedInvoiceIds: number[],
+  conn: mariadb.PoolConnection,
+) {
+  for (const receiptId of removedReceiptIds) {
+    const [link] = await query<Array<{ linked: number }>>(
+      `SELECT (
+         EXISTS (SELECT 1 FROM reimbursement_positions WHERE receipt_id = ?)
+         OR EXISTS (SELECT 1 FROM bank_statement_positions WHERE receipt_id = ? AND bank_statement_id <> ?)
+       ) AS linked`,
+      [receiptId, receiptId, bankStatementId],
+      conn,
+    )
+    if (Number(link?.linked)) continue
+    await query(`UPDATE receipts SET status = 'open' WHERE id = ? AND status = 'paid'`, [receiptId], conn)
+  }
+
+  for (const invoiceId of removedInvoiceIds) {
+    const [link] = await query<Array<{ linked: number }>>(
+      `SELECT EXISTS (SELECT 1 FROM bank_statement_positions WHERE invoice_id = ? AND bank_statement_id <> ?) AS linked`,
+      [invoiceId, bankStatementId],
+      conn,
+    )
+    if (Number(link?.linked)) continue
+    await query(`UPDATE invoices SET status = 'open', paid_at = NULL WHERE id = ? AND status = 'paid'`, [invoiceId], conn)
+  }
+}
+
 export async function validateBankStatementRelations(
   body: ReturnType<typeof normalizeBankStatementBody>,
   conn: mariadb.PoolConnection,
@@ -70,13 +108,19 @@ export async function validateBankStatementRelations(
   const invoiceIds = body.positions.filter(p => p.position_type === 'invoice' && p.invoice_id).map(p => p.invoice_id!)
 
   for (const position of body.positions) {
+    // Only issued records can be paid by a bank statement: a draft or cancelled invoice/receipt would
+    // be forced to "paid" — skipping finalization — and then be locked (SEC-15).
     if (position.position_type === 'receipt') {
-      const rows = await query<{ id: number }[]>(`SELECT id FROM receipts WHERE id = ? LIMIT 1`, [position.receipt_id], conn)
+      const rows = await query<{ id: number, status: string }[]>(`SELECT id, status FROM receipts WHERE id = ? LIMIT 1`, [position.receipt_id], conn)
       if (!rows.length) return `Receipt ${position.receipt_id} does not exist`
+      if (!LINKABLE_STATUSES.has(rows[0]!.status)) return 'Nur offene oder bezahlte Belege können mit einem Kontoauszug verknüpft werden.'
+      const file = await getActiveFileAttachment('receipt', Number(position.receipt_id), conn)
+      if (!file) return 'Nur Belege mit hinterlegter Datei können mit einem Kontoauszug verknüpft werden.'
     }
     if (position.position_type === 'invoice') {
-      const rows = await query<{ id: number }[]>(`SELECT id FROM invoices WHERE id = ? LIMIT 1`, [position.invoice_id], conn)
+      const rows = await query<{ id: number, status: string }[]>(`SELECT id, status FROM invoices WHERE id = ? LIMIT 1`, [position.invoice_id], conn)
       if (!rows.length) return `Invoice ${position.invoice_id} does not exist`
+      if (!LINKABLE_STATUSES.has(rows[0]!.status)) return 'Nur offene oder bezahlte Rechnungen können mit einem Kontoauszug verknüpft werden.'
     }
     if (position.position_type === 'event') {
       const rows = await query<{ id: number }[]>(`SELECT id FROM events WHERE id = ? LIMIT 1`, [position.event_id], conn)

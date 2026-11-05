@@ -12,6 +12,7 @@ import {
   normalizeBankStatementBody,
   validateBankStatementBody,
   validateBankStatementRelations,
+  restoreUnlinkedRecordStatuses,
 } from '~/server/utils/bankStatements'
 import { ReceiptStatus } from '~/types/receipt'
 import { InvoiceStatus } from '~/types/invoice'
@@ -131,23 +132,8 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
         )
       }
 
-      // Restore removed receipts to 'open'
-      if (removedReceiptIds.length) {
-        await query(
-          `UPDATE receipts SET status = ? WHERE id IN (${removedReceiptIds.map(() => '?').join(',')})`,
-          [ReceiptStatus.Open, ...removedReceiptIds],
-          conn,
-        )
-      }
-
-      // Restore removed invoices to 'open' with no paid_at
-      if (removedInvoiceIds.length) {
-        await query(
-          `UPDATE invoices SET status = ?, paid_at = NULL WHERE id IN (${removedInvoiceIds.map(() => '?').join(',')})`,
-          [InvoiceStatus.Open, ...removedInvoiceIds],
-          conn,
-        )
-      }
+      // Removed receipts/invoices: back to 'open' unless another payment record still covers them.
+      await restoreUnlinkedRecordStatuses(id, removedReceiptIds, removedInvoiceIds, conn)
 
       // Apply status to all current receipts
       const receiptIds = body.positions.filter(p => p.position_type === 'receipt' && p.receipt_id).map(p => p.receipt_id!)
