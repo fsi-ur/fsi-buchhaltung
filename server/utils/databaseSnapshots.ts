@@ -1,3 +1,4 @@
+import { isWellFormedStoredFilePath, resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import type mariadb from 'mariadb'
 import crypto from 'crypto'
 import fs from 'fs/promises'
@@ -456,6 +457,19 @@ function getSnapshotFiles(snapshot: DatabaseSnapshot) {
   })).filter(file => Number.isFinite(file.id) && file.file_path)
 }
 
+/**
+ * Every `files.file_path` of a snapshot must look like one `storeUploadedFile` writes (SEC-08) —
+ * a restored row is later streamed, mailed and deleted by path.
+ */
+function assertSnapshotFilePaths(snapshot: DatabaseSnapshot) {
+  const filesTable = snapshot.tables.find(table => table.name === 'files')
+  for (const row of filesTable?.rows ?? []) {
+    if (!isWellFormedStoredFilePath(row.file_path) || !resolveStoredFilePath(row.file_path, '/srv/uploads-check')) {
+      throw new SnapshotError('archiveInvalid', `Invalid snapshot file path: ${String(row.file_path).slice(0, 200)}`)
+    }
+  }
+}
+
 function readFilesArchive(archive: Buffer) {
   const entries = parseTarArchive(archive)
   const manifestContent = entries.get('manifest.json')
@@ -676,6 +690,7 @@ export async function previewDatabaseSnapshotForCurrentSchema(value: unknown) {
 
 export async function restoreDatabaseSnapshot(value: unknown, beforeCommit?: () => Promise<void>) {
   const snapshot = validateSnapshot(value)
+  assertSnapshotFilePaths(snapshot)
   const preview = previewDatabaseSnapshot(snapshot)
   if (preview.integrity.present && !preview.integrity.valid) {
     throw new SnapshotError('integrityFailed', 'Snapshot integrity check failed')
@@ -747,9 +762,8 @@ export function prepareFilesArchiveRestoreForSnapshot(snapshotValue: unknown, ar
     const content = entries.get(archivedFile.archive_path)
     if (!content) throw new SnapshotError('archiveFilesMissing', `Files archive is missing ${snapshotFile.original_name}`, { count: 1 })
 
-    const relativePath = snapshotFile.file_path.replace(/^\/uploads\//, '')
-    const absolutePath = path.resolve(resolvedUploadRoot, relativePath)
-    if (!absolutePath.startsWith(resolvedUploadRoot + path.sep)) {
+    const absolutePath = resolveStoredFilePath(snapshotFile.file_path, resolvedUploadRoot)
+    if (!absolutePath) {
       throw new SnapshotError('archiveInvalid', `Invalid snapshot file path: ${snapshotFile.file_path}`)
     }
 

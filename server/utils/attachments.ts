@@ -1,3 +1,4 @@
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import fs from 'fs/promises'
 import path from 'path'
 import { query } from '~/server/utils/db'
@@ -279,10 +280,11 @@ export async function loadMailAttachments(selection: AttachmentSelection, conn?:
     )
     if (!fileRow) continue
 
-    const absolutePath = path.join(uploadRoot, fileRow.file_path.replace(/^\/uploads\//, ''))
+    const absolutePath = resolveStoredFilePath(fileRow.file_path, uploadRoot)
     const label = source.title || fileRow.original_name
 
     try {
+      if (!absolutePath) throw new Error('file path outside UPLOAD_DIR')
       const content = await fs.readFile(absolutePath)
       if (totalBytes + content.length > MAX_TOTAL_ATTACHMENT_BYTES) {
         console.error(`attachments: "${label}" skipped, message would exceed ${MAX_TOTAL_ATTACHMENT_BYTES} bytes`)

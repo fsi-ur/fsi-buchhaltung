@@ -1,3 +1,4 @@
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { createError, defineEventHandler, sendStream, setHeader } from 'h3'
 import fs from 'fs'
 import path from 'path'
@@ -29,10 +30,8 @@ export default defineEventHandler(async (event) => {
     const logo = rows[0]
     if (!logo) return { ok: false, error: 'Logo not found' }
 
-    const uploadRoot = process.env.UPLOAD_DIR!
-    const relativePath = logo.file_path.replace(/^\/uploads\//, '')
-    const absolutePath = path.join(uploadRoot, relativePath)
-    if (!fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
+    const absolutePath = resolveStoredFilePath(logo.file_path)
+    if (!absolutePath || !fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
 
     const stat = fs.statSync(absolutePath)
     setHeader(event, 'Content-Type', logo.mime_type)

@@ -1,3 +1,4 @@
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import fs from 'fs/promises'
 import path from 'path'
@@ -236,9 +237,8 @@ export async function getAssociationLogoForInvoice(conn?: any): Promise<null | {
   const file = await getAttachedFile('association_profile_logo', profileId, conn)
   if (!file) return null
 
-  const uploadRoot = process.env.UPLOAD_DIR!
-  const relativePath = file.file_path.replace(/^\/uploads\//, '')
-  const absolutePath = path.join(uploadRoot, relativePath)
+  const absolutePath = resolveStoredFilePath(file.file_path)
+  if (!absolutePath) return null
   const data = await fs.readFile(absolutePath)
 
   return { file, data }
