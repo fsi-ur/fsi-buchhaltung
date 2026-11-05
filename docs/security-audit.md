@@ -78,7 +78,7 @@ These override the "Fix" text of the individual findings where they differ.
 ## High
 
 ### SEC-01 — Privilege escalation via position assignment and account linking ✅
-- [ ] done
+- [x] done
 
 **Background:** effective permissions = roles ∪ `user_permissions` ∪ **permissions of all positions held by members whose `members.account = userId`** (`server/utils/permissions.ts:38-98`, `getUserPositionIds`). So whoever can write `member_positions` or `members.account` can grant permissions.
 
@@ -99,7 +99,7 @@ These override the "Fix" text of the individual findings where they differ.
 5. Tests (`tests/db/`): members.edit-only user cannot add a privileged position, cannot change `account`, can still edit name/address; omitted `account` keeps the link.
 
 ### SEC-02 — Arbitrary file IDs can be attached → per-record file access bypass ✅
-- [ ] done
+- [x] done
 
 **Where**
 - `server/utils/attachments.ts:26-42` (`normalizeAttachmentSelection` only checks positive ints) and `:223-233` (`saveAttachmentSelection` inserts any new `fileIds` into `file_attachments`).
@@ -120,7 +120,7 @@ These override the "Fix" text of the individual findings where they differ.
 5. Tests (`tests/db/`): user without `receipts.view` cannot attach a receipt file to a wiki article / notification; already-attached ids still save; system path unaffected.
 
 ### SEC-03 — `users.manage` can take over higher-privileged accounts
-- [ ] done
+- [x] done
 
 **Where:** `server/api/auth/admin-set-password.post.ts:25,42-52` (any user incl. admins), `server/api/auth/change-username.post.ts:26`, `server/api/auth/activate.post.ts:7`, `server/api/auth/link-member.post.ts:23,38` (link any user, incl. self, to an unlinked member → inherits positions, see SEC-01).
 
@@ -133,7 +133,7 @@ These override the "Fix" text of the individual findings where they differ.
 4. Tests: `users.manage`-only user cannot reset an admin's password; can reset a plain user's.
 
 ### SEC-04 — No brute-force protection on login
-- [ ] done
+- [x] done
 
 **Where:** `server/api/auth/login.post.ts:28-61`; no rate limit / lockout / attempt logging anywhere. bcrypt cost 12 (`server/utils/auth.ts:26`) on libuv's 4-thread pool → ~20 req/s for an existing username saturate crypto/fs for the whole server.
 
@@ -146,7 +146,7 @@ These override the "Fix" text of the individual findings where they differ.
 6. Unit-test the limiter.
 
 ### SEC-05 — Database exposed with default credentials ✅
-- [ ] done
+- [x] done
 
 **Where:** `docker-compose.yml:63-64` (`"3308:3307"` on all interfaces), `:17-18,56,59,73` fallbacks `fsi_password` / `root_password`; `.env.example` ships `DB_PASSWORD=fsi_password`. Docker-published ports bypass host firewalls (ufw). `docker-compose.test.yml:15` publishes 3309 similarly.
 
@@ -163,7 +163,7 @@ These override the "Fix" text of the individual findings where they differ.
 ## Medium
 
 ### SEC-06 — Transactions commit on `{ ok:false }` returns ✅
-- [ ] done
+- [x] done
 
 **Where:** `server/utils/db.ts:40-80` — `withTransaction` / `withAuditTransaction` commit whenever the callback *returns*; they only roll back on throw. Handlers commonly `return { ok:false }` from inside after writing. Confirmed cases:
 - `server/api/bank_statements/[id].put.ts:173-191` — file-required / `validateUploadedFile` checks run **after** header, positions and linked receipt/invoice status writes → an invalid/removed file returns an error but everything else (incl. removing the statement's only file) is committed.
@@ -186,7 +186,7 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 **Tests (`tests/db/`):** a bank statement PUT with `removeExistingFile=true` and no file leaves DB unchanged; a receipt PUT with invalid cost centre leaves status unchanged; a callback returning `{ok:false}` after an INSERT leaves no row.
 
 ### SEC-07 — Unbounded request bodies ✅
-- [ ] done
+- [x] done
 
 **Where:** `server/utils/api/request.ts:74` (`readRawBody` buffers the whole multipart body; `MAX_UPLOAD_MB` checked only afterwards in `server/utils/files.ts:27` and `server/utils/wiki/images.ts:24`); `readBody` everywhere incl. unauthenticated `login.post.ts:30`. h3/Nitro set no limit. `attachments/upload.post.ts` only does `requireAuth` before reading. JSON arrays (positions, shifts, tasks, memberIds…) have no length caps.
 
@@ -197,7 +197,7 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 4. Document `client_max_body_size` for the reverse proxy in README/.env.example.
 
 ### SEC-08 — No path containment for stored files
-- [ ] done
+- [x] done
 
 **Where (all `path.join(UPLOAD_DIR, file_path.replace(/^\/uploads\//, ''))` with no check):** `server/api/files/[id].get.ts:46-48`, `server/utils/attachments.ts:282`, `server/utils/documentExport/engine.ts:124`, `server/utils/wiki/images.ts:157` (**unlink**) and `:189`, `server/api/settings/association/logo.get.ts:33-34`. Containment is only checked in `settings/app/files.get.ts:99` and `databaseSnapshots.ts:750-754` (the latter only for files present in the archive).
 
@@ -210,7 +210,7 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 4. Unit test the helper with `..`, absolute paths, Windows separators.
 
 ### SEC-09 — Snapshot restore is unaudited and can forge history
-- [ ] done — **Decision needed** on signing policy
+- [x] done — **Decision needed** on signing policy
 
 **Where:** `server/utils/databaseSnapshots.ts:677-729` (via `server/api/settings/app/snapshot.restore.post.ts`): `withTransaction` (no actor), DELETEs every table incl. `users`, `role_permissions`, `entity_versions` and re-inserts from the archive; integrity is optional (`:680`) and an unkeyed SHA-256 (`:599-608`). Identifiers are whitelisted and values parameterized (no SQLi). Restore tokens (`snapshotRestoreSessions.ts`) aren't bound to the previewing user.
 
@@ -222,7 +222,7 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 5. Document in the settings UI that this permission is equivalent to full DB admin.
 
 ### SEC-10 — Runtime DB user is all-powerful; privileged creds in app env
-- [ ] done — **Decision needed** (deployment change)
+- [x] done — **Decision needed** (deployment change)
 
 **Where:** `docker-compose.yml` db service (`MARIADB_USER` gets `ALL ON fsi_buchhaltung.*`), same user is runtime `DB_USER` (`server/utils/db.ts:7-17`); `docker-compose.yml:9` `env_file: .env` and `:18` put `DB_ROOT_PASSWORD` and `DB_AUDIT_SETUP_*` into the long-running Nitro process. The runtime user can `DROP TRIGGER` and edit `entity_versions`. (`@audit_user_id` is only set parameterized in `server/utils/dbAudit.ts:138` — no injection path today; this is defense in depth.)
 
@@ -234,14 +234,14 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 > **Note (implementation):** the runtime user gets `SELECT, INSERT, DELETE` (no `UPDATE`) on `entity_versions`, because snapshot restore replaces the table and the retention job prunes it. It can no longer drop/alter triggers or tables (verified against the test DB). Fully read-only audit history would require restore and pruning to run with separate credentials.
 
 ### SEC-11 — PNG decompression bomb
-- [ ] done
+- [x] done
 
 **Where:** `server/utils/pdf.ts:541-578` (`buildPngImageObject`): width/height uncapped, `inflateSync` without `maxOutputLength`. Reachable via wiki images (`bild:<id>`) in article/space PDF export and via the association logo in every PDF.
 
 **Fix:** reject if `width * height > 40_000_000` or either dimension > 20000 before inflating; pass `{ maxOutputLength: (stride + 1) * height }`. Also check dimensions at upload in `validateWikiImage` and logo upload. Unit test with a crafted IHDR.
 
 ### SEC-12 — No HTTP security headers
-- [ ] done
+- [x] done
 
 **Where:** nothing in `nuxt.config.ts`, no `server/middleware/`.
 
@@ -251,14 +251,14 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 3. `/api/files/[id]` and `logo.get.ts`: add `Content-Security-Policy: sandbox; default-src 'none'` and `nosniff` (see SEC-21).
 
 ### SEC-13 — Raw exception text returned to clients ✅
-- [ ] done
+- [x] done
 
 **Where:** ~140 occurrences of `` error: `… ${err}` `` in `server/api/**` (e.g. `receipts/create.post.ts:110`, `invoices/[id].put.ts:396`, `permissions/users.update.post.ts:126`, `auth/activate.post.ts:25`, `auth/register.post.ts:57` returns `err.code`), plus `createError({ message: err })` in `files/[id].get.ts:62` and `settings/association/logo.get.ts:45`. mariadb `SqlError` includes SQL text; fs errors include server paths.
 
 **Fix:** add `internalError(context: string, err: unknown): { ok:false, error:string }` in `server/utils/api/` that `console.error`s the full error and returns `{ ok:false, error: context }` (generic German message). Mechanically replace all occurrences (`grep -rn '\${err' server/api`). Keep intentional, user-facing validation messages unchanged. Optionally add a `conventions.spec.ts` rule forbidding `${err` in `server/api/**`.
 
 ### SEC-14 — Vulnerable dependencies ✅ (markdown-it 15.0.0 confirmed)
-- [ ] done
+- [x] done
 
 `npm audit --omit=dev`: 3 critical, 16 high, 15 moderate, 4 low (all with fixes). Runtime-relevant:
 - **markdown-it 15.0.0** — ReDoS/linkify DoS (GHSA-253c-mchw-3w2r etc.), directly reachable: `server/utils/wiki/render.ts:335` uses `linkify: true`, `MAX_MARKDOWN_LENGTH = 200_000`. Upgrade to latest 15.x.
@@ -271,35 +271,35 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 **Fix:** `npm update nuxt vue markdown-it mariadb sanitize-html`, evaluate nodemailer 10 separately, `npm audit fix`, then `npm run test:all` and `npm run build`. Do not use `npm audit fix --force` blindly.
 
 ### SEC-15 — Bank-statement linking ignores record status
-- [ ] done
+- [x] done
 
 **Where:** `server/utils/bankStatements.ts:70-83` (`validateBankStatementRelations`), `server/api/bank_statements/create.post.ts:74-91`, `[id].put.ts:128-165`. Any invoice (draft, cancelled) is forced to `paid` with `paid_at` — skipping `materializeFinalInvoiceTexts`/PDF regeneration, after which the invoice is edit-locked. Any receipt (draft, cancelled, without file) is accepted. Removing a position hard-resets the record to `open`.
 
 **Fix:** only allow invoices with `status IN ('open','paid')` and receipts with `status IN ('open','paid')` and an active file (check how "has file" is determined elsewhere, e.g. `receiptRequiresFile`). On removal, restore the previous status (store it in `bank_statement_positions` via migration, or recompute) instead of `open`. Tests in `tests/db/`.
 
 ### SEC-16 — Receipt money fields editable after reimbursement/booking
-- [ ] done
+- [x] done
 
 **Where:** `server/api/receipts/[id].put.ts:66-70` locks only `status` while `reimbursement_positions`/`bank_statement_positions` reference the receipt; positions, amounts, company, date remain editable (`:82-184`) and totals recompute live.
 
 **Fix:** when `statusLocked`, reject changes to positions (amount/tax/sphere/cost centre), company, date and number (compare with existing; mirror `invoices/[id].put.ts:146-148`). Allow description/notes and file replacement only if the owner wants (keep file replacement allowed by default). Update the form to render locked fields readonly (`Form.vue`) and add i18n error key.
 
 ### SEC-17 — ICS feed ignores event permissions
-- [ ] done
+- [x] done
 
 **Where:** `server/api/calendar/[token].get.ts:100-104` calls `loadCalendarEvents(null)` → all events incl. organizer names, regardless of permissions (in-app `server/api/calendar/entries.get.ts:51-58` requires `events.access`/`events.view`/`events.shifts.signup` and `calendar.view`). `server/api/user/calendar-feed.get.ts:18` / `.post.ts:19` use `getCurrentUserFromEvent` directly → no `calendar.view` check and bypass of `must_change_password`.
 
 **Fix:** in the feed, compute the same `canSeeEvents`/shift/task flags as `entries.get.ts` from the already-loaded permissions (extract a shared helper so both stay in sync) and return an empty calendar without `calendar.view`. Gate `calendar-feed.get/post` with `requirePermission(event, 'calendar.view')`. Test in `tests/db/`.
 
 ### SEC-18 — Login user enumeration ✅
-- [ ] done
+- [x] done
 
 **Where:** `server/api/auth/login.post.ts:39` (unknown user → immediate return, no bcrypt), `:43` (`inactive_user` returned before password check).
 
 **Fix:** if no row, `await comparePassword(password, DUMMY_HASH)` (a constant bcrypt-12 hash generated once at module load) and return `invalid_credentials`. Check password first; only then check `is_active` (returning `inactive_user` only after a correct password is acceptable). Do this together with SEC-04.
 
 ### SEC-19 — `members.edit` can deactivate any user ✅
-- [ ] done
+- [x] done
 
 **Where:** `server/api/members/[id].put.ts:162-175` passes `accountId: body.account ?? existing.account` to `applyMemberStatusActions` → `deactivateLinkedAccount` (`server/utils/members.ts:88-118`, `UPDATE users SET is_active = 0`).
 
@@ -310,7 +310,7 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 ## Low
 
 ### SEC-20 — Push subscriptions: SSRF, re-binding
-- [ ] done
+- [x] done
 
 > **Owner decision:** the **only** automatic removal of push subscriptions is when a user is **deactivated** — then delete all of that user's `notification_push_subscriptions` rows (inside the same audit transaction as the deactivation; this covers `auth/activate.post.ts` and the member-"left" path `deactivateLinkedAccount` in `server/utils/members.ts`). Nothing else may remove them: not logout, logout-all, password change, admin password reset, send failures or the endpoint allowlist below. Getting people to enable push is hard; the subscription must survive. The user's own explicit opt-out in the notification preferences stays as it is. The accepted trade-off: on a shared device, notifications of the last user who enabled push there keep arriving after logout.
 
@@ -324,26 +324,26 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 5. Test (`tests/db/`): deactivation removes the user's subscriptions; logout / logout-all / password change leave them untouched.
 
 ### SEC-21 — Upload type trust & inline serving
-- [ ] done
+- [x] done
 
 **Where:** `server/utils/files.ts:26,41-42,54-55` (MIME and extension from client; only wiki images sniff bytes, `server/utils/wiki/images.ts:14`); `server/api/files/[id].get.ts:54-58` and `logo.get.ts:38-41` serve `inline` with stored MIME, no `nosniff`.
 
 **Fix:** sniff magic bytes (`%PDF-`, PNG, JPEG — reuse `sniffWikiImageType`) in `validateUploadedFile`, store the sniffed MIME, derive the extension from it. On download add `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`, and RFC 5987 `filename*` encoding. Unit tests for the sniffer.
 
 ### SEC-22 — No locks on disbursed reimbursements / bank statements / cash counts
-- [ ] done — **Decision needed**
+- [x] done — **Decision needed**
 
 `reimbursements/[id].put.ts` (after `disbursed_at`), `bank_statements/[id].put.ts`, `cash_counts/[id].put.ts` allow full edits forever; only the audit log protects them. Propose to the owner: once disbursed/booked, allow only corrective fields or require a new `*.unlock` permission. Do not implement without confirmation.
 
 ### SEC-23 — Receipt/reimbursement validation & race
-- [ ] done
+- [x] done
 
 - `server/utils/receipts.ts:3-13`: `status` free text (validate against `ReceiptStatus` enum), `amount` not `Number.isFinite`, tax range unchecked (TINYINT), positions length uncapped; `JSON.parse` outside try (`receipts/create.post.ts:32`, `[id].put.ts:42`; same in invoices, reimbursements, bank_statements, cash_counts create/PUT) → 500s instead of `{ok:false}`. `normalizeInvoicePayload` (`server/utils/invoices.ts:74`) calls `.map`/`.trim` on unchecked types.
 - No `UNIQUE(receipt_id)` on `reimbursement_positions` (`db/init.sql:508-514`); check-then-insert → concurrent double reimbursement. Add unique key via migration (check duplicates first) and/or `SELECT … FOR UPDATE`.
 - `reimbursements/[id].put.ts:154-166,196-201`: reject cancelled receipts; define what happens to removed receipts' status.
 
 ### SEC-24 — Session & account hygiene
-- [ ] done
+- [x] done
 
 - `server/utils/sessionGuard.ts:38-40`: expired branch doesn't `deleteSessionByToken`; `cleanupExpiredSessions()` only runs on logout → call it on login too (or a Nitro scheduled task), and delete sessions idle beyond the inactivity limit.
 - `server/utils/calendarToken.ts`: clear `calendar_token_hash` on password change, admin password reset; add a revoke endpoint (`DELETE /api/user/calendar-feed`) + UI button.
@@ -351,14 +351,14 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 - No last-admin guard: `auth/activate.post.ts`, `permissions/users.update.post.ts`, `permissions/roles.save.post.ts:63-69`, `permissions/roles.set_permissions.post.ts`, `positions.set_permissions.post.ts` → inside the transaction, refuse any change leaving zero active users with effective `permissions.manage` (helper in `server/utils/permissions.ts`; test in `tests/db/`).
 
 ### SEC-25 — Password policy & bootstrap secrets
-- [ ] done
+- [x] done
 
 - `config/validation.ts` `MIN_PASSWORD_LENGTH = 8` → raise to 10–12; reject passwords > 72 bytes UTF-8 (bcrypt truncation) in all four places (`change-password`, `admin-set-password`, `register`, `userAccounts.ts:46`); i18n messages.
 - `scripts/seed-admin.mjs:159-162`: set `must_change_password = 1` on the created admin; refuse `ADMIN_PASSWORD` shorter than the minimum or equal to `change_me_admin`.
 - `server/utils/auth.ts:12`: in production refuse to start if `SESSION_SECRET` < 32 chars or equals `replace_me_with_random`/`dev_change_me`; `docker-compose.yml:25` remove the `dev_change_me` fallback.
 
 ### SEC-26 — CSRF hardening & cookie details
-- [ ] done
+- [x] done
 
 Current state is decent: cookie `httpOnly`, `sameSite: 'strict'`, mutations are POST/PUT/DELETE.
 - Add `server/middleware/origin-check.ts`: for non-GET/HEAD `/api/**` (except `/api/public/**`), reject when `Origin` (or `Sec-Fetch-Site` = `cross-site`/`same-site`) doesn't match the app origin. Important because `COOKIE_DOMAIN` (SSO with kassensystem) makes sibling subdomains same-site.
@@ -366,19 +366,19 @@ Current state is decent: cookie `httpOnly`, `sameSite: 'strict'`, mutations are 
 - `login.post.ts:54-61`: derive `secure` from an explicit `COOKIE_SECURE` env (default: true when `NODE_ENV=production`), set cookie `path` to `APP_BASE_URL`; same attributes in `logout*.post.ts`. Document the `COOKIE_DOMAIN` trust implication in `.env.example`.
 
 ### SEC-27 — External images in wiki/agenda
-- [ ] done
+- [x] done
 
 `server/utils/wiki/render.ts:370` falls back to the default image renderer for non-`bild:` srcs; sanitizer allows `img src` http/https (`:417,421`). Also agendas (`server/utils/appointments/index.ts:147`). → Only allow `bild:` images (render `escape(alt)` or push a validation error otherwise); restrict `allowedSchemesByTag.img`. Check existing content won't break silently (maybe surface a validation error on save/publish rather than dropping on render). Unit test in the wiki render specs.
 
 ### SEC-28 — Email header/recipient handling
-- [ ] done
+- [x] done
 
 - `server/utils/notifications/channels/email.ts:53`: use `from: { name: fromName, address: SMTP_FROM }` instead of string interpolation.
 - Member emails aren't validated server-side (`server/utils/members.ts` `validateMemberPayload`, `server/utils/memberSelfEdit.ts:88-97`) → a single-address check (no `,;<>` or whitespace) plus length caps; in `recipients.ts`/`email.ts` pass `to: { address }`.
 - Self-edit values: only "non-empty string" checks → reuse per-field validators from `validateMemberPayload` with length caps; avoid returning raw `err.code` (`members/self/update.post.ts:44`, see SEC-13).
 
 ### SEC-29 — Smaller authorization gaps
-- [ ] done
+- [x] done
 
 - `server/api/bank_statements/options.get.ts:21`: guarded by `.view`, lists all unlinked receipts/invoices incl. drafts → require `bank_statements.edit`. (Also bug: `erloese: Number(e.erloese)` is NaN — column not selected.)
 - `server/api/notifications/create.post.ts:39-45`: `shiftPlan` attachment for any event → require `events.view` or organizer of that event.
@@ -389,24 +389,24 @@ Current state is decent: cookie `httpOnly`, `sameSite: 'strict'`, mutations are 
 - `members/pending-changes/[id].post.ts`: verify whether an approver can approve their own pending change; if so, decide with owner whether to forbid.
 
 ### SEC-30 — Kassensystem DB user over-privileged
-- [ ] done
+- [x] done
 
 `scripts/create-connection-db-user.mjs:20-28,67-73`: `SELECT` on whole `users` (password hashes, token hashes) and full DML on `sessions`. → column-level grant `SELECT (id, username, is_active, must_change_password) ON users` (check what the kassensystem actually reads first). Document that sharing `SESSION_SECRET` + `sessions` write access makes the kassensystem fully trusted.
 
 ### SEC-31 — Docker runtime hardening
-- [ ] done — **Decision needed** (deployment change)
+- [ ] skipped — owner decision (no Dockerfile/runtime change)
 
 `docker-compose.yml:3-6,46`: `node:22-alpine` as root, `.:/app` RW bind mount, `npm ci && build` on every start. → multi-stage Dockerfile, run `.output` as `USER node`, no source mount, migrations as separate job (ties into SEC-10). Propose; don't silently change the production workflow.
 
 ### SEC-32 — Memory-heavy exports & restore sessions
-- [ ] done
+- [x] done
 
 `server/utils/documentExport/engine.ts:98-133`, `zip.ts:33-87`: up to `MAX_DOCUMENT_EXPORT_BYTES = 250 MB` (`shared/documentExport.ts:53`) in RAM per request → lower the limit and add a per-user concurrency limit of 1. `server/utils/snapshotRestoreSessions.ts:12,24`: uncapped sessions → max one per user; `scryptSync` blocks the event loop → use async `scrypt`.
 
 ---
 
 ## SEC-33 — Info / robustness (do last, batch together)
-- [ ] done
+- [x] done
 
 - `.env.example:59` `UPLOAD_DIR=/` → `./uploads`; containment prefix bug fixed by SEC-08 helper. `.env.example:13-14` mismatching `DB_AUDIT_SETUP_PASSWORD` vs `DB_ROOT_PASSWORD` → align.
 - `components/PageRenderer.vue:53`: `PAGES[currentPage]` with hash `#constructor`/`#__proto__` → crash; use `Object.hasOwn(PAGES, name)`. Check `usePage`/hash parsing for the same.
@@ -420,6 +420,8 @@ Current state is decent: cookie `httpOnly`, `sameSite: 'strict'`, mutations are 
 - `server/utils/xlsx.ts:320`: `&` in association name interpreted as Excel footer code; XML-invalid control chars not stripped from cells.
 - `server/utils/notifications/channels/email.ts:45-46`: with `APP_BASE_URL=/` the unsubscribe link is relative → add an absolute public URL setting.
 - Config, not code: default `user` role in `scripts/seed-admin.mjs:96-109` has `reimbursements.view` → every user sees all reimbursement IBANs. Raise with the owner.
+
+> **Implementation notes (SEC-33):** done except: heading slugs were **not** prefixed (`wiki-…`) — it would break existing deep links and the stored TOC/anchor pairing; the orphan-file cleanup job (optional) was not built. Snapshot restore re-activates revoked API keys / old password hashes / calendar tokens by design (it restores the whole DB) — restores are now password-confirmed, signed and logged (SEC-09). `reimbursements.view` was removed from the default role in `seed-admin.mjs` only; existing installs keep it until an admin removes it.
 
 ---
 
