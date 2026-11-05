@@ -5,6 +5,7 @@ import { invalidateWikiAccess } from '~/server/utils/wiki/access'
 import { slugifyTitle } from '~/server/utils/wiki/articles'
 import { applyOwnerGrants } from '~/server/utils/wiki/grants'
 import { DEFAULT_SPACE_ICON, isSpaceSlugTaken, validateSpaceFields } from '~/server/utils/wiki/spaces'
+import { internalError } from '~/server/utils/api/errors'
 
 export type CreateWikiSpaceResponse =
   | { ok: true, spaceId: number }
@@ -80,6 +81,6 @@ export default defineEventHandler(async (event): Promise<CreateWikiSpaceResponse
     invalidateWikiAccess(event)
     return { ok: true, spaceId }
   } catch (err: any) {
-    return { ok: false, error: `Failed to create wiki space: ${err}` }
+    return internalError('Failed to create wiki space', err)
   }
 })

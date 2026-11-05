@@ -1,6 +1,34 @@
 services:
+  # One-shot setup job: installs dependencies, runs the migrations and (re)creates the restricted DB
+  # users. It is the only container that receives the root/setup credentials (SEC-10); the app
+  # starts after it exited successfully.
+  migrate:
+    image: node:24-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=buchhaltung-db-local
+      - DB_PORT=3307
+      - DB_USER=${DB_USER:?DB_USER must be set}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
+      - DB_NAME=${DB_NAME:-fsi_buchhaltung}
+      - DB_RUNTIME_USER=${DB_RUNTIME_USER:?DB_RUNTIME_USER must be set}
+      - DB_RUNTIME_PASSWORD=${DB_RUNTIME_PASSWORD:?DB_RUNTIME_PASSWORD must be set}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+    command: sh -c "npm ci && node scripts/migrate.mjs && node scripts/create-runtime-db-user.mjs && node scripts/create-connection-db-user.mjs && node scripts/seed-admin.mjs"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   app:
-    image: node:22-alpine
+    image: node:24-alpine
     working_dir: /app
     volumes:
       - .:/app
@@ -13,20 +41,27 @@ services:
       - PORT=3002
       - DB_HOST=buchhaltung-db-local
       - DB_PORT=3307
-      - DB_USER=${DB_USER:-fsi}
-      - DB_PASSWORD=${DB_PASSWORD:-fsi_password}
-      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root_password}
+      # The running app connects as the restricted runtime user (create-runtime-db-user.mjs).
+      - DB_USER=${DB_RUNTIME_USER:?DB_RUNTIME_USER must be set}
+      - DB_PASSWORD=${DB_RUNTIME_PASSWORD:?DB_RUNTIME_PASSWORD must be set}
       - DB_NAME=${DB_NAME:-fsi_buchhaltung}
       - DB_CONN_LIMIT=${DB_CONN_LIMIT:-5}
+      # Setup secrets from .env are blanked here: only the migrate job needs them.
+      - DB_ROOT_PASSWORD=
+      - DB_AUDIT_SETUP_USER=
+      - DB_AUDIT_SETUP_PASSWORD=
+      - DB_RUNTIME_USER=
+      - DB_RUNTIME_PASSWORD=
+      - CONNECTION_DB_PASSWORD=
+      - ADMIN_USERNAME=
+      - ADMIN_PASSWORD=
       - CASH_REGISTER_API_URL=${CASH_REGISTER_API_URL:-http://kasse-app:3001}
       - UPLOAD_DIR=/uploads
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-5}
       - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-fsi_session}
-      - SESSION_SECRET=${SESSION_SECRET:-dev_change_me}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET must be set}
       - SESSION_INACTIVITY_MINUTES=${SESSION_INACTIVITY_MINUTES:-30}
       - SESSION_MAX_AGE_MINUTES=${SESSION_MAX_AGE_MINUTES:-1440}
-      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - APP_BASE_URL=${APP_BASE_URL:-/}
       - NOTIFICATIONS_DISPATCH_DISABLED=${NOTIFICATIONS_DISPATCH_DISABLED:-false}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -43,25 +78,27 @@ services:
     networks:
       - default
       - fsi-shared
-    command: sh -c "npm ci && node scripts/migrate.mjs && node scripts/create-connection-db-user.mjs && node scripts/seed-admin.mjs && npm run build && node .output/server/index.mjs"
+    command: sh -c "npm run build && node .output/server/index.mjs"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   db:
     image: mariadb:11.4
     command: ["mariadbd", "--port=3307"]
     environment:
-      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root_password}
+      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
       - MARIADB_DATABASE=${DB_NAME:-fsi_buchhaltung}
-      - MARIADB_USER=${DB_USER:-fsi}
-      - MARIADB_PASSWORD=${DB_PASSWORD:-fsi_password}
+      - MARIADB_USER=${DB_USER:?DB_USER must be set}
+      - MARIADB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
     volumes:
       - db_data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Published on the host's loopback only: Docker's port publishing bypasses host firewalls (SEC-05).
+    # Use an SSH tunnel for remote access.
     ports:
-      - "3308:3307"
+      - "127.0.0.1:3308:3307"
     networks:
       default:
         aliases:
@@ -70,7 +107,7 @@ services:
         aliases:
           - buchhaltung-db
     healthcheck:
-      test: ["CMD", "mariadb", "-u", "${DB_USER:-fsi}", "-p${DB_PASSWORD:-fsi_password}", "-h", "localhost", "-P", "3307", "-e", "SELECT 1;"]
+      test: ["CMD", "mariadb", "-u", "${DB_USER}", "-p${DB_PASSWORD}", "-h", "localhost", "-P", "3307", "-e", "SELECT 1;"]
       interval: 10s
       timeout: 5s
       retries: 5

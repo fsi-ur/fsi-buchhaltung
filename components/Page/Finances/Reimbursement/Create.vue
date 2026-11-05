@@ -13,11 +13,18 @@
       <PageAuditHistoryButton table="reimbursements" :record-id="reimbursementId" />
     </div>
 
+    <PageFinancesRecordLockBanner
+      v-if="recordLocked && !pageMeta?.forceReadonly && hasPermission('reimbursements.edit')"
+      v-model="unlocked"
+      :can-unlock="hasPermission('reimbursements.unlock')"
+    />
+
     <ReimbursementForm
       v-model="form"
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
       :file="file"
       :remove-existing-file="removeExistingFile"
+      :record-unlocked="recordLocked && unlocked"
       :disabled="!canEdit"
       :can-create-receipt="canCreateReceipt"
       :can-edit-receipt="canEditReceipt"
@@ -51,7 +58,11 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('ReimbursementList')
 
-const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit'))
+// Booked records are read-only until an unlock holder deliberately unlocks them (SEC-22).
+const recordLocked = ref(false)
+const unlocked = ref(false)
+const lockedForUser = computed(() => recordLocked.value && !(unlocked.value && hasPermission('reimbursements.unlock')))
+const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit') && !lockedForUser.value)
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
 const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
 const canViewReceipt = computed(() => hasPermission('receipts.view'))
@@ -151,6 +162,10 @@ onMounted(async () => {
     if (reimbursementId.value) {
       isEditMode.value = true
       const res = await apiFetch<GetReimbursementResponse>(`/api/reimbursements/${reimbursementId.value}`, { method: 'GET' })
+      if (res.ok) {
+        recordLocked.value = Boolean(res.locked)
+        unlocked.value = pageMeta.value?.recordUnlocked === true
+      }
       if (res.ok && res.file && !removeExistingFile.value) {
         existingFile.value = {
           id: res.file.id,
@@ -180,6 +195,7 @@ onMounted(async () => {
     return
   }
 
+  recordLocked.value = Boolean(res.locked)
   form.value = {
     ...res.reimbursement,
     positions: res.reimbursement.positions.map(position => ({
@@ -287,6 +303,7 @@ async function submit() {
     isSaving.value = true
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
+      if (recordLocked.value && unlocked.value) body.append('unlock', 'true')
       const updateRes = await apiFetch<{ ok: boolean, error?: string }>(`/api/reimbursements/${reimbursementId.value}`, {
         method: 'PUT',
         body,

@@ -9,6 +9,10 @@ import { normalizePositionAssignments, syncPositionAssignments, type PositionAss
 import { clearPendingChangeForField } from '~/server/utils/memberSelfEdit'
 import { retargetPendingMemberWelcome } from '~/server/utils/memberWelcome'
 import { SELF_EDIT_ELIGIBLE_FIELDS } from '~/config/memberSelfEdit'
+import { authorizeMemberAccountLink, canManageUser } from '~/server/utils/userAccounts'
+import { withLastAdminGuard } from '~/server/utils/permissions'
+import { MemberStatus } from '~/types/member'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateMemberSuccess {
   ok: true
@@ -45,15 +49,29 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
   if (positionAssignments === null) return { ok: false, error: 'Invalid position list' }
 
   try {
-    return await withAuditTransaction(current.user, async (conn) => {
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const existingRows = await query<any[]>(`SELECT * FROM members WHERE id = ? LIMIT 1`, [memberId], conn)
       const existing = existingRows[0]
       if (!existing) return { ok: false, error: 'Member not found' }
 
+      const existingAccount = existing.account === null || existing.account === undefined ? null : Number(existing.account)
+      // An omitted `account` keeps the link; changing it is a users.manage matter (SEC-01).
+      const nextAccount = body.account === undefined ? existingAccount : (body.account === null ? null : Number(body.account))
+      if (nextAccount !== existingAccount) {
+        const linkError = await authorizeMemberAccountLink({
+          memberId,
+          accountId: nextAccount,
+          previousAccountId: existingAccount,
+          actorPermissions: current.user.permissions,
+          conn,
+        })
+        if (linkError) return { ok: false, error: linkError }
+      }
+
       const subjectId = await ensureSubjectId(body.subject_name, conn)
 
       const updatedFields = {
-        account: body.account ?? null,
+        account: nextAccount,
         last_name: body.last_name,
         first_name: body.first_name,
         birthdate: body.birthdate,
@@ -103,23 +121,27 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         SELF_EDIT_ELIGIBLE_FIELDS.map(field => clearPendingChangeForField(memberId, field, conn)),
       )
 
-      const existingPositionRows = await query<PositionAssignmentRow[]>(
-        `SELECT id, member_id, position_id, since, until
-         FROM member_positions
-         WHERE member_id = ?`,
-        [memberId],
-        conn,
-      )
+      // An omitted list means "leave the assignments alone", never "remove them all".
+      if (body.positions !== undefined) {
+        const existingPositionRows = await query<PositionAssignmentRow[]>(
+          `SELECT id, member_id, position_id, since, until
+           FROM member_positions
+           WHERE member_id = ?`,
+          [memberId],
+          conn,
+        )
 
-      const syncedPositions = await syncPositionAssignments({
-        scope: 'member',
-        ownerId: memberId,
-        existingAssignments: existingPositionRows,
-        incomingAssignments: positionAssignments ?? [],
-        userId: current.user.id,
-        conn,
-      })
-      if (!syncedPositions.ok) return { ok: false, error: syncedPositions.error }
+        const syncedPositions = await syncPositionAssignments({
+          scope: 'member',
+          ownerId: memberId,
+          existingAssignments: existingPositionRows,
+          incomingAssignments: positionAssignments ?? [],
+          userId: current.user.id,
+          actorPermissions: current.user.permissions,
+          conn,
+        })
+        if (!syncedPositions.ok) return { ok: false, error: syncedPositions.error }
+      }
 
       if (canManageSubdivisions && subdivisionIds !== undefined) {
         const existingSubdivisionRows = await query<{ subdivision_id: number }[]>(
@@ -159,9 +181,21 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         })
       }
 
-      const memberAccountId = body.account ?? (existing.account === null || existing.account === undefined
-        ? null
-        : Number(existing.account))
+      const memberAccountId = nextAccount
+
+      // Setting "left" deactivates the linked account — only for editors who may manage that
+      // account, and never the editor's own (SEC-19). Otherwise the account stays active, also for
+      // the later leave dispatcher, which reads account_deactivation_skipped.
+      const mayDeactivateAccount = memberAccountId === null || (
+        memberAccountId !== Number(current.user.id)
+        && current.user.permissions.includes('users.manage')
+        && !await canManageUser(current.user.permissions, memberAccountId, conn)
+      )
+      await query(
+        `UPDATE members SET account_deactivation_skipped = ? WHERE id = ?`,
+        [body.status === MemberStatus.Left && !mayDeactivateAccount ? 1 : 0, memberId],
+        conn,
+      )
 
       const statusActions = await applyMemberStatusActions({
         memberId,
@@ -171,14 +205,15 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         leftAt: body.left_at || null,
         memberLabel: `${body.first_name} ${body.last_name}`.trim(),
         userId: current.user.id,
+        deactivateAccount: mayDeactivateAccount,
         conn,
       })
 
      await retargetPendingMemberWelcome(memberId, conn)
 
       return { ok: true, id: memberId, status_actions: statusActions }
-    })
+    }))
   } catch (err: any) {
-    return { ok: false, error: `Failed to update member: ${err?.code || err}` }
+    return internalError('Failed to update member', err)
   }
 })

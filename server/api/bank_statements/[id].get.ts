@@ -6,9 +6,12 @@ import { getAttachedFile } from '~/server/utils/files'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { BankStatementRow, BankStatementPositionDetail } from '~/types/bankStatement'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetBankStatementSuccess {
   ok: true
+  /** Booked (SEC-22): read-only without bank_statements.unlock. */
+  locked: boolean
   bankStatement: BankStatementRow & { opening_balance: number; closing_balance: number }
   positions: BankStatementPositionDetail[]
   file: FileRow | null
@@ -123,6 +126,7 @@ export default defineEventHandler(async (event): Promise<GetBankStatementRespons
 
     return {
       ok: true,
+      locked: true,
       bankStatement: {
         id: Number(row.id),
         statement_number: String(row.statement_number),
@@ -136,6 +140,6 @@ export default defineEventHandler(async (event): Promise<GetBankStatementRespons
       file: fileRow ? normalizeBigInt(fileRow) : null,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load bank statement: ${err}` }
+    return internalError('Failed to load bank statement', err)
   }
 })

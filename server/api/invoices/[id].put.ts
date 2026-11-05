@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { getNumericRouteParam, readMultipart } from '~/server/utils/api/request'
@@ -9,6 +10,7 @@ import { detachFileAttachment, getActiveFileAttachment, storeAndAttachUploadedFi
 import { getAssociationBoardLineForInvoice, getAssociationLogoForInvoice, getAssociationProfileForInvoice, getInvoiceCompany, invoiceNeedsUploadedFile, invoiceNumberExists, materializeFinalInvoiceTexts, normalizeInvoicePayload, validateInvoicePayload } from '~/server/utils/invoices'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import { InvoiceSourceType, InvoiceStatus, type InvoicePosition } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateInvoiceSuccess {
   ok: true
@@ -103,7 +105,11 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
   if (!invoiceJson) return { ok: false, error: 'Missing invoice data' }
 
-  let parsed = normalizeInvoicePayload(JSON.parse(invoiceJson))
+  const parsedJson = parseJsonField(invoiceJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  let parsed = normalizeInvoicePayload(parsedJson.value)
   const validationError = validateInvoicePayload(parsed)
   if (validationError) return { ok: false, error: validationError }
 
@@ -393,6 +399,6 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
   } catch (err: any) {
     const error = err as MysqlError
     if (error.code === 'ER_DUP_ENTRY') return { ok: false, error: 'Invoice number already exists' }
-    return { ok: false, error: `Failed to update invoice: ${err}` }
+    return internalError('Failed to update invoice', err)
   }
 })

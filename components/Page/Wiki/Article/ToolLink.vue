@@ -62,7 +62,10 @@ function open() {
   if (props.disabled || !allowed.value) return
 
   const { returnTarget, ...rest } = props.meta ?? {}
-  const meta: Record<string, any> = { ...rest }
+  // Plain values only (the server already refuses anything else when the article is published).
+  const meta: Record<string, any> = Object.fromEntries(
+    Object.entries(rest).filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value)),
+  )
 
   if (returnTarget === 'self') {
     if (props.articleId) meta.returnTarget = buildReturnTarget('WikiArticle', { articleId: props.articleId })

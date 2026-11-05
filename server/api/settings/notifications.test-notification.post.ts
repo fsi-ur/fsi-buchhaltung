@@ -7,6 +7,7 @@ import { CHANNELS } from '~/server/utils/notifications/channels'
 import { localWallClockNow } from '~/server/utils/notifications/time'
 import { saveNotificationAttachments } from '~/server/utils/notifications/attachments'
 import { loadMailAttachments, normalizeAttachmentSelection } from '~/server/utils/attachments'
+import { checkAttachableFiles } from '~/server/utils/fileAccess'
 import { getAssociationProfileForInvoice, getAssociationResponsibleMemberNames } from '~/server/utils/invoices'
 import { NOTIFICATION_TYPE_MAP, type NotificationTypeKey } from '~/config/notificationTypes'
 import { NOTIFICATION_CHANNELS, type NotificationChannelKey } from '~/config/notificationChannels'
@@ -120,6 +121,8 @@ export default defineEventHandler(async (event): Promise<SendTestNotificationRes
 
   const selection = normalizeAttachmentSelection(body.attachments)
   if (!selection.ok) return selection
+  const fileError = await checkAttachableFiles(event, current.user, selection.value.fileIds)
+  if (fileError) return { ok: false, error: fileError }
   const mailAttachments = await loadMailAttachments(selection.value)
 
   const subjectOverride = `${translate(locale, 'settings.notifications.testMailSubjectPrefix')} ${subject}`.trim()

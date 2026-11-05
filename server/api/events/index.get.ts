@@ -3,6 +3,7 @@ import { hasPermission, requireAuth } from '~/server/utils/api/guards'
 import { query } from '~/server/utils/db'
 import { getOrganizerEventIds, isAnyEventOrganizer, loadEventRelations } from '~/server/utils/events'
 import type { Event, EventRow } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventsSuccess {
   ok: true
@@ -58,6 +59,6 @@ export default defineEventHandler(async (event): Promise<GetEventsResponse> => {
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load events: ${err}` }
+    return internalError('Failed to load events', err)
   }
 })

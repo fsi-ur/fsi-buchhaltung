@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { requireArticleWrite, requireSpaceWrite } from '~/server/utils/wiki/access'
 import { isSlugTaken, slugifyTitle, validateArticleFields, validateParent } from '~/server/utils/wiki/articles'
+import { internalError } from '~/server/utils/api/errors'
 
 export type CreateWikiArticleResponse =
   | { ok: true, articleId: number }
@@ -67,6 +68,6 @@ export default defineEventHandler(async (event): Promise<CreateWikiArticleRespon
 
     return { ok: true, articleId }
   } catch (err: any) {
-    return { ok: false, error: `Failed to create wiki article: ${err}` }
+    return internalError('Failed to create wiki article', err)
   }
 })

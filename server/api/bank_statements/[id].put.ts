@@ -1,3 +1,5 @@
+import { parseJsonField } from '~/server/utils/api/request'
+import { isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -12,10 +14,12 @@ import {
   normalizeBankStatementBody,
   validateBankStatementBody,
   validateBankStatementRelations,
+  restoreUnlinkedRecordStatuses,
 } from '~/server/utils/bankStatements'
 import { ReceiptStatus } from '~/types/receipt'
 import { InvoiceStatus } from '~/types/invoice'
 import type { BankStatementPositionRow } from '~/types/bankStatement'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateBankStatementSuccess {
   ok: true
@@ -35,15 +39,26 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
   const id = getNumericRouteParam(event)
   if (!id) return { ok: false, error: 'Invalid bank statement id' }
 
+  // Saved statements are locked (SEC-22); without the permission, answer that before parsing anything.
+  const noPermission = lockError(true, current.user.permissions, 'bank_statements.unlock', true)
+  if (noPermission) return { ok: false, error: noPermission }
+
   const multipart = await readMultipart(event)
   if (!multipart) return { ok: false, error: 'Missing form data' }
+  const unlockRequested = isUnlockRequested(multipart.getField('unlock'))
+  const earlyLock = lockError(true, current.user.permissions, 'bank_statements.unlock', unlockRequested)
+  if (earlyLock) return { ok: false, error: earlyLock }
 
   const bankStatementJson = multipart.getField('bankStatement')
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
 
   if (!bankStatementJson) return { ok: false, error: 'Missing bank statement data' }
 
-  const body = normalizeBankStatementBody(JSON.parse(bankStatementJson))
+  const parsedJson = parseJsonField(bankStatementJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const body = normalizeBankStatementBody(parsedJson.value)
   const validationError = validateBankStatementBody(body)
   if (validationError) return { ok: false, error: validationError }
 
@@ -55,6 +70,8 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
         conn,
       )
       if (!existingRows.length) return { ok: false, error: 'Bank statement not found' }
+      const locked = lockError(true, current.user.permissions, 'bank_statements.unlock', unlockRequested)
+      if (locked) return { ok: false, error: locked }
 
       const relationError = await validateBankStatementRelations(body, conn, id)
       if (relationError) return { ok: false, error: relationError }
@@ -130,23 +147,8 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
         )
       }
 
-      // Restore removed receipts to 'open'
-      if (removedReceiptIds.length) {
-        await query(
-          `UPDATE receipts SET status = ? WHERE id IN (${removedReceiptIds.map(() => '?').join(',')})`,
-          [ReceiptStatus.Open, ...removedReceiptIds],
-          conn,
-        )
-      }
-
-      // Restore removed invoices to 'open' with no paid_at
-      if (removedInvoiceIds.length) {
-        await query(
-          `UPDATE invoices SET status = ?, paid_at = NULL WHERE id IN (${removedInvoiceIds.map(() => '?').join(',')})`,
-          [InvoiceStatus.Open, ...removedInvoiceIds],
-          conn,
-        )
-      }
+      // Removed receipts/invoices: back to 'open' unless another payment record still covers them.
+      await restoreUnlinkedRecordStatuses(id, removedReceiptIds, removedInvoiceIds, conn)
 
       // Apply status to all current receipts
       const receiptIds = body.positions.filter(p => p.position_type === 'receipt' && p.receipt_id).map(p => p.receipt_id!)
@@ -196,6 +198,6 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update bank statement: ${err}` }
+    return internalError('Failed to update bank statement', err)
   }
 })

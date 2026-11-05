@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -10,6 +11,7 @@ import {
 } from '~/server/utils/bankStatements'
 import { ReceiptStatus } from '~/types/receipt'
 import { InvoiceStatus } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateBankStatementSuccess {
   ok: true
@@ -33,7 +35,11 @@ export default defineEventHandler(async (event): Promise<CreateBankStatementResp
   const bankStatementJson = multipart.getField('bankStatement')
   if (!bankStatementJson) return { ok: false, error: 'Missing bank statement data' }
 
-  const body = normalizeBankStatementBody(JSON.parse(bankStatementJson))
+  const parsedJson = parseJsonField(bankStatementJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const body = normalizeBankStatementBody(parsedJson.value)
   const validationError = validateBankStatementBody(body)
   if (validationError) return { ok: false, error: validationError }
 
@@ -104,6 +110,6 @@ export default defineEventHandler(async (event): Promise<CreateBankStatementResp
       return { ok: true, bankStatementId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create bank statement: ${err}` }
+    return internalError('Failed to create bank statement', err)
   }
 })

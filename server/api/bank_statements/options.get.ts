@@ -1,7 +1,8 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { query } from '~/server/utils/db'
-import { requirePermission } from '~/server/utils/api/guards'
+import { hasPermission, requirePermission } from '~/server/utils/api/guards'
 import type { BankStatementReceiptOption, BankStatementInvoiceOption, BankStatementEventOption } from '~/types/bankStatement'
+import { internalError } from '~/server/utils/api/errors'
 
 interface OptionsSuccess {
   ok: true
@@ -22,7 +23,15 @@ export default defineEventHandler(async (event): Promise<OptionsResponse> => {
   if (!current.ok) return current
 
   const { currentStatementId: rawId } = getQuery(event)
-  const currentStatementId = rawId ? Number(rawId) : null
+  const parsedId = Number(rawId)
+  const currentStatementId = rawId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
+
+  // Editors get every linkable record; viewers only what the opened statement already links,
+  // which is all the read-only form needs for its labels (SEC-29).
+  const canEdit = hasPermission(current.user, 'bank_statements.edit')
+  const viewerReceiptScope = canEdit ? '' : 'AND r.id IN (SELECT receipt_id FROM bank_statement_positions WHERE bank_statement_id = ?)'
+  const viewerInvoiceScope = canEdit ? '' : 'AND i.id IN (SELECT invoice_id FROM bank_statement_positions WHERE bank_statement_id = ?)'
+  const viewerParams = canEdit ? [] : [currentStatementId ?? 0]
 
   try {
     // Receipts: exclude those already in a reimbursement or another bank statement
@@ -32,15 +41,21 @@ export default defineEventHandler(async (event): Promise<OptionsResponse> => {
       FROM receipts r
       LEFT JOIN companies c ON c.id = r.company_id
       LEFT JOIN receipt_positions rp ON rp.receipt_id = r.id
-      WHERE r.id NOT IN (SELECT receipt_id FROM reimbursement_positions)
+      WHERE r.status IN ('open', 'paid')
+        AND EXISTS (
+          SELECT 1 FROM file_attachments fa
+          WHERE fa.entity_type = 'receipt' AND fa.entity_id = r.id AND fa.detached_at IS NULL
+        )
+        AND r.id NOT IN (SELECT receipt_id FROM reimbursement_positions)
         AND r.id NOT IN (
           SELECT receipt_id FROM bank_statement_positions
           WHERE receipt_id IS NOT NULL
           ${currentStatementId ? 'AND bank_statement_id <> ?' : ''}
         )
+        ${viewerReceiptScope}
       GROUP BY r.id
       ORDER BY r.receipt_date DESC, r.id DESC
-    `, currentStatementId ? [currentStatementId] : [])
+    `, [...(currentStatementId ? [currentStatementId] : []), ...viewerParams])
 
     // Invoices: exclude cancelled and those already in another bank statement
     const invoices = await query(`
@@ -50,15 +65,16 @@ export default defineEventHandler(async (event): Promise<OptionsResponse> => {
       FROM invoices i
       LEFT JOIN companies c ON c.id = i.company_id
       LEFT JOIN invoice_positions ip ON ip.invoice_id = i.id
-      WHERE i.status != 'cancelled'
+      WHERE i.status IN ('open', 'paid')
         AND i.id NOT IN (
           SELECT invoice_id FROM bank_statement_positions
           WHERE invoice_id IS NOT NULL
           ${currentStatementId ? 'AND bank_statement_id <> ?' : ''}
         )
+        ${viewerInvoiceScope}
       GROUP BY i.id
       ORDER BY i.invoice_date DESC, i.id DESC
-    `, currentStatementId ? [currentStatementId] : [])
+    `, [...(currentStatementId ? [currentStatementId] : []), ...viewerParams])
 
     const events = await query(`
       SELECT e.id, e.name, e.starts_at
@@ -88,10 +104,9 @@ export default defineEventHandler(async (event): Promise<OptionsResponse> => {
         id: Number(e.id),
         name: String(e.name),
         starts_at: String(e.starts_at),
-        erloese: Number(e.erloese),
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load options: ${err}` }
+    return internalError('Failed to load options', err)
   }
 })

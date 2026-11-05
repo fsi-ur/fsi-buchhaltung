@@ -70,7 +70,7 @@ import { useI18n } from '~/composables/useI18n'
 import { usePage } from '~/composables/usePage'
 import { useToast } from '~/composables/useToast'
 import type { ChangePasswordResponse } from '~/server/api/auth/change-password.post'
-import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, passwordPolicyError } from '~/config/validation'
 import { parseDeepLinkHash } from '~/composables/usePage'
 
 const { fetchSession, logout } = useAuth()
@@ -88,6 +88,7 @@ const passwordForm = ref({
 function translatePasswordError(error?: string) {
   if (error === 'Missing fields') return t('settings.general.passwordMissingFields')
   if (error === 'Password too short') return t('settings.general.passwordTooShort', { min: MIN_PASSWORD_LENGTH })
+  if (error === 'Password too long') return t('settings.general.passwordTooLong', { max: MAX_PASSWORD_BYTES })
   if (error === 'Passwords do not match') return t('settings.general.passwordMismatch')
   if (error === 'Invalid current password') return t('settings.general.currentPasswordInvalid')
   if (error === 'Not authenticated') return t('errors.notAuthenticated')
@@ -106,6 +107,10 @@ async function changePassword() {
     return
   }
 
+  if (passwordPolicyError(passwordForm.value.newPassword) === 'Password too long') {
+    toast.error(t('settings.general.passwordTooLong', { max: MAX_PASSWORD_BYTES }))
+    return
+  }
   if (passwordForm.value.newPassword.length < MIN_PASSWORD_LENGTH) {
     toast.error(t('settings.general.passwordTooShort', { min: MIN_PASSWORD_LENGTH }))
     return

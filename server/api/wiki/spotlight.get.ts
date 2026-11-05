@@ -5,6 +5,7 @@ import { filterVisibleArticles, getWikiAccess } from '~/server/utils/wiki/access
 import { loadPathViews, pickRecommendedPath } from '~/server/utils/wiki/paths'
 import type { WikiHomeArticle } from '~/server/api/wiki/home.get'
 import type { WikiPathView } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type WikiSpotlightResponse =
   | { ok: true, recentlyPublished: WikiHomeArticle[], recommendedPath: WikiPathView | null }
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<WikiSpotlightResponse> 
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the wiki spotlight: ${err}` }
+    return internalError('Failed to load the wiki spotlight', err)
   }
 })

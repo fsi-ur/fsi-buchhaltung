@@ -1,3 +1,5 @@
+import { storedFileHeaders } from '~/server/utils/securityHeaders'
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { defineEventHandler, createError, sendStream, setHeader } from 'h3'
 import { query } from '~/server/utils/db'
 import { requireAuth } from '~/server/utils/api/guards'
@@ -9,6 +11,7 @@ interface FileRecord {
   id: number
   file_path: string
   mime_type: string
+  original_name: string | null
 }
 
 interface GetFileError {
@@ -33,7 +36,7 @@ export default defineEventHandler(async (event): Promise<GetFileResponse> => {
     if (!(await canReadFile(event, current.user, id))) return { ok: false, error: 'Not authorized' }
 
     const result: FileRecord[] = await query(
-      `SELECT id, file_path, mime_type
+      `SELECT id, file_path, mime_type, original_name
       FROM files
       WHERE id = ?
       LIMIT 1`,
@@ -43,22 +46,19 @@ export default defineEventHandler(async (event): Promise<GetFileResponse> => {
     const file = result[0]
     if (!file) return { ok: false, error: 'File not found' }
 
-    const uploadRoot = process.env.UPLOAD_DIR!
-    const relativePath = file.file_path.replace(/^\/uploads\//, '')
-    const absolutePath = path.join(uploadRoot, relativePath)
-
-    if (!fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
+    const absolutePath = resolveStoredFilePath(file.file_path)
+    if (!absolutePath || !fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
 
     const stat = fs.statSync(absolutePath)
 
-    setHeader(event, 'Content-Type', file.mime_type)
+    for (const [name, value] of Object.entries(storedFileHeaders(file.mime_type, file.original_name))) setHeader(event, name, value)
     setHeader(event, 'Content-Length', stat.size)
-    setHeader(event, 'Content-Disposition', 'inline')
     setHeader(event, 'Accept-Ranges', 'bytes')
     setHeader(event, 'Cache-Control', 'no-transform')
 
     return sendStream(event, fs.createReadStream(absolutePath))
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to get file', message: err })
+    console.error('Failed to get file:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to get file' })
   }
 })

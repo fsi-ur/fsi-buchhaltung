@@ -4,7 +4,7 @@
     :can-view-files="canViewFiles"
     :model-value="file"
     :existing-file="existingFile"
-    :can-edit="canEdit"
+    :can-edit="canEdit && !statusLockedFromAssociation"
     @open-menu="$emit('openMenu')"
     @update:model-value="file = $event"
     @remove-existing="onRemoveFile"
@@ -13,10 +13,17 @@
       <PageAuditHistoryButton table="receipts" :record-id="receiptId" />
     </div>
 
+    <p
+      v-if="statusLockedFromAssociation && canEdit"
+      class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
+    >
+      {{ t('receipt.lockedHint') }}
+    </p>
+
     <ReceiptForm
       v-model="form"
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
-      :disabled="!canEdit"
+      :disabled="!canEdit || statusLockedFromAssociation"
       :status-disabled="statusLocked"
       :can-edit-company="canEditCompany"
       :external-validation-errors="externalValidationErrors"

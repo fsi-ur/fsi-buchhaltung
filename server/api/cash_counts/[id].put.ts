@@ -1,3 +1,5 @@
+import { parseJsonField } from '~/server/utils/api/request'
+import { isCashCountLocked, isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -14,6 +16,7 @@ import {
   validateCashCountRelations,
 } from '~/server/utils/cashCounts'
 import type { CashCountPositionRow, CashCountRow } from '~/types/cashCount'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateCashCountSuccess {
   ok: true
@@ -36,12 +39,18 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
   const multipart = await readMultipart(event)
   if (!multipart) return { ok: false, error: 'Missing form data' }
 
+  const unlockRequested = isUnlockRequested(multipart.getField('unlock'))
+
   const cashCountJson = multipart.getField('cashCount')
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
 
   if (!cashCountJson) return { ok: false, error: 'Missing cash count data' }
 
-  const updated = normalizeCashCountBody(JSON.parse(cashCountJson))
+  const parsedJson = parseJsonField(cashCountJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const updated = normalizeCashCountBody(parsedJson.value)
   const validationError = validateCashCountBody(updated)
   if (validationError) return { ok: false, error: validationError }
 
@@ -54,6 +63,8 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
       )
 
       if (!existingRows.length) return { ok: false, error: 'Cash count not found' }
+      const locked = lockError(await isCashCountLocked(cashCountId, conn), current.user.permissions, 'cash_counts.unlock', unlockRequested)
+      if (locked) return { ok: false, error: locked }
       const relationError = await validateCashCountRelations(updated, conn)
       if (relationError) return { ok: false, error: relationError }
 
@@ -168,6 +179,6 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update cash count: ${err}` }
+    return internalError('Failed to update cash count', err)
   }
 })

@@ -158,3 +158,32 @@ export async function canReadFile(event: H3Event, user: User, fileId: number): P
 
   return false
 }
+
+export const FILE_NOT_ATTACHABLE = 'Mindestens eine ausgewählte Datei ist nicht verfügbar.'
+
+/**
+ * Attaching a file to a record makes it readable for everyone who may read that record, so a caller
+ * may only attach files they can read themselves (SEC-02). `alreadyAttached` ids are skipped — an
+ * existing attachment must keep saving even if the caller couldn't add it today.
+ * Returns a generic German error (nothing about the files themselves) or null.
+ */
+export async function checkAttachableFiles(
+  event: H3Event,
+  user: User,
+  fileIds: readonly number[],
+  alreadyAttached: readonly number[] = [],
+): Promise<string | null> {
+  const added = Array.from(new Set(fileIds.map(Number))).filter(id => !alreadyAttached.includes(id))
+  if (!added.length) return null
+
+  const rows = await query<Array<{ id: number }>>(
+    `SELECT id FROM files WHERE id IN (${added.map(() => '?').join(',')})`,
+    added,
+  )
+  if (rows.length !== added.length) return FILE_NOT_ATTACHABLE
+
+  for (const fileId of added) {
+    if (!await canReadFile(event, user, fileId)) return FILE_NOT_ATTACHABLE
+  }
+  return null
+}

@@ -1,9 +1,11 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
 import { normalizeCashCountBody, validateCashCountBody, validateCashCountRelations } from '~/server/utils/cashCounts'
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateCashCountSuccess {
   ok: true
@@ -27,7 +29,11 @@ export default defineEventHandler(async (event): Promise<CreateCashCountResponse
   const cashCountJson = multipart.getField('cashCount')
   if (!cashCountJson) return { ok: false, error: 'Missing cash count data' }
 
-  const cashCount = normalizeCashCountBody(JSON.parse(cashCountJson))
+  const parsedJson = parseJsonField(cashCountJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const cashCount = normalizeCashCountBody(parsedJson.value)
   const validationError = validateCashCountBody(cashCount)
   if (validationError) return { ok: false, error: validationError }
 
@@ -84,6 +90,6 @@ export default defineEventHandler(async (event): Promise<CreateCashCountResponse
       return { ok: true, cashCountId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create cash count: ${err}` }
+    return internalError('Failed to create cash count', err)
   }
 })

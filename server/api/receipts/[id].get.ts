@@ -6,6 +6,7 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { getAttachedFile, getEntityIdsWithActiveFiles } from '~/server/utils/files'
 import type { Receipt, ReceiptPosition, ReceiptRow } from '~/types/receipt'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetReceiptSuccess {
   ok: true
@@ -102,6 +103,6 @@ export default defineEventHandler(async (event): Promise<GetReceiptResponse> => 
       bankStatementId: bankStatementLinks[0] ? Number(bankStatementLinks[0].bank_statement_id) : null,
     }
   } catch (err: any) {
-    return { ok: false, error: `An error occurred while fetching a receipt: ${err}` }
+    return internalError('An error occurred while fetching a receipt', err)
   }
 })

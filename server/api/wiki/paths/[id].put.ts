@@ -10,6 +10,7 @@ import {
   savePathItems,
   validatePathFields,
 } from '~/server/utils/wiki/paths'
+import { internalError } from '~/server/utils/api/errors'
 
 export type UpdateWikiPathResponse = { ok: true } | { ok: false, error: string }
 
@@ -52,6 +53,6 @@ export default defineEventHandler(async (event): Promise<UpdateWikiPathResponse>
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to update the wiki learning path: ${err}` }
+    return internalError('Failed to update the wiki learning path', err)
   }
 })

@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { isTagSlugTaken, parseTagInput } from '~/server/utils/wiki/tags'
+import { internalError } from '~/server/utils/api/errors'
 
 export type CreateWikiTagResponse =
   | { ok: true, tagId: number }
@@ -31,6 +32,6 @@ export default defineEventHandler(async (event): Promise<CreateWikiTagResponse> 
 
     return { ok: true, tagId }
   } catch (err: any) {
-    return { ok: false, error: `Failed to create the wiki tag: ${err}` }
+    return internalError('Failed to create the wiki tag', err)
   }
 })

@@ -17,8 +17,12 @@ const {
   CONNECTION_DB_PASSWORD,
 } = process.env
 
+// `users` is granted column by column (SEC-30): the kassensystem logs in against it, so it needs the
+// password hash, but nothing else (calendar token hashes, timestamps, ...). Checked against the
+// kassensystem's queries (login, session lookup, user list).
+const USER_COLUMNS = ['id', 'username', 'password_hash', 'is_active', 'must_change_password']
+
 const SELECT_TABLES = [
-  'users',
   'members',
   'events',
   'roles',
@@ -64,6 +68,11 @@ async function createConnectionUser() {
       // No existing grants to revoke.
     }
 
+    await conn.query(
+      `GRANT SELECT (${USER_COLUMNS.map(column => `\`${column}\``).join(', ')}) ON \`${databaseName}\`.\`users\` TO ?@'%'`,
+      [CONNECTION_DB_USER],
+    )
+
     for (const table of SELECT_TABLES) {
       await conn.query(`GRANT SELECT ON \`${databaseName}\`.\`${table}\` TO ?@'%'`, [CONNECTION_DB_USER])
     }
@@ -75,7 +84,7 @@ async function createConnectionUser() {
 
     console.log(
       `create-connection-db-user: user "${CONNECTION_DB_USER}" is set up ` +
-      `(SELECT on ${SELECT_TABLES.join(', ')}; full access on ${SESSION_TABLE})`,
+      `(SELECT on users(${USER_COLUMNS.join(', ')}), ${SELECT_TABLES.join(', ')}; full access on ${SESSION_TABLE})`,
     )
   } finally {
     if (conn) conn.release()

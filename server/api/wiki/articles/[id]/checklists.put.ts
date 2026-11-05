@@ -9,6 +9,7 @@ import {
   validateChecklists,
 } from '~/server/utils/wiki/checklists'
 import type { WikiChecklistView } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveChecklistsBody {
   checklists?: unknown[]
@@ -41,6 +42,6 @@ export default defineEventHandler(async (event): Promise<SaveWikiChecklistsRespo
 
     return { ok: true, checklists: await loadArticleChecklists(articleId, Number(current.user.id), true) }
   } catch (err: any) {
-    return { ok: false, error: `Failed to save wiki checklists: ${err}` }
+    return internalError('Failed to save wiki checklists', err)
   }
 })

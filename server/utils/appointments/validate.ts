@@ -1,3 +1,4 @@
+import { EXTERNAL_IMAGE_ERROR, renderArticle } from '~/server/utils/wiki/render'
 import { query } from '~/server/utils/db'
 import type { DbConn } from '~/server/utils/notifications/types'
 import type { AppointmentEditScope, SaveAppointmentBody } from '~/types/appointment'
@@ -64,6 +65,11 @@ export async function validateAppointment(
 
   if (body.agenda && String(body.agenda).length > MAX_AGENDA_LENGTH) {
     return 'Die Agenda ist zu lang (maximal 64 KB).'
+  }
+  if (body.agenda) {
+    // Agendas use the wiki renderer; external images (tracking pixels) are refused on save (SEC-27).
+    const rendered = renderArticle(String(body.agenda), { rejectExternalImages: true })
+    if (!rendered.ok && rendered.error === EXTERNAL_IMAGE_ERROR) return EXTERNAL_IMAGE_ERROR
   }
 
   const startsAt = parseWallClock(body.starts_at)

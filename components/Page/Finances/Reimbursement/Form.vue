@@ -238,6 +238,8 @@ const props = defineProps<{
   hasFile?: boolean
   file?: File | null
   removeExistingFile?: boolean
+  /** A booked record the user has unlocked (SEC-22) — kept across the receipt/invoice detour. */
+  recordUnlocked?: boolean
   canCreateReceipt?: boolean
   canEditReceipt?: boolean
   canViewReceipt?: boolean
@@ -517,6 +519,7 @@ function buildReceiptReturnMeta() {
   if (pageMeta.value?.reimbursementId) nestedReturnTargetMeta.reimbursementId = pageMeta.value.reimbursementId
   if (props.file) nestedReturnTargetMeta.reimbursementFile = props.file
   if (props.removeExistingFile) nestedReturnTargetMeta.reimbursementRemoveExistingFile = true
+  if (props.recordUnlocked) nestedReturnTargetMeta.recordUnlocked = true
   if (pageMeta.value?.forceReadonly) nestedReturnTargetMeta.forceReadonly = true
   nestedReturnTargetMeta.returnTarget = returnTarget.value
 

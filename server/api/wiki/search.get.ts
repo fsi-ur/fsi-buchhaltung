@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getWikiAccess } from '~/server/utils/wiki/access'
 import { searchArticles } from '~/server/utils/wiki/search'
 import type { WikiSearchHit } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type WikiSearchResponse =
   | { ok: true, hits: WikiSearchHit[] }
@@ -30,6 +31,6 @@ export default defineEventHandler(async (event): Promise<WikiSearchResponse> => 
     })
     return { ok: true, hits }
   } catch (err: any) {
-    return { ok: false, error: `Failed to search the wiki: ${err}` }
+    return internalError('Failed to search the wiki', err)
   }
 })

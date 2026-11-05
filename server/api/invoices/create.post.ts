@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { readMultipart } from '~/server/utils/api/request'
@@ -9,6 +10,7 @@ import { getAssociationBoardLineForInvoice, getAssociationLogoForInvoice, getAss
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import { InvoiceSourceType, InvoiceStatus } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateInvoiceSuccess {
   ok: true
@@ -36,7 +38,11 @@ export default defineEventHandler(async (event): Promise<CreateInvoiceResponse> 
   const invoiceJson = multipart.getField('invoice')
   if (!invoiceJson) return { ok: false, error: 'Missing invoice data' }
 
-  let parsed = normalizeInvoicePayload(JSON.parse(invoiceJson))
+  const parsedJson = parseJsonField(invoiceJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  let parsed = normalizeInvoicePayload(parsedJson.value)
   const preValidationError = validateInvoicePayload(parsed.invoice_number ? parsed : { ...parsed, invoice_number: 'DEFAULT' })
   if (preValidationError) return { ok: false, error: preValidationError }
 
@@ -166,6 +172,6 @@ export default defineEventHandler(async (event): Promise<CreateInvoiceResponse> 
   } catch (err: any) {
     const error = err as MysqlError
     if (error.code === 'ER_DUP_ENTRY') return { ok: false, error: 'Invoice number already exists' }
-    return { ok: false, error: `Failed to create invoice: ${err}` }
+    return internalError('Failed to create invoice', err)
   }
 })

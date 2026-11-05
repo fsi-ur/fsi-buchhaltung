@@ -17,6 +17,7 @@ import {
 } from '~/server/utils/appointments'
 import { formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import type { AppointmentEditScope, SaveAppointmentBody } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CancelAppointmentSuccess {
   ok: true
@@ -168,6 +169,6 @@ export default defineEventHandler(async (event): Promise<CancelAppointmentRespon
       return { ok: true as const }
     })
   } catch (err: any) {
-    return { ok: false, error: `Der Termin konnte nicht geändert werden: ${err?.code ?? err}` }
+    return internalError('Der Termin konnte nicht geändert werden', err)
   }
 })

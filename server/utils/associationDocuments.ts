@@ -1,5 +1,5 @@
 import { query } from '~/server/utils/db'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import type { AssociationDocument, SaveAssociationDocumentBody } from '~/types/document'
 import type { PermissionKey } from '~/config/permissions'
 

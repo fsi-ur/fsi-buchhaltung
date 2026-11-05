@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { levelAtLeast, requireArticleWrite } from '~/server/utils/wiki/access'
 import { renderArticle } from '~/server/utils/wiki/render'
 import { loadArticleImageIds } from '~/server/utils/wiki/images'
+import { internalError } from '~/server/utils/api/errors'
 
 export type PublishWikiArticleResponse =
   | { ok: true }
@@ -51,6 +52,7 @@ export default defineEventHandler(async (event): Promise<PublishWikiArticleRespo
   const rendered = renderArticle(markdown, {
     knownChecklists: checklistRows.map(row => row.key_slug),
     knownImages: await loadArticleImageIds(articleId),
+    rejectExternalImages: true,
   })
   if (!rendered.ok) return rendered
 
@@ -85,6 +87,6 @@ export default defineEventHandler(async (event): Promise<PublishWikiArticleRespo
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to publish wiki article: ${err}` }
+    return internalError('Failed to publish wiki article', err)
   }
 })

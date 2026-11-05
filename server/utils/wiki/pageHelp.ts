@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 
 const PAGE_NAME = /^[A-Za-z][A-Za-z0-9]*$/

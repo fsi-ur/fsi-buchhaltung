@@ -4,6 +4,7 @@ import { parseFinanceAnalysisFilters } from '~/server/utils/financeAnalysis/filt
 import { loadFinanceAnalysis } from '~/server/utils/financeAnalysis/load'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
 import { appTodayLocalDate } from '~/server/utils/time'
+import { internalError } from '~/server/utils/api/errors'
 
 interface FinanceAnalysisSuccess {
   ok: true
@@ -30,6 +31,6 @@ export default defineEventHandler(async (event): Promise<FinanceAnalysisResponse
   try {
     return { ok: true, analysis: await loadFinanceAnalysis(filters) }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load finance analysis: ${err}` }
+    return internalError('Failed to load finance analysis', err)
   }
 })

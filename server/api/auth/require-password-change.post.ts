@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RequirePasswordChangeBody {
   user_id?: number
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event): Promise<RequirePasswordChangeRe
     })
   } catch (err: any) {
     if (err?.message === 'User not found') return { ok: false, error: 'User not found' }
-    return { ok: false, error: err?.code || 'Failed to flag user' }
+    return internalError('Failed to flag user', err)
   }
 
   return { ok: true }

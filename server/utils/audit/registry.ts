@@ -172,6 +172,7 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     domain: 'members',
     viewPermissions: ['members.view'],
     references: { account: USER_REF, subject: SUBJECT_REF },
+    ignoredColumns: ['account_deactivation_skipped'],
     describe: state => (state.first_name || state.last_name) ? `${state.first_name ?? ''} ${state.last_name ?? ''}`.trim() : null,
     openPage: { page: 'MemberCreate', metaKey: 'memberId' },
   },

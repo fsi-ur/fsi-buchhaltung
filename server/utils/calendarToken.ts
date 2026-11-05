@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { hmacToken, makeToken } from '~/server/utils/auth'
 import { query } from '~/server/utils/db'
 import { utcNowSql } from '~/server/utils/time'
@@ -14,6 +14,14 @@ export async function generateCalendarToken(userId: number, conn?: mariadb.PoolC
   )
 
   return rawToken
+}
+
+export async function revokeCalendarToken(userId: number, conn?: mariadb.PoolConnection) {
+  await query(
+    `UPDATE users SET calendar_token_hash = NULL, calendar_token_created_at = NULL WHERE id = ?`,
+    [userId],
+    conn,
+  )
 }
 
 export async function hasCalendarToken(userId: number): Promise<boolean> {

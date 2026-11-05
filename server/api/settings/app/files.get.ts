@@ -1,3 +1,4 @@
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { createReadStream } from 'fs'
 import fs from 'fs/promises'
 import path from 'path'
@@ -91,12 +92,11 @@ export default defineEventHandler(async (event) => {
 
     for (const file of rows) {
       const archivePath = `files/${String(file.id).padStart(8, '0')}-${cleanPathPart(file.original_name)}`
-      const relativePath = file.file_path.replace(/^\/uploads\//, '')
-      const absolutePath = path.resolve(resolvedUploadRoot, relativePath)
+      const absolutePath = resolveStoredFilePath(file.file_path, resolvedUploadRoot) ?? ''
       let included = false
 
       try {
-        if (!absolutePath.startsWith(resolvedUploadRoot + path.sep)) throw new Error('Invalid file path')
+        if (!absolutePath) throw new Error('Invalid file path')
         const stat = await fs.stat(absolutePath)
         included = stat.isFile()
       } catch (err) {
@@ -114,6 +114,7 @@ export default defineEventHandler(async (event) => {
 
     return sendStream(event, Readable.from(tarArchiveStream(files)))
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to create files archive', message: String(err?.message || err) })
+    console.error('Failed to create files archive:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to create files archive' })
   }
 })

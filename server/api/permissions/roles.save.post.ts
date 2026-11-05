@@ -1,7 +1,9 @@
+import { withLastAdminGuard } from '~/server/utils/permissions'
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveRoleBody {
   id?: number
@@ -41,7 +43,7 @@ export default defineEventHandler(async (event): Promise<SaveRoleResponse> => {
   const nextIsDefault = updated.is_active ? updated.is_default : false
 
   try {
-    return await withAuditTransaction(current.user, async (conn) => {
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       if (updated.id && updated.id > 0) {
         const existingRows = await query<any[]>(
           `SELECT id, code, name, description, is_active, is_default FROM roles WHERE id = ? LIMIT 1`,
@@ -89,8 +91,8 @@ export default defineEventHandler(async (event): Promise<SaveRoleResponse> => {
       }
 
       return { ok: true }
-    })
+    }))
   } catch (err: any) {
-    return { ok: false, error: `An error occured while saving the role: ${err.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the role', err)
   }
 })

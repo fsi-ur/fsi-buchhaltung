@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { EventRow } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetCashCountEventOptionsSuccess {
   ok: true
@@ -38,6 +39,6 @@ export default defineEventHandler(async (event): Promise<GetCashCountEventOption
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load cash count event options: ${err}` }
+    return internalError('Failed to load cash count event options', err)
   }
 })

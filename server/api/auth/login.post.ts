@@ -1,6 +1,8 @@
-import { defineEventHandler, readBody, setCookie } from 'h3'
+import { sessionCookieOptions } from '~/server/utils/sessionCookie'
+import { defineEventHandler, readBody, setCookie, setResponseHeader, setResponseStatus } from 'h3'
 import { query } from '~/server/utils/db'
-import { makeToken, createSession, comparePassword } from '~/server/utils/auth'
+import { makeToken, createSession, comparePassword, compareAgainstDummyHash, cleanupExpiredSessions } from '~/server/utils/auth'
+import { getClientIp, loginIpLimiter, loginLockout } from '~/server/utils/rateLimit'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import { getUserPermissions, getUserPositionIds, getUserRoleIds } from '~/server/utils/permissions'
 import type { User, UserRow } from '~/types/user'
@@ -15,7 +17,7 @@ interface LoginSuccess {
   user: User
 }
 
-export type LoginErrorCode = 'missing_credentials' | 'invalid_credentials' | 'inactive_user' | 'server_error' | 'network_error' | 'session_not_established'
+export type LoginErrorCode = 'missing_credentials' | 'invalid_credentials' | 'inactive_user' | 'rate_limited' | 'server_error' | 'network_error' | 'session_not_established'
 
 interface LoginError {
   ok: false
@@ -25,40 +27,64 @@ interface LoginError {
 
 export type LoginResponse = LoginSuccess | LoginError
 
+function rateLimited(event: Parameters<typeof setResponseStatus>[0], retryMs: number): LoginError {
+  setResponseStatus(event, 429)
+  setResponseHeader(event, 'Retry-After', Math.ceil(retryMs / 1000))
+  return { ok: false, error: 'Too many login attempts', code: 'rate_limited' }
+}
+
 export default defineEventHandler(async (event): Promise<LoginResponse> => {
   try {
+    const ip = getClientIp(event)
+
+    // Per-IP budget first: it is checked before reading the body or touching bcrypt (SEC-04).
+    const ipRetryMs = loginIpLimiter.hit(ip)
+    if (ipRetryMs) return rateLimited(event, ipRetryMs)
+
     const body = await readBody<LoginBody>(event)
-    if (!body.username || !body.password) return { ok: false, error: 'Missing credentials', code: 'missing_credentials' }
+    if (typeof body?.username !== 'string' || typeof body?.password !== 'string' || !body.username || !body.password) {
+      return { ok: false, error: 'Missing credentials', code: 'missing_credentials' }
+    }
     const { username, password } = body
+    const lockoutKey = username.trim().toLowerCase()
+
+    const lockedMs = loginLockout.lockedFor(lockoutKey)
+    if (lockedMs) {
+      console.warn(`auth: login for locked username "${username}" from ${ip} refused`)
+      return rateLimited(event, lockedMs)
+    }
 
     const rows = await query(
       'SELECT id, username, password_hash, is_active, must_change_password FROM users WHERE username = ? LIMIT 1',
       [username]
     ) as UserRow[]
 
-    if (rows.length === 0) return { ok: false, error: 'Invalid username or password', code: 'invalid_credentials' }
+    const user = rows.length ? normalizeBigInt(rows[0]) as UserRow : null
+    // Always spend one bcrypt comparison, and check the password before the account state, so
+    // neither timing nor the error code tells which usernames exist (SEC-18).
+    const passwordMatches = user
+      ? await comparePassword(password, user.password_hash)
+      : await compareAgainstDummyHash(password)
 
-    const user = normalizeBigInt(rows[0]) as UserRow
+    if (!user || !passwordMatches) {
+      loginLockout.recordFailure(lockoutKey)
+      console.warn(`auth: failed login for username "${username}" from ${ip}`)
+      return { ok: false, error: 'Invalid username or password', code: 'invalid_credentials' }
+    }
 
+    loginLockout.recordSuccess(lockoutKey)
     if (!user.is_active) return { ok: false, error: 'User is inactive', code: 'inactive_user' }
-
-    const passwordMatches = await comparePassword(password, user.password_hash)
-    if (!passwordMatches) return { ok: false, error: 'Invalid username or password', code: 'invalid_credentials' }
 
     const token = makeToken()
     await createSession(user.id, token)
+    // Expired rows are otherwise only removed on logout (SEC-24). Only expired ones: the sessions
+    // table is shared with the kassensystem, whose idle limit may differ from ours.
+    cleanupExpiredSessions().catch(err => console.error('auth: session cleanup failed', err))
 
     const cookieName = process.env.SESSION_COOKIE_NAME || 'app_session'
     const maxAgeSeconds = parseInt(process.env.SESSION_MAX_AGE_MINUTES || '1440') * 60
 
-    setCookie(event, cookieName, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: maxAgeSeconds,
-      ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
-    })
+    setCookie(event, cookieName, token, sessionCookieOptions(maxAgeSeconds))
 
     const roles = await getUserRoleIds(user.id)
     const positionIds = await getUserPositionIds(user.id)

@@ -1,3 +1,5 @@
+import { storedFileHeaders } from '~/server/utils/securityHeaders'
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { createError, defineEventHandler, sendStream, setHeader } from 'h3'
 import fs from 'fs'
 import path from 'path'
@@ -29,19 +31,17 @@ export default defineEventHandler(async (event) => {
     const logo = rows[0]
     if (!logo) return { ok: false, error: 'Logo not found' }
 
-    const uploadRoot = process.env.UPLOAD_DIR!
-    const relativePath = logo.file_path.replace(/^\/uploads\//, '')
-    const absolutePath = path.join(uploadRoot, relativePath)
-    if (!fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
+    const absolutePath = resolveStoredFilePath(logo.file_path)
+    if (!absolutePath || !fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
 
     const stat = fs.statSync(absolutePath)
-    setHeader(event, 'Content-Type', logo.mime_type)
+    for (const [name, value] of Object.entries(storedFileHeaders(logo.mime_type, null))) setHeader(event, name, value)
     setHeader(event, 'Content-Length', stat.size)
-    setHeader(event, 'Content-Disposition', 'inline')
     setHeader(event, 'Cache-Control', 'no-transform')
 
     return sendStream(event, fs.createReadStream(absolutePath))
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to get association logo', message: err })
+    console.error('Failed to get association logo:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to get association logo' })
   }
 })

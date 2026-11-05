@@ -1,3 +1,4 @@
+import { isSingleEmailAddress } from '~/shared/email'
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import type { NotificationChannel } from '~/server/utils/notifications/types'
@@ -36,25 +37,34 @@ export const emailChannel: NotificationChannel = {
     const client = getTransporter()
     if (!client) throw new Error('SMTP is not configured')
     if (!recipient.email) throw new Error('Recipient has no e-mail address')
+    if (!isSingleEmailAddress(recipient.email)) throw new Error('Recipient e-mail address is invalid')
 
     const fromName = settings.email_from_name || 'FSi'
     let body = rendered.body
     let unsubscribeUrl: string | null = null
 
     if (unsubscribeToken) {
-      const baseUrl = (process.env.APP_BASE_URL || '/').replace(/\/$/, '')
+      // APP_PUBLIC_URL (absolute) makes the link work in every mail client; APP_BASE_URL alone is
+      // only a path (SEC-33).
+      const baseUrl = (process.env.APP_PUBLIC_URL || process.env.APP_BASE_URL || '/').replace(/\/$/, '')
       unsubscribeUrl = `${baseUrl}/api/notifications/unsubscribe?token=${unsubscribeToken}`
       body = `${body}\n\n---\n\nAbmelden: ${unsubscribeUrl}`
     }
+    // RFC 8058 one-click unsubscribe (POST); mail clients require an absolute https URL.
+    const listUnsubscribe = unsubscribeUrl && /^https:\/\//.test(unsubscribeUrl)
+      ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+      : undefined
 
     const bodyHtml = renderNotificationBodyHtml(body)
 
     await client.sendMail({
-      from: `"${fromName}" <${process.env.SMTP_FROM || 'noreply@example.com'}>`,
-      to: recipient.email,
+      // Structured addresses: no string building, so a name with quotes or <> can't add recipients (SEC-28).
+      from: { name: fromName, address: process.env.SMTP_FROM || 'noreply@example.com' },
+      to: { name: '', address: recipient.email.trim() },
       subject: rendered.subject,
       text: body,
       html: bodyHtml,
+      headers: listUnsubscribe,
       attachments: attachments?.length
         ? attachments.map(attachment => ({
             filename: attachment.filename,

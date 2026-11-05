@@ -1,3 +1,4 @@
+import { isAllowedPushEndpoint } from '~/server/utils/notifications/pushEndpoints'
 import webpush from 'web-push'
 import { query } from '~/server/utils/db'
 import { localWallClockNow } from '~/server/utils/notifications/time'
@@ -34,10 +35,20 @@ export const pushChannel: NotificationChannel = {
     if (!vapidConfigured) throw new Error('VAPID keys are not configured')
     if (!recipient.userId) throw new Error('Recipient has no account')
 
-    const subscriptions = await query<Array<{ id: number, endpoint: string, p256dh: string, auth: string }>>(
+    // Safety net: never push to a deactivated account (its subscriptions are removed on deactivation).
+    const [account] = await query<Array<{ is_active: number }>>(`SELECT is_active FROM users WHERE id = ? LIMIT 1`, [recipient.userId])
+    if (!account || !Number(account.is_active)) throw new Error('Recipient account is inactive')
+
+    const storedSubscriptions = await query<Array<{ id: number, endpoint: string, p256dh: string, auth: string }>>(
       `SELECT id, endpoint, p256dh, auth FROM notification_push_subscriptions WHERE user_id = ?`,
       [recipient.userId],
     )
+    // Rows from before the endpoint allowlist are kept (owner decision) but never contacted.
+    const subscriptions = storedSubscriptions.filter((sub) => {
+      if (isAllowedPushEndpoint(sub.endpoint)) return true
+      console.warn(`push: subscription ${sub.id} skipped — endpoint host not allowed`)
+      return false
+    })
     if (!subscriptions.length) throw new Error('No push subscription for this recipient')
 
     const payload = JSON.stringify({
@@ -51,17 +62,18 @@ export const pushChannel: NotificationChannel = {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
         await query(`UPDATE notification_push_subscriptions SET last_used_at = ? WHERE id = ?`, [await localWallClockNow(), sub.id])
       } catch (err: any) {
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
-          await query(`DELETE FROM notification_push_subscriptions WHERE id = ?`, [sub.id])
-        }
+        // Subscriptions are only removed when their user is deactivated — not on send failures, even
+        // 404/410 (owner decision: getting people to enable push is hard).
+        console.warn(`push: delivery to subscription ${sub.id} failed`, err?.statusCode ?? err?.message ?? err)
         throw err
       }
     }))
 
     if (results.every(result => result.status === 'rejected')) {
       const firstRejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
-      const reason = firstRejected?.reason
-      throw new Error(reason instanceof Error ? reason.message : String(reason ?? 'Push delivery failed'))
+      const statusCode = Number(firstRejected?.reason?.statusCode) || null
+      // Stored in notification_deliveries.error — only a generic text, never the raw network error (SEC-20).
+      throw new Error(statusCode ? `Push delivery failed (HTTP ${statusCode})` : 'Push delivery failed')
     }
   },
 }

@@ -227,6 +227,7 @@
     :title="t('settings.app.restoreTitle')"
     :description="t('settings.app.restoreText')"
   >
+    <p class="text-sm font-medium text-danger-800">{{ t('settings.app.restorePermissionWarning') }}</p>
     <input
       ref="fileInput"
       class="input bg-white"
@@ -315,6 +316,10 @@
         <p class="font-medium">{{ integrityLabel }}</p>
       </div>
       <div class="rounded-lg border border-base-200 p-3 md:col-span-2">
+        <p class="text-xs text-base-500">{{ t('settings.app.previewSignature') }}</p>
+        <p class="font-medium">{{ signatureLabel }}</p>
+      </div>
+      <div class="rounded-lg border border-base-200 p-3 md:col-span-2">
         <p class="text-xs text-base-500">{{ t('settings.app.previewFilesArchive') }}</p>
         <p class="font-medium">{{ filesArchiveLabel }}</p>
       </div>
@@ -328,6 +333,14 @@
         </div>
         <p class="text-xs text-danger-800">{{ t('settings.app.uploadProgress', { progress: String(uploadProgress) }) }}</p>
       </div>
+      <label v-if="!restorePreview.signature.valid" class="flex items-start gap-2">
+        <input v-model="restoreForeignConfirmed" type="checkbox" class="checkbox mt-0.5">
+        <span class="text-xs font-medium text-danger-900">{{ t('settings.app.restoreForeignConfirm') }}</span>
+      </label>
+      <label class="block">
+        <span class="text-xs font-medium text-danger-900">{{ t('settings.app.restoreAccountPasswordLabel') }}</span>
+        <input v-model="restoreAccountPassword" class="input mt-1 bg-white" type="password" autocomplete="current-password">
+      </label>
       <label class="block">
         <span class="text-xs font-medium text-danger-900">{{ t('settings.app.restoreConfirmLabel') }}</span>
         <input v-model="restoreConfirmation" class="input mt-1 bg-white" autocomplete="off">
@@ -388,6 +401,8 @@ const snapshotPassword = ref('')
 const restorePassword = ref('')
 const restorePreview = ref<Extract<PreviewSnapshotResponse, { ok: true }> | null>(null)
 const restoreConfirmation = ref('')
+const restoreAccountPassword = ref('')
+const restoreForeignConfirmed = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const archiveInput = ref<HTMLInputElement | null>(null)
 const { timeZone: appTimeZone, setTimeZone } = useAppTimeZone()
@@ -457,8 +472,16 @@ const filesArchiveLabel = computed(() => {
   })
 })
 
+const signatureLabel = computed(() => {
+  if (!restorePreview.value) return ''
+  if (restorePreview.value.signature.valid) return t('settings.app.signatureValid')
+  return restorePreview.value.signature.present ? t('settings.app.signatureForeign') : t('settings.app.signatureMissing')
+})
+
 const canRestorePreview = computed(() => {
   if (!restorePreview.value) return false
+  if (!restoreAccountPassword.value) return false
+  if (!restorePreview.value.signature.valid && !restoreForeignConfirmed.value) return false
   return !restorePreview.value.integrity.present || restorePreview.value.integrity.valid
 })
 
@@ -673,6 +696,7 @@ const snapshotErrorMessageKeys: Record<SnapshotErrorCode | 'uploadFailed', strin
   archiveInvalid: 'settings.app.snapshotErrors.archiveInvalid',
   archiveFilesMissing: 'settings.app.snapshotErrors.archiveFilesMissing',
   previewExpired: 'settings.app.snapshotErrors.previewExpired',
+  untrustedSnapshot: 'settings.app.snapshotErrors.untrustedSnapshot',
   uploadFailed: 'settings.app.snapshotErrors.uploadFailed',
 }
 
@@ -766,6 +790,8 @@ async function openRestorePreview() {
 function closeRestorePreview() {
   restorePreview.value = null
   restoreConfirmation.value = ''
+  restoreAccountPassword.value = ''
+  restoreForeignConfirmed.value = false
 }
 
 async function restoreSnapshot() {
@@ -799,6 +825,8 @@ async function restoreSnapshot() {
 function restoreBody() {
   const body = new FormData()
   body.append('restoreToken', restoreToken.value)
+  body.append('accountPassword', restoreAccountPassword.value)
+  if (restoreForeignConfirmed.value) body.append('allowForeign', 'true')
   if (selectedArchive.value) body.append('archive', selectedArchive.value)
   return body
 }

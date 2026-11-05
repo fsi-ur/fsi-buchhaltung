@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { slugifyTitle } from '~/server/utils/wiki/articles'
 import { canReadArticle, type ViewerSubjects, type WikiAccessIndex } from '~/server/utils/wiki/access'

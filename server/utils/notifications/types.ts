@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
 import type { MailAttachment } from '~/server/utils/attachments'

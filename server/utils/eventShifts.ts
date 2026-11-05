@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import type { EventShiftMember, EventShiftSlot, EventShiftTemplate, EventShiftTypeDescriptions, SaveEventShiftSlot, SaveEventShiftTemplate } from '~/types/event'
 import { dropFutureReminders } from '~/server/utils/notifications/enqueue'

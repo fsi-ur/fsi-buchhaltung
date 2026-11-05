@@ -195,6 +195,13 @@ type DiscrepancyViewResponse =
 const props = defineProps<{
   cashCountId: number
   canEdit: boolean
+  /** The count is confirmed (locked) and the user has unlocked it in the editor (SEC-22). */
+  unlock?: boolean
+}>()
+
+const emit = defineEmits<{
+  /** A confirmation was saved (true — the count is booked) or withdrawn (false). */
+  (e: 'lockedChange', locked: boolean): void
 }>()
 
 const { t } = useI18n()
@@ -304,10 +311,14 @@ async function saveConfirm() {
 
   busy.value = true
   try {
-    const res = await apiFetch<DiscrepancyViewResponse>(`/api/cash_counts/${props.cashCountId}/discrepancies`, { method: 'POST', body })
+    const res = await apiFetch<DiscrepancyViewResponse>(`/api/cash_counts/${props.cashCountId}/discrepancies`, {
+      method: 'POST',
+      body: { ...body, ...(props.unlock ? { unlock: true } : {}) },
+    })
     if (applyView(res)) {
       toast.success(t('cashCount.discrepancies.saved'))
       closeConfirm()
+      emit('lockedChange', true)
     }
   } catch {
     toast.error(t('cashCount.discrepancies.failed'))
@@ -319,8 +330,14 @@ async function saveConfirm() {
 async function revoke() {
   busy.value = true
   try {
-    const res = await apiFetch<DiscrepancyViewResponse>(`/api/cash_counts/${props.cashCountId}/discrepancies`, { method: 'DELETE' })
-    if (applyView(res)) toast.success(t('cashCount.discrepancies.revoked'))
+    const res = await apiFetch<DiscrepancyViewResponse>(`/api/cash_counts/${props.cashCountId}/discrepancies`, {
+      method: 'DELETE',
+      query: props.unlock ? { unlock: 'true' } : undefined,
+    })
+    if (applyView(res)) {
+      toast.success(t('cashCount.discrepancies.revoked'))
+      emit('lockedChange', false)
+    }
   } catch {
     toast.error(t('cashCount.discrepancies.failed'))
   } finally {

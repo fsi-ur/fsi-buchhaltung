@@ -5,6 +5,7 @@ import { invalidateWikiAccess } from '~/server/utils/wiki/access'
 import { slugifyTitle } from '~/server/utils/wiki/articles'
 import { applyOwnerGrants } from '~/server/utils/wiki/grants'
 import { DEFAULT_SPACE_ICON, isSpaceSlugTaken, validateSpaceFields } from '~/server/utils/wiki/spaces'
+import { internalError } from '~/server/utils/api/errors'
 
 export type UpdateWikiSpaceResponse = { ok: true } | { ok: false, error: string }
 
@@ -75,6 +76,6 @@ export default defineEventHandler(async (event): Promise<UpdateWikiSpaceResponse
     invalidateWikiAccess(event)
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to update the wiki space: ${err}` }
+    return internalError('Failed to update the wiki space', err)
   }
 })

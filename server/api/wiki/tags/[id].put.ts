@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { isTagSlugTaken, parseTagInput } from '~/server/utils/wiki/tags'
+import { internalError } from '~/server/utils/api/errors'
 
 export type UpdateWikiTagResponse = { ok: true } | { ok: false, error: string }
 
@@ -32,6 +33,6 @@ export default defineEventHandler(async (event): Promise<UpdateWikiTagResponse> 
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to update the wiki tag: ${err}` }
+    return internalError('Failed to update the wiki tag', err)
   }
 })

@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { canReadArticle, getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
 import { loadRunContext } from '~/server/utils/wiki/checklists'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CloseRunBody {
   closed?: boolean
@@ -43,6 +44,6 @@ export default defineEventHandler(async (event): Promise<CloseWikiChecklistRunRe
     })
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to close wiki checklist run: ${err}` }
+    return internalError('Failed to close wiki checklist run', err)
   }
 })

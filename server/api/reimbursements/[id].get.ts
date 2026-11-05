@@ -1,3 +1,4 @@
+import { isReimbursementLocked } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
@@ -7,9 +8,12 @@ import { getAttachedFile, getEntityIdsWithActiveFiles } from '~/server/utils/fil
 import type { Reimbursement, ReimbursementPosition, ReimbursementRow } from '~/types/reimbursement'
 import { ReceiptStatus } from '~/types/receipt'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetReimbursementSuccess {
   ok: true
+  /** Booked (SEC-22): read-only without reimbursements.unlock. */
+  locked: boolean
   reimbursement: Reimbursement
   file: FileRow | null
 }
@@ -122,6 +126,7 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
 
     return {
       ok: true,
+      locked: isReimbursementLocked(reimbursement),
       reimbursement: {
         id: Number(reimbursement.id),
         paid_by: Number(reimbursement.paid_by),
@@ -141,6 +146,6 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
       file: file ?? null
     }
   } catch (err: any) {
-    return { ok: false, error: `An error occurred while fetching a reimbursement: ${err}` }
+    return internalError('An error occurred while fetching a reimbursement', err)
   }
 })

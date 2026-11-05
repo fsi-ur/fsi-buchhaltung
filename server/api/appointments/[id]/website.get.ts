@@ -4,6 +4,7 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { loadAppointmentWebsiteSettings } from '~/server/utils/appointmentWebsite'
 import { isAppointmentVisible, resolveAppointmentViewer } from '~/server/utils/appointments/visibility'
 import type { AppointmentWebsiteSettings } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetAppointmentWebsiteSuccess {
   ok: true
@@ -36,6 +37,6 @@ export default defineEventHandler(async (event): Promise<GetAppointmentWebsiteRe
 
     return { ok: true, website, canPublish: hasPermission(current.user, 'calendar.publish') }
   } catch (err: any) {
-    return { ok: false, error: `Die Website-Einstellungen konnten nicht geladen werden: ${err?.code ?? err}` }
+    return internalError('Die Website-Einstellungen konnten nicht geladen werden', err)
   }
 })

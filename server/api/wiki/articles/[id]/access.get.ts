@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
 import { loadScopeGrants, type GrantView } from '~/server/utils/wiki/grants'
 import type { WikiAccessLevel } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type WikiScopeAccessResponse =
   | { ok: true, grants: GrantView[], accessLevel: WikiAccessLevel, canManage: boolean }
@@ -29,6 +30,6 @@ export default defineEventHandler(async (event): Promise<WikiScopeAccessResponse
       canManage: subjects.canManage || levelAtLeast(level, 'admin'),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load wiki access grants: ${err}` }
+    return internalError('Failed to load wiki access grants', err)
   }
 })

@@ -9,6 +9,7 @@ import {
   removeSelfFromShift,
 } from '~/server/utils/eventShifts'
 import type { EventShiftSlot } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RemoveSelfFromShiftSuccess {
   ok: true
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<RemoveSelfFromShiftResp
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to remove shift member: ${err}` }
+    return internalError('Failed to remove shift member', err)
   }
 })

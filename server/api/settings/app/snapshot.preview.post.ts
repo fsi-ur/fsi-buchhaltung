@@ -1,6 +1,7 @@
 import { createError, defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
+import { snapshotBodyLimit } from '~/server/utils/bodyLimit'
 import {
   parseEncryptedDatabaseSnapshot,
   previewDatabaseSnapshotForCurrentSchema,
@@ -32,16 +33,16 @@ export default defineEventHandler(async (event): Promise<PreviewSnapshotResponse
   try {
     const contentType = event.node.req.headers['content-type'] || ''
     if (contentType.includes('multipart/form-data')) {
-      const multipart = await readMultipart(event)
+      const multipart = await readMultipart(event, { maxBytes: snapshotBodyLimit() })
       if (!multipart) throw new Error('Missing restore preview payload')
 
       const snapshotFile = multipart.formData.find(field => field.name === 'snapshotFile' && field.filename)
       if (!snapshotFile) throw new Error('Missing encrypted snapshot')
 
       const password = multipart.getField('password')
-      const snapshot = parseEncryptedDatabaseSnapshot(snapshotFile.data, password)
+      const snapshot = await parseEncryptedDatabaseSnapshot(snapshotFile.data, password)
       const preview = await previewDatabaseSnapshotForCurrentSchema(snapshot)
-      const restoreToken = createSnapshotRestoreSession(snapshot, preview)
+      const restoreToken = createSnapshotRestoreSession(current.user.id, snapshot, preview)
 
       return { ...preview, restoreToken, filesArchive: { provided: false, fileCount: 0, archiveFileCount: 0 } }
     }
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event): Promise<PreviewSnapshotResponse
     throw createError({
       statusCode: 400,
       statusMessage: 'Failed to preview database snapshot',
-      message: String(err?.message || err),
+      message: err instanceof SnapshotError ? err.message : 'Unexpected error',
       data: err instanceof SnapshotError ? { snapshotErrorCode: err.code, snapshotErrorParams: err.params } : undefined,
     })
   }

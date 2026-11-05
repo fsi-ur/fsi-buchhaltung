@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { canReadArticle, getWikiAccess } from '~/server/utils/wiki/access'
+import { internalError } from '~/server/utils/api/errors'
 
 interface PathProgressBody {
   itemId?: number
@@ -50,6 +51,6 @@ export default defineEventHandler(async (event): Promise<WikiPathProgressRespons
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to save the wiki learning path progress: ${err}` }
+    return internalError('Failed to save the wiki learning path progress', err)
   }
 })

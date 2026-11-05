@@ -14,6 +14,8 @@ const {
 const EXCLUDED_AUDIT_TABLES = new Set([
   'entity_versions',
   'sessions',
+  // Restore log (SEC-09): must not end up in entity_versions, which a restore replaces.
+  'system_events',
   // High-churn, low-value wiki state -- auditing it would only bloat entity_versions.
   'wiki_path_progress',
   'wiki_checklist_personal_state',
@@ -37,6 +39,8 @@ const TABLE_COMPARISON_IGNORED_COLUMNS = new Map([
   ['wiki_articles', ['draft_md', 'draft_updated_at', 'draft_updated_by']],
   // Refreshed by every website request authenticated with the key.
   ['api_keys', ['last_used_at']],
+  // Internal flag written next to every member save (SEC-19).
+  ['members', ['account_deactivation_skipped']],
 ])
 
 function buildComparisonColumns(table) {

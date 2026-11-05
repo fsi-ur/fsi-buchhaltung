@@ -1,6 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { computeCurrentBankBalance } from '~/server/utils/cashPosition'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CurrentBalanceSuccess {
   ok: true
@@ -22,6 +23,6 @@ export default defineEventHandler(async (event): Promise<CurrentBalanceResponse>
     const balance = await computeCurrentBankBalance()
     return { ok: true, balance }
   } catch (err: any) {
-    return { ok: false, error: `Failed to compute current balance: ${err}` }
+    return internalError('Failed to compute current balance', err)
   }
 })

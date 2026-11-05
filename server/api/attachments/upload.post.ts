@@ -1,7 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { hasPermission, requireAuth } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
-import { storeUploadedFile, validateUploadedFile } from '~/server/utils/files'
+import { sniffUploadType, storeUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { withAuditTransaction } from '~/server/utils/db'
 import { ATTACHMENT_UPLOAD_FOLDER } from '~/server/utils/attachments'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
@@ -9,6 +9,7 @@ import { ATTACHMENT_SCOPES, type AttachmentFileInfo, type AttachmentScope } from
 import type { PermissionKey } from '~/config/permissions'
 import type { H3Event } from 'h3'
 import type { User } from '~/types/user'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UploadAttachmentSuccess { ok: true, file: AttachmentFileInfo }
 interface UploadAttachmentError { ok: false, error: string }
@@ -68,10 +69,10 @@ export default defineEventHandler(async (event): Promise<UploadAttachmentRespons
         fileId,
         fileName: file.filename || 'Datei',
         fileSize: file.data.length,
-        mimeType: file.type || 'application/octet-stream',
+        mimeType: sniffUploadType(file.data) ?? 'application/octet-stream',
       },
     }
   } catch (err: any) {
-    return { ok: false, error: `Die Datei konnte nicht gespeichert werden: ${err}` }
+    return internalError('Die Datei konnte nicht gespeichert werden', err)
   }
 })

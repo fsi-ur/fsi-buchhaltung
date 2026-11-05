@@ -10,6 +10,7 @@ import {
   replaceEventShiftTypeDescriptions,
 } from '~/server/utils/eventShifts'
 import type { EventShiftTypeDescriptions } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventShiftTypeDescriptionsSuccess {
   ok: true
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventShiftTypeDes
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update shift type descriptions: ${err}` }
+    return internalError('Failed to update shift type descriptions', err)
   }
 })

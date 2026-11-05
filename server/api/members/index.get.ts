@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { MemberStatus, type MemberListItem } from '~/types/member'
 import { parseMemberStatus } from '~/server/utils/members'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetMembersSuccess {
   ok: true
@@ -61,6 +62,6 @@ export default defineEventHandler(async (event): Promise<GetMembersResponse> => 
       }))
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load members: ${err}` }
+    return internalError('Failed to load members', err)
   }
 })

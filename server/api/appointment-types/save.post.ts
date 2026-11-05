@@ -4,6 +4,7 @@ import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
 import type { SaveAppointmentTypeBody } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveAppointmentTypeSuccess {
   ok: true
@@ -73,6 +74,6 @@ export default defineEventHandler(async (event): Promise<SaveAppointmentTypeResp
       return { ok: true as const, id: normalizeBigInt(result.insertId) }
     })
   } catch (err: any) {
-    return { ok: false, error: `Die Terminart konnte nicht gespeichert werden: ${err?.code ?? 'DB_ERROR'}` }
+    return internalError('Die Terminart konnte nicht gespeichert werden', err)
   }
 })

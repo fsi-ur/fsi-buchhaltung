@@ -1,4 +1,5 @@
-import type mariadb from 'mariadb'
+import { isWellFormedStoredFilePath, resolveStoredFilePath } from '~/server/utils/storedFilePath'
+import type * as mariadb from 'mariadb'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
@@ -11,6 +12,12 @@ const ENCRYPTED_SNAPSHOT_FORMAT = 'fsi-buchhaltung.encrypted-database-snapshot'
 const SNAPSHOT_VERSION = 3
 const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3])
 const CONTENT_EXCLUDED_TABLES = new Set(['sessions'])
+/**
+ * Tables that are not part of a snapshot at all — neither exported nor deleted/replaced on restore.
+ * `system_events` is the restore log itself (SEC-09): it must survive the restore it records.
+ */
+export const SNAPSHOT_EXCLUDED_TABLES = new Set(['system_events'])
+const SIGNATURE_ALGORITHM = 'hmac-sha256'
 const ENCRYPTED_SNAPSHOT_MAGIC = Buffer.from('FSI-DB-SNAPSHOT-ENC\0', 'utf8')
 const ENCRYPTED_SNAPSHOT_TAG_LENGTH = 16
 const ENCRYPTED_SNAPSHOT_SCRYPT_OPTIONS = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
@@ -26,6 +33,7 @@ export type SnapshotErrorCode =
   | 'archiveInvalid'
   | 'archiveFilesMissing'
   | 'previewExpired'
+  | 'untrustedSnapshot'
 
 export class SnapshotError extends Error {
   constructor(
@@ -86,6 +94,11 @@ export interface DatabaseSnapshot {
     algorithm: 'sha256'
     checksum: string
   }
+  /** HMAC of `integrity.checksum` with this server's signing key (SEC-09). */
+  signature?: {
+    algorithm: typeof SIGNATURE_ALGORITHM
+    value: string
+  }
   excludedContent?: string[]
   tables: SnapshotTable[]
 }
@@ -120,6 +133,11 @@ export interface SnapshotPreview {
     algorithm: string | null
     checksum: string | null
   }
+  /** `valid` = created and signed by this server (same signing key) and unmodified since. */
+  signature: {
+    present: boolean
+    valid: boolean
+  }
 }
 
 function quoteIdentifier(identifier: string) {
@@ -147,18 +165,22 @@ function normalizeSnapshotPassword(password: unknown) {
   return value
 }
 
-function deriveSnapshotEncryptionKey(password: string, salt: Buffer) {
-  return crypto.scryptSync(password, salt, 32, ENCRYPTED_SNAPSHOT_SCRYPT_OPTIONS)
+// scrypt with N=32768 takes a noticeable moment; the async variant runs on the libuv pool instead
+// of blocking every other request on the event loop (SEC-32).
+function deriveSnapshotEncryptionKey(password: string, salt: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 32, ENCRYPTED_SNAPSHOT_SCRYPT_OPTIONS, (err, key) => (err ? reject(err) : resolve(key)))
+  })
 }
 
 export function isEncryptedSnapshotBuffer(value: Buffer) {
   return value.subarray(0, ENCRYPTED_SNAPSHOT_MAGIC.length).equals(ENCRYPTED_SNAPSHOT_MAGIC)
 }
 
-function buildEncryptedSnapshotHeader(password: string) {
+async function buildEncryptedSnapshotHeader(password: string) {
   const salt = crypto.randomBytes(16)
   const iv = crypto.randomBytes(12)
-  const key = deriveSnapshotEncryptionKey(password, salt)
+  const key = await deriveSnapshotEncryptionKey(password, salt)
   const header: EncryptedSnapshotHeader = {
     format: ENCRYPTED_SNAPSHOT_FORMAT,
     version: 1,
@@ -175,13 +197,14 @@ function buildEncryptedSnapshotHeader(password: string) {
 
 export function createEncryptedDatabaseSnapshotStream(passwordValue: unknown) {
   const password = normalizeSnapshotPassword(passwordValue)
-  const { header, key, iv } = buildEncryptedSnapshotHeader(password)
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: ENCRYPTED_SNAPSHOT_TAG_LENGTH })
-  const headerBuffer = Buffer.from(JSON.stringify(header), 'utf8')
-  const headerLength = Buffer.alloc(4)
-  headerLength.writeUInt32BE(headerBuffer.length, 0)
 
   return Readable.from((async function* () {
+    const { header, key, iv } = await buildEncryptedSnapshotHeader(password)
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: ENCRYPTED_SNAPSHOT_TAG_LENGTH })
+    const headerBuffer = Buffer.from(JSON.stringify(header), 'utf8')
+    const headerLength = Buffer.alloc(4)
+    headerLength.writeUInt32BE(headerBuffer.length, 0)
+
     yield ENCRYPTED_SNAPSHOT_MAGIC
     yield headerLength
     yield headerBuffer
@@ -197,7 +220,7 @@ export function createEncryptedDatabaseSnapshotStream(passwordValue: unknown) {
   })())
 }
 
-export function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwordValue: unknown) {
+export async function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwordValue: unknown) {
   if (!isEncryptedSnapshotBuffer(encryptedSnapshot)) throw new SnapshotError('notEncrypted', 'Snapshot is not encrypted')
   const password = normalizeSnapshotPassword(passwordValue)
 
@@ -231,7 +254,7 @@ export function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwor
 
   const salt = Buffer.from(header.salt, 'base64')
   const iv = Buffer.from(header.iv, 'base64')
-  const key = deriveSnapshotEncryptionKey(password, salt)
+  const key = await deriveSnapshotEncryptionKey(password, salt)
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: ENCRYPTED_SNAPSHOT_TAG_LENGTH })
   decipher.setAuthTag(encryptedSnapshot.subarray(tagStart))
 
@@ -246,8 +269,8 @@ export function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwor
   }
 }
 
-export function parseEncryptedDatabaseSnapshot(encryptedSnapshot: Buffer, passwordValue: unknown) {
-  const decrypted = decryptDatabaseSnapshotBuffer(encryptedSnapshot, passwordValue)
+export async function parseEncryptedDatabaseSnapshot(encryptedSnapshot: Buffer, passwordValue: unknown) {
+  const decrypted = await decryptDatabaseSnapshotBuffer(encryptedSnapshot, passwordValue)
   try {
     return JSON.parse(decrypted.toString('utf8'))
   } catch {
@@ -255,8 +278,33 @@ export function parseEncryptedDatabaseSnapshot(encryptedSnapshot: Buffer, passwo
   }
 }
 
+function snapshotSigningKey() {
+  const explicit = process.env.SNAPSHOT_SIGNING_KEY
+  if (explicit) return Buffer.from(explicit, 'utf8')
+  const sessionSecret = process.env.SESSION_SECRET
+  if (!sessionSecret) throw new Error('Missing SNAPSHOT_SIGNING_KEY / SESSION_SECRET env var')
+  return crypto.createHmac('sha256', sessionSecret).update('fsi-buchhaltung snapshot signing v1').digest()
+}
+
+function signChecksum(checksum: string) {
+  return crypto.createHmac('sha256', snapshotSigningKey()).update(checksum).digest('hex')
+}
+
+function snapshotSignature(checksum: string) {
+  return { algorithm: SIGNATURE_ALGORITHM, value: signChecksum(checksum) } as const
+}
+
+function isSignatureValid(snapshot: DatabaseSnapshot, integrityValid: boolean) {
+  const value = snapshot.signature?.value
+  const checksum = snapshot.integrity?.checksum
+  if (!integrityValid || !checksum || snapshot.signature?.algorithm !== SIGNATURE_ALGORITHM || typeof value !== 'string') return false
+  const expected = Buffer.from(signChecksum(checksum), 'hex')
+  const actual = Buffer.from(value, 'hex')
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected)
+}
+
 function checksumSnapshot(snapshot: DatabaseSnapshot) {
-  const { integrity, ...snapshotWithoutIntegrity } = snapshot
+  const { integrity, signature: _signature, ...snapshotWithoutIntegrity } = snapshot
   if (Number(snapshot.version) >= 3) {
     return sha256({
       ...snapshotWithoutIntegrity,
@@ -379,6 +427,7 @@ export function createDatabaseSnapshotStream() {
     yield `  "app": ${JSON.stringify(snapshotMeta.app, null, 2).replace(/\n/g, '\n  ')},\n`
     yield `  "schema": ${JSON.stringify(snapshotMeta.schema, null, 2).replace(/\n/g, '\n  ')},\n`
     yield `  "integrity": ${JSON.stringify(integrity, null, 2).replace(/\n/g, '\n  ')},\n`
+    yield `  "signature": ${JSON.stringify(snapshotSignature(integrity.checksum), null, 2).replace(/\n/g, '\n  ')},\n`
     yield `  "excludedContent": ${JSON.stringify(snapshotMeta.excludedContent, null, 2).replace(/\n/g, '\n  ')},\n`
     yield '  "tables": [\n'
 
@@ -456,6 +505,19 @@ function getSnapshotFiles(snapshot: DatabaseSnapshot) {
   })).filter(file => Number.isFinite(file.id) && file.file_path)
 }
 
+/**
+ * Every `files.file_path` of a snapshot must look like one `storeUploadedFile` writes (SEC-08) —
+ * a restored row is later streamed, mailed and deleted by path.
+ */
+function assertSnapshotFilePaths(snapshot: DatabaseSnapshot) {
+  const filesTable = snapshot.tables.find(table => table.name === 'files')
+  for (const row of filesTable?.rows ?? []) {
+    if (!isWellFormedStoredFilePath(row.file_path) || !resolveStoredFilePath(row.file_path, '/srv/uploads-check')) {
+      throw new SnapshotError('archiveInvalid', `Invalid snapshot file path: ${String(row.file_path).slice(0, 200)}`)
+    }
+  }
+}
+
 function readFilesArchive(archive: Buffer) {
   const entries = parseTarArchive(archive)
   const manifestContent = entries.get('manifest.json')
@@ -517,6 +579,7 @@ async function getTableColumns(conn?: mariadb.PoolConnection) {
 
   const tables = new Map<string, string[]>()
   for (const row of rows) {
+    if (SNAPSHOT_EXCLUDED_TABLES.has(row.table_name)) continue
     if (!tables.has(row.table_name)) tables.set(row.table_name, [])
     tables.get(row.table_name)!.push(row.column_name)
   }
@@ -563,6 +626,7 @@ export async function createDatabaseSnapshot(): Promise<DatabaseSnapshot> {
     algorithm: 'sha256',
     checksum: checksumSnapshot(snapshot),
   }
+  snapshot.signature = snapshotSignature(snapshot.integrity.checksum)
 
   return snapshot
 }
@@ -598,6 +662,7 @@ export function previewDatabaseSnapshot(value: unknown): SnapshotPreview {
   const snapshot = validateSnapshot(value)
   const integrityChecksum = snapshot.integrity?.checksum || null
   const integrityValid = integrityChecksum ? checksumSnapshot(snapshot) === integrityChecksum : false
+  const signatureValid = isSignatureValid(snapshot, integrityValid)
 
   if (snapshot.integrity && snapshot.integrity.algorithm !== 'sha256') {
     throw new SnapshotError('unsupportedFormat', 'Unsupported snapshot checksum algorithm')
@@ -629,6 +694,10 @@ export function previewDatabaseSnapshot(value: unknown): SnapshotPreview {
       valid: integrityValid,
       algorithm: snapshot.integrity?.algorithm || null,
       checksum: integrityChecksum,
+    },
+    signature: {
+      present: Boolean(snapshot.signature),
+      valid: signatureValid,
     },
   }
 }
@@ -674,11 +743,21 @@ export async function previewDatabaseSnapshotForCurrentSchema(value: unknown) {
   return preview
 }
 
-export async function restoreDatabaseSnapshot(value: unknown, beforeCommit?: () => Promise<void>) {
+export async function restoreDatabaseSnapshot(
+  value: unknown,
+  beforeCommit?: () => Promise<void>,
+  options: { allowForeign?: boolean } = {},
+) {
   const snapshot = validateSnapshot(value)
+  assertSnapshotFilePaths(snapshot)
   const preview = previewDatabaseSnapshot(snapshot)
   if (preview.integrity.present && !preview.integrity.valid) {
     throw new SnapshotError('integrityFailed', 'Snapshot integrity check failed')
+  }
+  // Unsigned (old) or foreign snapshots need an explicit confirmation — a restore rewrites users,
+  // permissions and the audit history (SEC-09).
+  if (!preview.signature.valid && !options.allowForeign) {
+    throw new SnapshotError('untrustedSnapshot', 'Snapshot was not signed by this server')
   }
 
   return await withTransaction(async (conn) => {
@@ -747,9 +826,8 @@ export function prepareFilesArchiveRestoreForSnapshot(snapshotValue: unknown, ar
     const content = entries.get(archivedFile.archive_path)
     if (!content) throw new SnapshotError('archiveFilesMissing', `Files archive is missing ${snapshotFile.original_name}`, { count: 1 })
 
-    const relativePath = snapshotFile.file_path.replace(/^\/uploads\//, '')
-    const absolutePath = path.resolve(resolvedUploadRoot, relativePath)
-    if (!absolutePath.startsWith(resolvedUploadRoot + path.sep)) {
+    const absolutePath = resolveStoredFilePath(snapshotFile.file_path, resolvedUploadRoot)
+    if (!absolutePath) {
       throw new SnapshotError('archiveInvalid', `Invalid snapshot file path: ${snapshotFile.file_path}`)
     }
 

@@ -4,6 +4,9 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { toggleActiveRecord } from '~/server/utils/api/toggle'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { appTodayLocalDate } from '~/server/utils/time'
+import { getPositionPermissionKeys, permissionsBeyond, withLastAdminGuard } from '~/server/utils/permissions'
+import { POSITION_ASSIGN_EXCEEDS_OWN } from '~/server/utils/positions'
+import { internalError } from '~/server/utils/api/errors'
 
 interface PositionActivateBody {
   id: number
@@ -52,6 +55,11 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
 
   try {
     if (is_active) {
+      // Re-activating hands the position's permissions back to everyone holding it (SEC-01).
+      if (!current.user.permissions.includes('permissions.manage')) {
+        const keys = (await getPositionPermissionKeys([Number(id)])).get(Number(id)) ?? []
+        if (permissionsBeyond(keys, current.user.permissions).length) return { ok: false, error: POSITION_ASSIGN_EXCEEDS_OWN }
+      }
       return await toggleActiveRecord({
         table: 'positions',
         entityType: 'position',
@@ -62,7 +70,7 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       })
     }
 
-    return await withAuditTransaction(current.user, async (conn) => {
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const existingRows = await query<PositionRow[]>(
         `SELECT id, code, name, is_active
          FROM positions
@@ -125,8 +133,8 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       }
 
       return { ok: true as const }
-    })
+    }))
   } catch (err: any) {
-    return { ok: false, error: `An error occured while activating/deactivating the position: ${err}` }
+    return internalError('An error occured while activating/deactivating the position', err)
   }
 })

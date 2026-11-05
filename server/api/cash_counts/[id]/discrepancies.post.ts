@@ -1,3 +1,4 @@
+import { isCashCountLocked, isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler, readBody } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
@@ -31,7 +32,12 @@ export default defineEventHandler(async (event): Promise<SaveCashCountDiscrepanc
   const id = getNumericRouteParam(event)
   if (!id) return { ok: false, error: 'Invalid cash count id' }
 
-  const body = parseCashDiscrepancyBookingBody(await readBody(event))
+  const rawBody = await readBody(event)
+  // A confirmed count is booked: changing the confirmation needs the unlock (SEC-22).
+  const locked = lockError(await isCashCountLocked(id), current.user.permissions, 'cash_counts.unlock', isUnlockRequested(rawBody?.unlock))
+  if (locked) return { ok: false, error: locked }
+
+  const body = parseCashDiscrepancyBookingBody(rawBody)
 
   const pairError = await validateSphereCostCentrePair(body.sphere_id, body.cost_centre_id)
   if (pairError) return { ok: false, error: pairError }

@@ -1,8 +1,9 @@
 import { defineEventHandler, readBody } from 'h3'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { BudgetSemester, SaveBudgetBody, SaveBudgetLineBody } from '~/types/budget'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveBudgetSuccess {
   ok: true
@@ -253,6 +254,6 @@ export default defineEventHandler(async (event): Promise<SaveBudgetResponse> => 
       return { ok: false, error: 'A budget already exists for the selected period' }
     }
 
-    return { ok: false, error: `Failed to save budget: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('Failed to save budget', err)
   }
 })

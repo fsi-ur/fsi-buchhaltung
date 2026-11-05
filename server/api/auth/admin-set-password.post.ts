@@ -2,7 +2,9 @@ import { defineEventHandler, readBody } from 'h3'
 import { hashPassword } from '~/server/utils/auth'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { passwordPolicyError } from '~/config/validation'
+import { canManageUser } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 interface AdminSetPasswordBody {
   user_id?: number
@@ -32,8 +34,12 @@ export default defineEventHandler(async (event): Promise<AdminSetPasswordRespons
 
   if (!Number.isInteger(userId) || userId <= 0) return { ok: false, error: 'Missing fields' }
   if (!newPassword || !confirmPassword) return { ok: false, error: 'Missing fields' }
-  if (newPassword.length < MIN_PASSWORD_LENGTH) return { ok: false, error: 'Password too short' }
+  const policyError = passwordPolicyError(newPassword)
+  if (policyError) return { ok: false, error: policyError }
   if (newPassword !== confirmPassword) return { ok: false, error: 'Passwords do not match' }
+
+  const manageError = await canManageUser(current.user.permissions, userId)
+  if (manageError) return { ok: false, error: manageError }
 
   const newPasswordHash = await hashPassword(newPassword)
 
@@ -53,7 +59,7 @@ export default defineEventHandler(async (event): Promise<AdminSetPasswordRespons
     })
   } catch (err: any) {
     if (err?.message === 'User not found') return { ok: false, error: 'User not found' }
-    return { ok: false, error: err?.code || 'Failed to set password' }
+    return internalError('Failed to set password', err)
   }
 
   return { ok: true }

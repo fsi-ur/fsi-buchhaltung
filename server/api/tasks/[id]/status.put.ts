@@ -6,6 +6,7 @@ import { withAuditTransaction } from '~/server/utils/db'
 import { isEventOrganizer } from '~/server/utils/events'
 import { getTaskEventId, isTaskAssignee, isTaskChecklistControlled, normalizeTaskStatus, setTaskStatus } from '~/server/utils/myTasks'
 import type { EventTaskStatus } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateTaskStatusSuccess {
   ok: true
@@ -55,6 +56,6 @@ export default defineEventHandler(async (event): Promise<UpdateTaskStatusRespons
       return { ok: true, status }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update task status: ${err}` }
+    return internalError('Failed to update task status', err)
   }
 })

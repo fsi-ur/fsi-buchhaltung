@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -9,9 +10,10 @@ import {
   validateUploadedFile,
 } from '~/server/utils/files'
 import { validateCostCentreSelection } from '~/server/utils/costCentres'
-import { receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
+import { changesLockedReceiptFields, RECEIPT_LOCKED_ERROR, receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import type { ReceiptPosition, ReceiptRow } from '~/types/receipt'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateReceiptSuccess {
   ok: true
@@ -39,7 +41,11 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
 
   if (!receiptJson) return { ok: false, error: 'Missing receipt' }
 
-  const updated = JSON.parse(receiptJson)
+  const parsedJson = parseJsonField(receiptJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const updated = parsedJson.value
   const validationError = validateReceiptPayload(updated)
   if (validationError) return { ok: false, error: validationError }
 
@@ -68,6 +74,16 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
       const hasExistingFile = Boolean(existingAttachment)
       const hasFileAfterSave = Boolean(multipart.file) || (hasExistingFile && !removeExistingFile)
       const targetStatus = statusLocked ? existingReceipt.status : updated.status
+
+      if (statusLocked) {
+        if (multipart.file || removeExistingFile) return { ok: false, error: RECEIPT_LOCKED_ERROR }
+        const lockedPositions: ReceiptPosition[] = await query(
+          `SELECT * FROM receipt_positions WHERE receipt_id = ?`,
+          [receiptId],
+          conn,
+        )
+        if (changesLockedReceiptFields(existingReceipt, lockedPositions, updated)) return { ok: false, error: RECEIPT_LOCKED_ERROR }
+      }
 
       if (statusLocked && !hasFileAfterSave) {
         return { ok: false, error: 'Receipts that are part of a reimbursement or bank statement must always have a file attached' }
@@ -201,6 +217,6 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
       return { ok: true }
     })
   } catch (err) {
-    return { ok: false, error: `An error occured during the update of the receipt: ${err}` }
+    return internalError('An error occured during the update of the receipt', err)
   }
 })

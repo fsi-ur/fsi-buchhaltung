@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { CreateCompanyBody } from '~/types/company'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateCompanySuccess {
   ok: true
@@ -38,6 +39,6 @@ export default defineEventHandler(async (event): Promise<CreateCompanyResponse> 
     return { ok: true, id: normalizeBigInt(res.insertId) }
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: error.code ?? 'DB_ERROR' }
+    return internalError('Failed to create company', error)
   }
 })

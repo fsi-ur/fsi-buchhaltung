@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query, getDbConnection } from '~/server/utils/db'
 import { getAuditedTableMetadata, type AuditedTableMetadata } from '~/server/utils/dbAudit'
 import {
@@ -581,6 +581,8 @@ export function parseScopedTableSpec(raw: string): ScopedTableSpec | null {
 
   const scopeColumn = explicitColumn || def.parent?.foreignKey
   if (!scopeColumn || !SCOPE_COLUMN_PATTERN.test(scopeColumn)) return null
+  // Filtering on a redacted column would let a caller test guesses of its value (SEC-29).
+  if (isRedactedColumn(table, scopeColumn)) return null
 
   let via: ScopedTableSpec['via']
   if (viaPart !== undefined) {
@@ -589,6 +591,7 @@ export function parseScopedTableSpec(raw: string): ScopedTableSpec | null {
     // Whitelisted through the registry, so the table name is safe to use as an identifier.
     if (!getAuditTableDefinition(viaTable)) return null
     if (!SCOPE_COLUMN_PATTERN.test(viaColumn)) return null
+    if (isRedactedColumn(viaTable, viaColumn)) return null
     via = { table: viaTable, column: viaColumn }
   }
 
@@ -598,6 +601,7 @@ export function parseScopedTableSpec(raw: string): ScopedTableSpec | null {
     if (index <= 0) return null
     const column = part.slice(0, index)
     if (!SCOPE_COLUMN_PATTERN.test(column)) return null
+    if (isRedactedColumn(table, column)) return null
     literals.push([column, part.slice(index + 1)])
   }
 

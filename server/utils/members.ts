@@ -1,4 +1,5 @@
-import type mariadb from 'mariadb'
+import { isSingleEmailAddress } from '~/shared/email'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getPositionLabels, type PositionAssignmentRow } from '~/server/utils/positions'
 import { getSubdivisionLabels, syncSubdivisionAssignments } from '~/server/utils/subdivisions'
@@ -24,9 +25,35 @@ export function parseMemberStatus(value: unknown): MemberStatus {
   return isMemberStatus(value) ? value : MemberStatus.Active
 }
 
+/** Column sizes of `members` (db/init.sql); longer values would be cut or rejected by the DB. */
+const MEMBER_FIELD_MAX_LENGTH: Record<string, number> = {
+  first_name: 127,
+  last_name: 127,
+  street: 255,
+  street_number: 20,
+  postal_code: 20,
+  city: 127,
+  phone: 63,
+  email: 254,
+}
+
+/** Per-field check shared by the member editor and the members' own self-edit (SEC-28). */
+export function memberFieldError(field: string, value: unknown): string | null {
+  const max = MEMBER_FIELD_MAX_LENGTH[field]
+  if (max === undefined) return null
+  if (typeof value !== 'string' || !value.trim()) return `Missing value for ${field}`
+  if (value.length > max) return `Der Wert für ${field} ist zu lang (höchstens ${max} Zeichen).`
+  if (field === 'email' && !isSingleEmailAddress(value)) return 'Bitte genau eine gültige E-Mail-Adresse angeben.'
+  return null
+}
+
 export function validateMemberPayload(body: SaveMemberBody) {
   if (!body.first_name || !body.last_name || !body.birthdate || !body.street || !body.street_number || !body.postal_code || !body.city || !body.phone || !body.email || !body.status || !body.applied_at || !body.joined_at || !body.subject_name?.trim()) {
     return 'Missing fields'
+  }
+  for (const field of Object.keys(MEMBER_FIELD_MAX_LENGTH)) {
+    const fieldError = memberFieldError(field, (body as unknown as Record<string, unknown>)[field])
+    if (fieldError) return fieldError
   }
   if (!isMemberStatus(body.status)) return 'Invalid status'
   if (body.status === MemberStatus.Left && !body.left_at) return 'Status left requires left_at'
@@ -62,6 +89,11 @@ interface ApplyMemberStatusActionsOptions {
   leftAt: string | null
   memberLabel: string
   userId: number
+  /**
+   * false = the acting user may not deactivate the linked account (SEC-19); the account stays
+   * active and the summary reports it as skipped.
+   */
+  deactivateAccount?: boolean
   conn: mariadb.PoolConnection
 }
 
@@ -111,11 +143,23 @@ async function deactivateLinkedAccount(
     [account.id],
     conn,
   )
+  // A deactivated account loses its push subscriptions — the only automatic removal (SEC-20).
+  await query('DELETE FROM notification_push_subscriptions WHERE user_id = ?', [account.id], conn)
 
   return {
     id: Number(account.id),
     username: String(account.username),
   }
+}
+
+async function activeAccountSummary(accountId: number, conn: mariadb.PoolConnection): Promise<MemberStatusActionAccountChange | null> {
+  const [account] = await query<UserAccountStateRow[]>(
+    `SELECT id, username, is_active FROM users WHERE id = ? LIMIT 1`,
+    [accountId],
+    conn,
+  )
+  if (!account || !isTruthyDbBoolean(account.is_active)) return null
+  return { id: Number(account.id), username: String(account.username) }
 }
 
 async function removeMemberFromAllSubdivisions(
@@ -241,15 +285,18 @@ export async function applyMemberLeftStatusActions({
   leftAt,
   memberLabel,
   userId,
+  deactivateAccount = true,
   conn,
 }: Omit<ApplyMemberStatusActionsOptions, 'previousStatus' | 'nextStatus'> & { leftAt: string }): Promise<MemberStatusActionSummary> {
-  const accountDeactivated = await deactivateLinkedAccount(accountId, userId, conn)
+  const accountDeactivated = deactivateAccount ? await deactivateLinkedAccount(accountId, userId, conn) : null
+  const accountDeactivationSkipped = !deactivateAccount && accountId ? await activeAccountSummary(accountId, conn) : null
   const removedSubdivisions = await removeMemberFromAllSubdivisions(memberId, memberLabel, userId, conn)
   const positionChanges = await closeMemberPositionsAfterLeftDate(memberId, leftAt, userId, conn)
 
   return {
     left_at: leftAt,
     account_deactivated: accountDeactivated,
+    account_deactivation_skipped: accountDeactivationSkipped,
     removed_subdivisions: removedSubdivisions,
     closed_positions: positionChanges.closed_positions,
     removed_positions: positionChanges.removed_positions,
@@ -268,6 +315,7 @@ export async function applyMemberStatusActions({
   leftAt,
   memberLabel,
   userId,
+  deactivateAccount = true,
   conn,
 }: ApplyMemberStatusActionsOptions): Promise<MemberStatusActionSummary | null> {
   if (previousStatus === MemberStatus.Left || nextStatus !== MemberStatus.Left || !leftAt) {
@@ -284,6 +332,7 @@ export async function applyMemberStatusActions({
     leftAt,
     memberLabel,
     userId,
+    deactivateAccount,
     conn,
   })
 }

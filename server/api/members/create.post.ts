@@ -2,11 +2,12 @@ import { defineEventHandler, readBody } from 'h3'
 import type { SaveMemberBody } from '~/types/member'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { createUserAccount, DuplicateUsernameError } from '~/server/utils/userAccounts'
+import { authorizeMemberAccountLink, createUserAccount, DuplicateUsernameError } from '~/server/utils/userAccounts'
 import { ensureSubjectId, validateMemberPayload } from '~/server/utils/members'
 import { getSubdivisionLabels, normalizeRelationIds, syncSubdivisionAssignments, validateSubdivisionSelection } from '~/server/utils/subdivisions'
 import { normalizePositionAssignments, syncPositionAssignments } from '~/server/utils/positions'
 import { scheduleMemberWelcome } from '~/server/utils/memberWelcome'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateMemberSuccess {
   ok: true
@@ -41,7 +42,16 @@ export default defineEventHandler(async (event): Promise<CreateMemberResponse> =
   try {
     return await withAuditTransaction(current.user, async (conn) => {
       const subjectId = await ensureSubjectId(body.subject_name, conn)
-      let accountId = body.account ?? null
+      let accountId = body.account === undefined || body.account === null ? null : Number(body.account)
+      if (accountId !== null) {
+        const linkError = await authorizeMemberAccountLink({
+          memberId: null,
+          accountId,
+          actorPermissions: current.user.permissions,
+          conn,
+        })
+        if (linkError) return { ok: false, error: linkError }
+      }
 
       if (body.new_account) {
         if (!current.user.permissions.includes('users.manage')) {
@@ -88,6 +98,7 @@ export default defineEventHandler(async (event): Promise<CreateMemberResponse> =
           member_id: memberId,
         })),
         userId: current.user.id,
+        actorPermissions: current.user.permissions,
         conn,
       })
       if (!syncedPositions.ok) return { ok: false, error: syncedPositions.error }
@@ -127,6 +138,6 @@ export default defineEventHandler(async (event): Promise<CreateMemberResponse> =
     if (err instanceof DuplicateUsernameError) {
       return { ok: false, error: 'Username already exists' }
     }
-    return { ok: false, error: `Failed to create member: ${err?.code || err}` }
+    return internalError('Failed to create member', err)
   }
 })

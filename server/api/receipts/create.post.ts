@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -6,6 +7,7 @@ import { validateCostCentreSelection } from '~/server/utils/costCentres'
 import { receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { validateSphereSelection } from '~/server/utils/spheres'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateReceiptSuccess {
   ok: true
@@ -29,7 +31,11 @@ export default defineEventHandler(async (event): Promise<CreateReceiptResponse> 
   const receiptJson = multipart.getField('receipt')
   if (!receiptJson) return { ok: false, error: 'Missing receipt data' }
 
-  const receipt = JSON.parse(receiptJson)
+  const parsedJson = parseJsonField(receiptJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const receipt = parsedJson.value
   const validationError = validateReceiptPayload(receipt)
   if (validationError) return { ok: false, error: validationError }
 
@@ -107,6 +113,6 @@ export default defineEventHandler(async (event): Promise<CreateReceiptResponse> 
       return { ok: true, receiptId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create receipt: ${err}` }
+    return internalError('Failed to create receipt', err)
   }
 })

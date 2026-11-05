@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 export type ReorderWikiPathsResponse = { ok: true } | { ok: false, error: string }
 
@@ -34,6 +35,6 @@ export default defineEventHandler(async (event): Promise<ReorderWikiPathsRespons
     })
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to reorder the wiki learning paths: ${err}` }
+    return internalError('Failed to reorder the wiki learning paths', err)
   }
 })

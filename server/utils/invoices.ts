@@ -1,3 +1,5 @@
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
+import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import fs from 'fs/promises'
 import path from 'path'
 import { query } from '~/server/utils/db'
@@ -21,6 +23,7 @@ export function validateInvoicePayload(invoice: any) {
   if (invoice.status === InvoiceStatus.Paid && !invoice.paid_at) return 'Paid invoices require a payment date'
   if (invoice.status !== InvoiceStatus.Paid && invoice.paid_at) return 'Only paid invoices can have a payment date'
   if (!Array.isArray(invoice.positions) || invoice.positions.length === 0) return 'At least one invoice position is required'
+  if (invoice.positions.length > MAX_RECORD_POSITIONS) return TOO_MANY_POSITIONS
 
   for (const position of invoice.positions) {
     if (!position?.name || String(position.name).trim().length < 1) {
@@ -55,7 +58,14 @@ export function invoiceNeedsUploadedFile(sourceType: InvoiceSourceType | string)
   return sourceType === InvoiceSourceType.Upload
 }
 
-export function normalizeInvoicePayload(invoice: CreateInvoiceBody): CreateInvoiceBody {
+function trimmedOrNull(value: unknown) {
+  return typeof value === 'string' ? value.trim() || null : null
+}
+
+/** Coerces an untrusted payload into the expected shape (SEC-23) — validation follows separately. */
+export function normalizeInvoicePayload(input: CreateInvoiceBody): CreateInvoiceBody {
+  const invoice = (input && typeof input === 'object' ? input : {}) as CreateInvoiceBody
+  const positions = Array.isArray(invoice.positions) ? invoice.positions.filter(p => p && typeof p === 'object') : []
   return {
     company_id: invoice.company_id ? Number(invoice.company_id) : null,
     source_type: invoice.source_type,
@@ -63,22 +73,22 @@ export function normalizeInvoicePayload(invoice: CreateInvoiceBody): CreateInvoi
     invoice_date: String(invoice.invoice_date || ''),
     due_date: String(invoice.due_date || ''),
     paid_at: invoice.paid_at ? String(invoice.paid_at) : null,
-    contact_person: invoice.contact_person?.trim() || null,
-    recipient_attention: invoice.recipient_attention?.trim() || null,
+    contact_person: trimmedOrNull(invoice.contact_person),
+    recipient_attention: trimmedOrNull(invoice.recipient_attention),
     service_date: invoice.service_date ? String(invoice.service_date) : null,
     invoice_number: String(invoice.invoice_number || '').trim(),
-    subject: invoice.subject?.trim() || null,
-    intro_text: invoice.intro_text?.trim() || null,
-    notes: invoice.notes?.trim() || null,
+    subject: trimmedOrNull(invoice.subject),
+    intro_text: trimmedOrNull(invoice.intro_text),
+    notes: trimmedOrNull(invoice.notes),
     status: invoice.status,
-    positions: invoice.positions.map(position => ({
+    positions: positions.map(position => ({
       id: position.id ? Number(position.id) : undefined,
       name: String(position.name || '').trim(),
       description: String(position.description || '').trim() || null,
       sphere: Number(position.sphere),
       cost_centre: Number(position.cost_centre),
       quantity: Number(position.quantity),
-      unit: position.unit?.trim() || null,
+      unit: trimmedOrNull(position.unit),
       unit_price: Number(position.unit_price),
       tax: Number(position.tax),
     })),
@@ -234,9 +244,8 @@ export async function getAssociationLogoForInvoice(conn?: any): Promise<null | {
   const file = await getAttachedFile('association_profile_logo', profileId, conn)
   if (!file) return null
 
-  const uploadRoot = process.env.UPLOAD_DIR!
-  const relativePath = file.file_path.replace(/^\/uploads\//, '')
-  const absolutePath = path.join(uploadRoot, relativePath)
+  const absolutePath = resolveStoredFilePath(file.file_path)
+  if (!absolutePath) return null
   const data = await fs.readFile(absolutePath)
 
   return { file, data }

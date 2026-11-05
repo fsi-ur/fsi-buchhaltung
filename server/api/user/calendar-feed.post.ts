@@ -1,7 +1,7 @@
 import { defineEventHandler, getRequestHost, getRequestProtocol } from 'h3'
 import { generateCalendarToken } from '~/server/utils/calendarToken'
 import { withAuditTransaction } from '~/server/utils/db'
-import { getCurrentUserFromEvent } from '~/server/utils/sessionGuard'
+import { requirePermission } from '~/server/utils/api/guards'
 
 interface PostCalendarFeedSuccess {
   ok: true
@@ -16,8 +16,8 @@ interface PostCalendarFeedError {
 export type PostCalendarFeedResponse = PostCalendarFeedSuccess | PostCalendarFeedError
 
 export default defineEventHandler(async (event): Promise<PostCalendarFeedResponse> => {
-  const current = await getCurrentUserFromEvent(event, true)
-  if (!current.ok) return { ok: false, error: 'Not authenticated' }
+  const current = await requirePermission(event, 'calendar.view', { touch: false })
+  if (!current.ok) return current
 
   const rawToken = await withAuditTransaction(current.user, conn => generateCalendarToken(current.user.id, conn))
 

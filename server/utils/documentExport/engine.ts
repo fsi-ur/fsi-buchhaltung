@@ -1,3 +1,4 @@
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import fs from 'fs/promises'
 import path from 'path'
 import { query } from '~/server/utils/db'
@@ -117,11 +118,12 @@ export async function loadLatestAttachments(entityType: string, entityIds: numbe
     return { ok: false, error: `Die ausgewählten Dokumente sind zusammen größer als ${Math.round(MAX_DOCUMENT_EXPORT_BYTES / 1024 / 1024)} MB. Bitte weniger Einträge auf einmal exportieren.` }
   }
 
-  const uploadRoot = process.env.UPLOAD_DIR ?? ''
   for (const row of rows) {
     const entityId = Number(row.entity_id)
     try {
-      const data = await fs.readFile(path.join(uploadRoot, row.file_path.replace(/^\/uploads\//, '')))
+      const absolutePath = resolveStoredFilePath(row.file_path)
+      if (!absolutePath) throw new Error('file path outside UPLOAD_DIR')
+      const data = await fs.readFile(absolutePath)
       attachments.set(entityId, { file: { original_name: row.original_name, mime_type: row.mime_type, data }, fileMissing: false })
     } catch (err) {
       console.error(`document export: file of ${entityType} ${entityId} could not be read`, err)

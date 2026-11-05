@@ -5,6 +5,7 @@ import { isEventOrganizer } from '~/server/utils/events'
 import { loadEventChecklists, loadEventChecklistTemplates } from '~/server/utils/eventChecklists'
 import { eventExists } from '~/server/utils/eventShifts'
 import type { EventChecklist, EventChecklistTemplate } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventChecklistsSuccess {
   ok: true
@@ -43,6 +44,6 @@ export default defineEventHandler(async (event): Promise<GetEventChecklistsRespo
       canManageChecklists: hasPermission(current.user, 'events.edit') || isOrganizer,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load event checklists: ${err}` }
+    return internalError('Failed to load event checklists', err)
   }
 })

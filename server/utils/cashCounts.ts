@@ -1,4 +1,5 @@
-import type mariadb from 'mariadb'
+import { MAX_RECORD_POSITIONS } from '~/server/utils/api/limits'
+import type * as mariadb from 'mariadb'
 import type { CreateCashCountBody, CreateCashCountPositionBody } from '~/types/cashCount'
 import { query } from '~/server/utils/db'
 import { normalizeLocalDateTime } from '~/shared/time'
@@ -31,7 +32,7 @@ export function normalizeCashCountBody(body: CreateCashCountBody) {
     counted_before_at: isRegisterCheck ? null : (normalizeLocalDateTime(body.counted_before_at) ?? String(body.counted_before_at || '')),
     counted_after_at: normalizeLocalDateTime(body.counted_after_at) ?? String(body.counted_after_at || ''),
     positions: Array.isArray(body.positions)
-      ? body.positions.map((position, index) => {
+      ? body.positions.slice(0, MAX_RECORD_POSITIONS + 1).map((position, index) => {
           const normalized = normalizeCashCountPosition(position, index)
           return isRegisterCheck ? { ...normalized, amount_before: normalized.amount_after } : normalized
         })
@@ -46,6 +47,7 @@ export function validateCashCountBody(body: ReturnType<typeof normalizeCashCount
   if (!body.counted_by_first || !body.counted_by_second || !body.checked_by) return 'All member references are required'
   if (!body.counted_after_at || (!isRegisterCheck && !body.counted_before_at)) return 'Required timestamp is missing'
   if (!body.positions.length) return 'At least one register is required'
+  if (body.positions.length > MAX_RECORD_POSITIONS) return `Höchstens ${MAX_RECORD_POSITIONS} Kassen erlaubt.`
   if (body.positions.some(position => !Number.isInteger(position.register_number) || position.register_number < 1)) {
     return 'Each position requires a valid register number'
   }

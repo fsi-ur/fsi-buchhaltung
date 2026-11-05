@@ -6,6 +6,7 @@ import { loadAppointment, loadOverrides } from '~/server/utils/appointments'
 import { expandOccurrences, formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import { getMemberIdForUser, loadAppointmentAudience } from '~/server/utils/appointments/visibility'
 import type { AppointmentResponseValue } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RespondSuccess {
   ok: true
@@ -69,7 +70,7 @@ export default defineEventHandler(async (event): Promise<RespondAppointmentRespo
 
       const targetDates = body.applyToSeries
         ? remainingOccurrenceDates(appointment, overrides, occurrenceDate)
-        : [occurrenceDate]
+        : isOccurrenceOf(appointment, overrides, occurrenceDate) ? [occurrenceDate] : []
 
       // An RSVP for a date the rule does not produce would become an orphan the moment the series
       // is next edited.
@@ -88,9 +89,22 @@ export default defineEventHandler(async (event): Promise<RespondAppointmentRespo
       return { ok: true as const }
     })
   } catch (err: any) {
-    return { ok: false, error: `Deine Antwort konnte nicht gespeichert werden: ${err?.code ?? err}` }
+    return internalError('Deine Antwort konnte nicht gespeichert werden', err)
   }
 })
+
+/** True when the series really has an occurrence starting at this (original) date (SEC-29). */
+function isOccurrenceOf(
+  appointment: Parameters<typeof expandOccurrences>[0],
+  overrides: Parameters<typeof expandOccurrences>[1],
+  occurrenceDate: string,
+): boolean {
+  const from = parseWallClock(occurrenceDate)
+  if (!from) return false
+  const to = formatWallClock(new Date(from.getTime() + 60_000))
+  return expandOccurrences(appointment, overrides, { from: occurrenceDate, to })
+    .some(occurrence => occurrence.occurrenceDate === occurrenceDate)
+}
 
 function remainingOccurrenceDates(
   appointment: Parameters<typeof expandOccurrences>[0],

@@ -1,3 +1,4 @@
+import { withLastAdminGuard } from '~/server/utils/permissions'
 import { defineEventHandler, readBody } from 'h3'
 import type { PositionRow, SavePositionBody } from '~/types/position'
 import { query, withAuditTransaction } from '~/server/utils/db'
@@ -5,6 +6,7 @@ import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
 import { normalizePositionAssignments, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SavePositionSuccess {
   ok: true
@@ -34,7 +36,7 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
   const active = toDbBoolean(updated.is_active)
 
   try {
-    return await withAuditTransaction(current.user, async (conn) => {
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       if (updated.id && updated.id > 0) {
         const positionId = updated.id
         const normalizedAssignments = normalizePositionAssignments(updated.assignments, { position_id: positionId })
@@ -68,6 +70,7 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
           existingAssignments: existingAssignmentRows,
           incomingAssignments: normalizedAssignments,
           userId: current.user.id,
+          actorPermissions: current.user.permissions,
           conn,
         })
         if (!syncedAssignments.ok) return { ok: false, error: syncedAssignments.error }
@@ -92,14 +95,15 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
         existingAssignments: [],
         incomingAssignments: normalizedAssignments,
         userId: current.user.id,
+        actorPermissions: current.user.permissions,
         conn,
       })
       if (!syncedAssignments.ok) return { ok: false, error: syncedAssignments.error }
 
       return { ok: true, id }
-    })
+    }))
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the position: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the position', err)
   }
 })

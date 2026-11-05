@@ -114,6 +114,8 @@ CREATE TABLE IF NOT EXISTS members (
   applied_at DATE NOT NULL,
   joined_at DATE NOT NULL,
   left_at DATE,
+  account_deactivation_skipped TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uq_members_account (account),
   FOREIGN KEY (account) REFERENCES users(id),
   FOREIGN KEY (subject) REFERENCES subjects(id)
 );
@@ -464,6 +466,17 @@ CREATE TABLE IF NOT EXISTS invoice_positions (
   FOREIGN KEY (cost_centre) REFERENCES cost_centres(id)
 );
 
+-- Durable log that survives snapshot restores (excluded from snapshots and audit triggers).
+CREATE TABLE IF NOT EXISTS system_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event_type VARCHAR(100) NOT NULL,
+  actor_user_id BIGINT UNSIGNED NULL,
+  actor_username VARCHAR(255) NULL,
+  details LONGTEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_system_events_created (created_at)
+);
+
 CREATE TABLE IF NOT EXISTS receipts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   company_id BIGINT UNSIGNED NOT NULL,
@@ -509,6 +522,7 @@ CREATE TABLE IF NOT EXISTS reimbursement_positions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   reimbursement_id BIGINT UNSIGNED NOT NULL,
   receipt_id BIGINT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_reimbursement_positions_receipt (receipt_id),
   FOREIGN KEY (reimbursement_id) REFERENCES reimbursements(id) ON DELETE CASCADE,
   FOREIGN KEY (receipt_id) REFERENCES receipts(id)
 );

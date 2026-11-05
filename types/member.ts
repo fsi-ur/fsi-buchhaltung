@@ -110,6 +110,8 @@ export interface MemberStatusActionPositionRemoval {
 export interface MemberStatusActionSummary {
   left_at: string
   account_deactivated: MemberStatusActionAccountChange | null
+  /** The editor may not deactivate this account (SEC-19); it stays active. */
+  account_deactivation_skipped?: MemberStatusActionAccountChange | null
   removed_subdivisions: MemberStatusActionSubdivisionChange[]
   closed_positions: MemberStatusActionPositionClose[]
   removed_positions: MemberStatusActionPositionRemoval[]

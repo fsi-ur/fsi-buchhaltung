@@ -258,6 +258,8 @@ const props = defineProps<{
   hasFile?: boolean
   file?: File | null
   removeExistingFile?: boolean
+  /** A booked record the user has unlocked (SEC-22) — kept across the receipt/invoice detour. */
+  recordUnlocked?: boolean
   canCreateReceipt?: boolean
   canCreateInvoice?: boolean
   canEditReceipt?: boolean
@@ -552,6 +554,7 @@ function buildEntityReturnMeta(positionIndex: number) {
   if (pageMeta.value?.bankStatementId) meta.bankStatementId = pageMeta.value.bankStatementId
   if (props.file) meta.bankStatementFile = props.file
   if (props.removeExistingFile) meta.bankStatementRemoveExistingFile = true
+  if (props.recordUnlocked) meta.recordUnlocked = true
   if (pageMeta.value?.forceReadonly) meta.forceReadonly = true
   meta.returnTarget = returnTarget.value
   return meta

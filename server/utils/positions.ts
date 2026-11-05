@@ -1,6 +1,9 @@
-import type mariadb from 'mariadb'
+import { MAX_POSITION_ASSIGNMENTS } from '~/server/utils/api/limits'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getMemberLabels } from '~/server/utils/subdivisions'
+import { getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
+import type { PermissionKey } from '~/config/permissions'
 
 interface NamedRow {
   id: number
@@ -34,6 +37,8 @@ interface SyncPositionAssignmentsOptions {
   existingAssignments: PositionAssignmentRow[]
   incomingAssignments: PositionAssignmentInput[]
   userId: number
+  /** Effective permissions of the acting user — changing assignments is privileged (SEC-01). */
+  actorPermissions: readonly PermissionKey[]
   conn: mariadb.PoolConnection
 }
 
@@ -42,7 +47,7 @@ export function normalizePositionAssignments(
   fixed: Partial<Pick<PositionAssignmentInput, 'member_id' | 'position_id'>> = {},
 ) {
   if (value === undefined || value === null) return []
-  if (!Array.isArray(value)) return null
+  if (!Array.isArray(value) || value.length > MAX_POSITION_ASSIGNMENTS) return null
 
   const normalized: PositionAssignmentInput[] = []
 
@@ -69,6 +74,59 @@ export function normalizePositionAssignments(
   }
 
   return normalized
+}
+
+function sameDay(left: unknown, right: unknown) {
+  return String(left ?? '').slice(0, 10) === String(right ?? '').slice(0, 10)
+}
+
+function assignmentChanged(existing: PositionAssignmentRow, incoming: PositionAssignmentInput) {
+  return Number(existing.member_id) !== Number(incoming.member_id)
+    || Number(existing.position_id) !== Number(incoming.position_id)
+    || !sameDay(existing.since, incoming.since)
+    || !sameDay(existing.until, incoming.until)
+}
+
+export const POSITION_ASSIGN_FORBIDDEN = 'Du hast keine Berechtigung, Positionen zuzuweisen oder zu ändern.'
+export const POSITION_ASSIGN_EXCEEDS_OWN = 'Diese Position gewährt Rechte, die du selbst nicht hast. Nur wer Berechtigungen verwalten darf, kann sie zuweisen.'
+
+/**
+ * Position assignments grant the position's permissions to the member's linked account, so any
+ * change needs `positions.assign`; handing out (or extending) a position whose permissions go
+ * beyond the caller's own additionally needs `permissions.manage`. Unchanged rows are free, so
+ * member editors can still save the rest of the record.
+ */
+export async function authorizePositionAssignmentChanges(options: {
+  existingAssignments: PositionAssignmentRow[]
+  incomingAssignments: PositionAssignmentInput[]
+  actorPermissions: readonly PermissionKey[]
+  conn?: mariadb.PoolConnection
+}): Promise<string | null> {
+  const existingById = new Map(options.existingAssignments.map(assignment => [Number(assignment.id), assignment]))
+  const grantedPositionIds = new Set<number>()
+  const retained = new Set<number>()
+  let anyChange = false
+
+  for (const incoming of options.incomingAssignments) {
+    const existing = incoming.id ? existingById.get(Number(incoming.id)) : undefined
+    if (existing) {
+      retained.add(Number(existing.id))
+      if (!assignmentChanged(existing, incoming)) continue
+    }
+    anyChange = true
+    grantedPositionIds.add(Number(incoming.position_id))
+  }
+  if (options.existingAssignments.some(assignment => !retained.has(Number(assignment.id)))) anyChange = true
+
+  if (!anyChange) return null
+  if (!options.actorPermissions.includes('positions.assign')) return POSITION_ASSIGN_FORBIDDEN
+  if (options.actorPermissions.includes('permissions.manage') || !grantedPositionIds.size) return null
+
+  const permissionsByPosition = await getPositionPermissionKeys(Array.from(grantedPositionIds), options.conn)
+  for (const keys of permissionsByPosition.values()) {
+    if (permissionsBeyond(keys, options.actorPermissions).length) return POSITION_ASSIGN_EXCEEDS_OWN
+  }
+  return null
 }
 
 function formatAssignmentDateRange(assignment: Pick<PositionAssignmentInput, 'since' | 'until'>) {
@@ -159,8 +217,17 @@ export async function syncPositionAssignments({
   existingAssignments,
   incomingAssignments,
   userId,
+  actorPermissions,
   conn,
 }: SyncPositionAssignmentsOptions) {
+  const authorizationError = await authorizePositionAssignmentChanges({
+    existingAssignments,
+    incomingAssignments,
+    actorPermissions,
+    conn,
+  })
+  if (authorizationError) return { ok: false as const, error: authorizationError }
+
   const memberIds = Array.from(new Set([
     ...existingAssignments.map(assignment => Number(assignment.member_id)),
     ...incomingAssignments.map(assignment => Number(assignment.member_id)),

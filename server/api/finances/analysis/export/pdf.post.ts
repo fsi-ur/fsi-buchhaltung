@@ -14,6 +14,7 @@ import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~
 import type { BudgetDetail } from '~/types/budget'
 import type { CostCentreRow } from '~/types/costCentre'
 import { appTodayLocalDate } from '~/server/utils/time'
+import { internalError } from '~/server/utils/api/errors'
 
 const MAX_COMPARISON_BUDGETS = 12
 
@@ -141,6 +142,6 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Content-Disposition', `attachment; filename="${fileNameParts.filter(Boolean).join('_')}.pdf"`)
     return pdf
   } catch (err: any) {
-    return { ok: false, error: `Failed to export finance analysis: ${err}` }
+    return internalError('Failed to export finance analysis', err)
   }
 })

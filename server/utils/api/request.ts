@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { getRequestHeader, getRouterParam, readRawBody } from 'h3'
+import { multipartBodyLimit } from '~/server/utils/bodyLimit'
 
 export function getNumericRouteParam(
   event: H3Event,
@@ -66,13 +67,20 @@ function parseMultipartBuffer(body: Buffer, boundary: string) {
   return formData
 }
 
-export async function readMultipart(event: H3Event) {
+export async function readMultipart(event: H3Event, options: { maxBytes?: number } = {}) {
   const contentType = getRequestHeader(event, 'content-type') || ''
   const boundary = contentType.match(/boundary=([^;]*)(;|$)/i)?.[1]?.replace(/^"|"$/g, '')
   if (!contentType.startsWith('multipart/form-data') || !boundary) return null
 
+  // The body-limit middleware already refused oversized requests by Content-Length; this is the
+  // defensive re-check on what was actually buffered (SEC-07).
+  const maxBytes = options.maxBytes ?? multipartBodyLimit()
+  const declared = Number(getRequestHeader(event, 'content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) return null
+
   const body = await readRawBody(event, false)
   if (!body) return null
+  if (body.length > maxBytes) return null
 
   const formData = parseMultipartBuffer(Buffer.isBuffer(body) ? body : Buffer.from(body), boundary)
 
@@ -85,5 +93,18 @@ export async function readMultipart(event: H3Event) {
     formData,
     getField,
     file,
+  }
+}
+
+export const INVALID_JSON_ERROR = 'Ungültige Daten übermittelt.'
+
+/** JSON.parse for form fields: malformed input becomes a regular { ok: false } answer, not a 500 (SEC-23). */
+export function parseJsonField<T = any>(value: string): { ok: true, value: T } | { ok: false, error: string } {
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, error: INVALID_JSON_ERROR }
+    return { ok: true, value: parsed as T }
+  } catch {
+    return { ok: false, error: INVALID_JSON_ERROR }
   }
 }

@@ -195,6 +195,9 @@
 
     <section class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 space-y-3">
       <h3 class="font-semibold">{{ t('member.positions') }}</h3>
+      <p v-if="!disabled && !canAssignPositions" class="text-sm text-base-500">
+        {{ t('member.positionsAssignNotAllowed') }}
+      </p>
 
       <div
         v-for="(assignment, i) in form.positions"
@@ -207,17 +210,17 @@
           :selected-label="selectedPositionLabel(i)"
           :placeholder="t('member.positionPlaceholder')"
           :empty-text="t('member.noPositions')"
-          :disabled="disabled"
+          :disabled="positionsDisabled"
           @update:model-value="setPositionQuery(assignment, $event)"
           @select="selectPositionFromOption(i, $event)"
           @clear-selection="clearPosition(i)"
         />
 
-        <CommonDateInput v-model="assignment.since" :disabled="disabled" />
-        <CommonDateInput v-model="assignment.until" :disabled="disabled" :empty-value="null" />
+        <CommonDateInput v-model="assignment.since" :disabled="positionsDisabled" />
+        <CommonDateInput v-model="assignment.until" :disabled="positionsDisabled" :empty-value="null" />
 
         <button
-          v-if="!disabled"
+          v-if="!positionsDisabled"
           class="text-danger-500 cursor-pointer p-2 w-10 rounded-md hover:bg-base-100"
           type="button"
           @click="removePosition(i)"
@@ -234,7 +237,7 @@
       </div>
 
       <button
-        v-if="!disabled"
+        v-if="!positionsDisabled"
         type="button"
         class="flex items-center gap-2 text-accent-500 font-medium cursor-pointer"
         @click="addPosition"
@@ -329,6 +332,8 @@ const props = defineProps<{
   saving?: boolean
   canEditSubjects?: boolean
   canManageUsers?: boolean
+  /** `positions.assign` — without it the assignments are shown read-only (SEC-01). */
+  canAssignPositions?: boolean
   canManageSubdivisions?: boolean
   /** Subdivisions already assigned to the member, so they can be shown without the catalog */
   assignedSubdivisions?: SubdivisionOption[]
@@ -356,6 +361,8 @@ const leftAtInput = computed({
 const disabled = computed(() => Boolean(props.disabled))
 const canEditSubjects = computed(() => props.canEditSubjects !== false)
 const canManageUsers = computed(() => props.canManageUsers === true)
+const canAssignPositions = computed(() => props.canAssignPositions === true)
+const positionsDisabled = computed(() => disabled.value || !canAssignPositions.value)
 const canManageSubdivisions = computed(() => props.canManageSubdivisions === true)
 const showAccountCreation = computed(() => props.showAccountCreation === true)
 const usernameManuallyEdited = ref(false)

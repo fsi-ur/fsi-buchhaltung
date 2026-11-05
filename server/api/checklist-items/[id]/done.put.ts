@@ -7,6 +7,7 @@ import { getChecklistItemContext, setChecklistItemDone } from '~/server/utils/ev
 import { isEventOrganizer } from '~/server/utils/events'
 import { isTaskAssignee } from '~/server/utils/myTasks'
 import type { EventTaskStatus } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateChecklistItemDoneSuccess {
   ok: true
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<UpdateChecklistItemDone
       return { ok: true, done, task }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update checklist item: ${err}` }
+    return internalError('Failed to update checklist item', err)
   }
 })

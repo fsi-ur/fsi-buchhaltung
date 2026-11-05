@@ -1,3 +1,4 @@
+import { sessionCookieOptions } from '~/server/utils/sessionCookie'
 import { defineEventHandler, getCookie, setCookie } from 'h3'
 import { deleteSessionByToken, cleanupExpiredSessions } from '~/server/utils/auth'
 
@@ -10,14 +11,7 @@ export default defineEventHandler(async (event): Promise<LogoutResponse> => {
   const token = getCookie(event, cookieName)
   if (token) {
     await deleteSessionByToken(token)
-    setCookie(event, cookieName, '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: 0,
-      ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
-    })
+    setCookie(event, cookieName, '', sessionCookieOptions(0))
     await cleanupExpiredSessions() 
     return { ok: true }
   }

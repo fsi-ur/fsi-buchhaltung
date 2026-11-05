@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import type { User } from '~/types/user'
 import type {

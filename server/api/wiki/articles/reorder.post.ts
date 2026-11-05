@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
 import { validateParent } from '~/server/utils/wiki/articles'
+import { internalError } from '~/server/utils/api/errors'
 
 export type ReorderWikiArticlesResponse = { ok: true } | { ok: false, error: string }
 
@@ -63,6 +64,6 @@ export default defineEventHandler(async (event): Promise<ReorderWikiArticlesResp
     })
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to reorder wiki articles: ${err}` }
+    return internalError('Failed to reorder wiki articles', err)
   }
 })

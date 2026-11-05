@@ -38,14 +38,17 @@ const ALL_PERMISSION_KEYS = [
   'subjects.view',
   'subjects.edit',
   'positions.view',
+  'positions.assign',
   'receipts.view',
   'receipts.edit',
   'invoices.view',
   'invoices.edit',
   'reimbursements.view',
   'reimbursements.edit',
+  'reimbursements.unlock',
   'cash_counts.view',
   'cash_counts.edit',
+  'cash_counts.unlock',
   'budgets.view',
   'budgets.edit',
   'events.access',
@@ -74,6 +77,7 @@ const ALL_PERMISSION_KEYS = [
   'users.manage',
   'bank_statements.view',
   'bank_statements.edit',
+  'bank_statements.unlock',
   'notifications.send',
   'notifications.view',
   'settings.notifications.manage',
@@ -99,7 +103,6 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'members.editOwnData',
     'receipts.view',
     'invoices.view',
-    'reimbursements.view',
     'companies.view',
     'subjects.view',
     'positions.view',
@@ -156,9 +159,13 @@ async function main() {
       userId = Number(existing[0].id)
       console.log(`seed-admin: user "${ADMIN_USERNAME}" already exists`)
     } else {
+      // The bootstrap password lives in .env — refuse obvious ones and force a change on first login (SEC-25).
+      if (ADMIN_PASSWORD.length < 10 || ADMIN_PASSWORD === 'change_me_admin') {
+        throw new Error('ADMIN_PASSWORD must be at least 10 characters and not the .env.example placeholder')
+      }
       const hash = await bcrypt.hash(ADMIN_PASSWORD, 12)
       const result = await conn.query(
-        'INSERT INTO users (username, password_hash, is_active) VALUES (?, ?, 1)',
+        'INSERT INTO users (username, password_hash, is_active, must_change_password) VALUES (?, ?, 1, 1)',
         [ADMIN_USERNAME, hash]
       )
       userId = Number(result.insertId)

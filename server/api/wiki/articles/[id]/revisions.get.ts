@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiRevisionSummary {
   id: number
@@ -55,6 +56,6 @@ export default defineEventHandler(async (event): Promise<WikiRevisionListRespons
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load wiki revisions: ${err}` }
+    return internalError('Failed to load wiki revisions', err)
   }
 })

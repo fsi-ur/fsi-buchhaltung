@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { hasPermission, requirePermission } from '~/server/utils/api/guards'
 import { PERMISSIONS } from '~/config/permissions'
 import type { WikiGrantSubjectType } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiSubjectOption {
   type: WikiGrantSubjectType
@@ -67,6 +68,6 @@ export default defineEventHandler(async (event): Promise<WikiSubjectOptionsRespo
       options: rows.map(row => ({ type, id: Number(row.id), key: '', label: row.label })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load subject options: ${err}` }
+    return internalError('Failed to load subject options', err)
   }
 })

@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
 import { isSlugTaken, validateArticleFields, validateParent } from '~/server/utils/wiki/articles'
 import { parseTagIds, replaceArticleTags, validateTagIds } from '~/server/utils/wiki/tags'
+import { internalError } from '~/server/utils/api/errors'
 
 export type UpdateWikiArticleResponse =
   | { ok: true }
@@ -93,6 +94,6 @@ export default defineEventHandler(async (event): Promise<UpdateWikiArticleRespon
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to save wiki article: ${err}` }
+    return internalError('Failed to save wiki article', err)
   }
 })

@@ -7,6 +7,7 @@ import {
   replaceEventShiftTemplates,
 } from '~/server/utils/eventShifts'
 import type { EventShiftTemplate } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventShiftTemplatesSuccess {
   ok: true
@@ -42,6 +43,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventShiftTemplat
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update event shift templates: ${err}` }
+    return internalError('Failed to update event shift templates', err)
   }
 })

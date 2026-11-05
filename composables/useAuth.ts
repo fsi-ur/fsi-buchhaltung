@@ -48,6 +48,8 @@ export const useAuth = () => {
 
       return res
     } catch (err: any) {
+      // A 429 (rate limit) still carries the regular result body.
+      if (err?.data && err.data.ok === false && typeof err.data.code === 'string') return err.data as LoginResponse
       return { ok: false, error: err?.message || 'Network error', code: 'network_error' }
     }
   }

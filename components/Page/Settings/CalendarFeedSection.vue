@@ -24,14 +24,24 @@
         <p class="text-xs text-base-400">
           {{ t('home.widgets.calendarFeed.alreadyExists') }}
         </p>
-        <button
-          type="button"
-          class="btn-secondary w-full justify-center sm:w-auto"
-          :disabled="generating"
-          @click="confirmingRegenerate = true"
-        >
-          {{ t('home.widgets.calendarFeed.regenerate') }}
-        </button>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn-secondary w-full justify-center sm:w-auto"
+            :disabled="generating"
+            @click="confirmingRegenerate = true"
+          >
+            {{ t('home.widgets.calendarFeed.regenerate') }}
+          </button>
+          <button
+            type="button"
+            class="btn-secondary w-full justify-center text-danger-600 sm:w-auto"
+            :disabled="generating"
+            @click="confirmingRevoke = true"
+          >
+            {{ t('home.widgets.calendarFeed.revoke') }}
+          </button>
+        </div>
       </div>
 
       <div v-else class="space-y-3">
@@ -57,14 +67,24 @@
           {{ t('home.widgets.calendarFeed.helpText') }}
         </p>
 
-        <button
-          type="button"
-          class="btn-secondary w-full justify-center sm:w-auto"
-          :disabled="generating"
-          @click="confirmingRegenerate = true"
-        >
-          {{ t('home.widgets.calendarFeed.regenerate') }}
-        </button>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn-secondary w-full justify-center sm:w-auto"
+            :disabled="generating"
+            @click="confirmingRegenerate = true"
+          >
+            {{ t('home.widgets.calendarFeed.regenerate') }}
+          </button>
+          <button
+            type="button"
+            class="btn-secondary w-full justify-center text-danger-600 sm:w-auto"
+            :disabled="generating"
+            @click="confirmingRevoke = true"
+          >
+            {{ t('home.widgets.calendarFeed.revoke') }}
+          </button>
+        </div>
       </div>
     </template>
   </CommonCard>
@@ -92,6 +112,30 @@
       </button>
     </template>
   </CommonModal>
+
+  <CommonModal
+    v-model="confirmingRevoke"
+    :title="t('home.widgets.calendarFeed.revokeConfirmTitle')"
+    footer-class="relative z-10 mt-4 flex justify-end gap-3 bg-white pt-2"
+  >
+    <p class="text-sm text-base-600">
+      {{ t('home.widgets.calendarFeed.revokeConfirmText') }}
+    </p>
+
+    <template #footer>
+      <button class="btn-secondary" @click="confirmingRevoke = false">
+        {{ t('actions.cancel') }}
+      </button>
+      <button
+        class="btn-primary"
+        :disabled="generating"
+        :class="{ 'opacity-50 cursor-not-allowed': generating }"
+        @click="revoke"
+      >
+        {{ t('home.widgets.calendarFeed.revoke') }}
+      </button>
+    </template>
+  </CommonModal>
 </template>
 
 <script setup lang="ts">
@@ -99,6 +143,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import type { GetCalendarFeedResponse } from '~/server/api/user/calendar-feed.get'
 import type { PostCalendarFeedResponse } from '~/server/api/user/calendar-feed.post'
+import type { DeleteCalendarFeedResponse } from '~/server/api/user/calendar-feed.delete'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -108,6 +153,7 @@ const generating = ref(false)
 const hasToken = ref(false)
 const url = ref('')
 const confirmingRegenerate = ref(false)
+const confirmingRevoke = ref(false)
 
 async function load() {
   loading.value = true
@@ -131,6 +177,22 @@ async function generate() {
     }
   } catch {
     toast.error(t('home.widgets.calendarFeed.generateError'))
+  } finally {
+    generating.value = false
+  }
+}
+
+async function revoke() {
+  confirmingRevoke.value = false
+  generating.value = true
+  try {
+    const res = await apiFetch<DeleteCalendarFeedResponse>('/api/user/calendar-feed', { method: 'DELETE' })
+    if (!res.ok) throw new Error(res.error)
+    url.value = ''
+    hasToken.value = false
+    toast.success(t('home.widgets.calendarFeed.revoked'))
+  } catch {
+    toast.error(t('home.widgets.calendarFeed.revokeError'))
   } finally {
     generating.value = false
   }

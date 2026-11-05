@@ -1,6 +1,8 @@
+import { checkUploadedImageDimensions } from '~/server/utils/imageLimits'
+import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import fs from 'fs/promises'
 import path from 'path'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { MAX_UPLOAD_SIZE, type UploadedFile } from '~/server/utils/files'
 import { findImageReferencesInText } from '~/shared/wikiImages'
@@ -26,6 +28,8 @@ export function validateWikiImage(file: UploadedFile | null):
   }
   const mimeType = sniffWikiImageType(file.data)
   if (!mimeType) return { ok: false, error: 'Es sind nur Bilder im Format PNG oder JPEG erlaubt.' }
+  const dimensionError = checkUploadedImageDimensions(file.data)
+  if (dimensionError) return { ok: false, error: dimensionError }
   return { ok: true, mimeType }
 }
 
@@ -154,7 +158,9 @@ export async function deleteArticleImage(articleId: number, fileId: number, conn
 /** Best effort: a file left behind on disk wastes space but breaks nothing. */
 export async function unlinkStoredFile(filePath: string) {
   try {
-    await fs.unlink(path.join(process.env.UPLOAD_DIR!, filePath.replace(/^\/uploads\//, '')))
+    const absolutePath = resolveStoredFilePath(filePath)
+    if (!absolutePath) return
+    await fs.unlink(absolutePath)
   } catch {
     // already gone
   }
@@ -183,10 +189,10 @@ export async function loadArticleImageData(articleIds: number[], conn?: mariadb.
     conn,
   )
 
-  const uploadRoot = process.env.UPLOAD_DIR!
   for (const row of rows) {
     try {
-      const absolutePath = path.join(uploadRoot, row.file_path.replace(/^\/uploads\//, ''))
+      const absolutePath = resolveStoredFilePath(row.file_path)
+      if (!absolutePath) continue
       images.set(Number(row.id), { mimeType: row.mime_type, data: await fs.readFile(absolutePath) })
     } catch {
       // Missing on disk — rendered as a placeholder.

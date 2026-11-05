@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import type { CompanyRow, UpdateCompanyBody } from '~/types/company'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateCompanySuccess {
   ok: true
@@ -79,6 +80,6 @@ export default defineEventHandler(async (event): Promise<UpdateCompanyResponse> 
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while updating the company: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while updating the company', err)
   }
 })

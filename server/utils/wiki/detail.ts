@@ -4,7 +4,7 @@ import type { H3Event } from 'h3'
 import { query } from '~/server/utils/db'
 import type { User } from '~/types/user'
 import { canReadArticle, getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
-import { renderArticle } from '~/server/utils/wiki/render'
+import { renderArticle, sanitizeWikiHtml } from '~/server/utils/wiki/render'
 import {
   buildBreadcrumbs,
   buildVisibleTree,
@@ -201,7 +201,8 @@ export async function loadArticleDetail(
 }
 
 async function ensureRenderedHtml(article: WikiArticle): Promise<string> {
-  if (article.content_html) return article.content_html
+  // Cached HTML may predate the current sanitizer rules (SEC-27/33), so it is sanitized again.
+  if (article.content_html) return sanitizeWikiHtml(article.content_html)
   if (!article.content_md) return ''
 
   const rendered = renderArticle(article.content_md)

@@ -6,6 +6,7 @@ import { isEventOrganizer } from '~/server/utils/events'
 import { eventExists } from '~/server/utils/eventShifts'
 import { loadEventTasks, normalizeEventTasks, replaceEventTasks } from '~/server/utils/eventTasks'
 import type { EventTask } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventTasksSuccess {
   ok: true
@@ -47,6 +48,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventTasksRespons
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update event tasks: ${err}` }
+    return internalError('Failed to update event tasks', err)
   }
 })

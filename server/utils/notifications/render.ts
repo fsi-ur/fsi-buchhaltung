@@ -134,7 +134,7 @@ export function renderNotification(args: RenderNotificationArgs): RenderedNotifi
 }
 
 function interpolateTemplate(template: string, params: Record<string, string | number>): string {
-  return Object.entries(params).reduce((result, [key, value]) => {
-    return result.replaceAll(`{${key}}`, String(value))
-  }, template)
+  // One pass over the template: placeholders inside substituted values stay literal (SEC-33).
+  return template.replace(/\{([A-Za-z0-9_.]+)\}/g, (match, key: string) =>
+    Object.hasOwn(params, key) ? String(params[key]) : match)
 }

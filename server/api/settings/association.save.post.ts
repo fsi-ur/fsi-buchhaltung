@@ -9,9 +9,11 @@ import {
   validateAssociationProfilePayload,
 } from '~/server/utils/association'
 import { query, withAuditTransaction } from '~/server/utils/db'
+import { checkUploadedImageDimensions } from '~/server/utils/imageLimits'
 import { detachFileAttachment, getActiveFileAttachment, storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { AssociationProfileRow } from '~/types/association'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveAssociationProfileSuccess {
   ok: true
@@ -48,6 +50,8 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
     ? validateUploadedFile(multipart.file)
     : null
   if (logoError) return { ok: false, error: logoError }
+  const logoDimensionError = multipart.file ? checkUploadedImageDimensions(multipart.file.data) : null
+  if (logoDimensionError) return { ok: false, error: logoDimensionError }
   if (multipart.file && !String(multipart.file.type || '').startsWith('image/')) {
     return { ok: false, error: 'Association logo must be an image file' }
   }
@@ -229,6 +233,6 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the association profile: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the association profile', err)
   }
 })

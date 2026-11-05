@@ -1,3 +1,4 @@
+import { isCashCountLocked } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
@@ -6,9 +7,12 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { getAttachedFile } from '~/server/utils/files'
 import type { CashCount, CashCountPosition, CashCountRow } from '~/types/cashCount'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetCashCountSuccess {
   ok: true
+  /** Booked (SEC-22): read-only without cash_counts.unlock. */
+  locked: boolean
   cashCount: CashCount
   file: FileRow | null
 }
@@ -75,6 +79,7 @@ export default defineEventHandler(async (event): Promise<GetCashCountResponse> =
 
     return {
       ok: true,
+      locked: await isCashCountLocked(id),
       cashCount: {
         id: Number(cashCount.id),
         event_id: cashCount.event_id === null ? null : Number(cashCount.event_id),
@@ -89,6 +94,6 @@ export default defineEventHandler(async (event): Promise<GetCashCountResponse> =
       file: file ? normalizeBigInt(file) : null,
     }
   } catch (err: any) {
-    return { ok: false, error: `An error occurred while fetching a cash count: ${err}` }
+    return internalError('An error occurred while fetching a cash count', err)
   }
 })

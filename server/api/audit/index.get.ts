@@ -30,8 +30,10 @@ export default defineEventHandler(async (event): Promise<GetAuditLogResponse> =>
     search: typeof q.search === 'string' ? q.search : undefined,
   }
 
-  const before = q.before ? Number(q.before) : undefined
-  const limit = q.limit ? Number(q.limit) : undefined
+  const parsedBefore = Number(q.before)
+  const parsedLimit = Number(q.limit)
+  const before = q.before && Number.isFinite(parsedBefore) ? parsedBefore : undefined
+  const limit = q.limit && Number.isFinite(parsedLimit) ? Math.trunc(parsedLimit) : undefined
 
   const result = await listAuditGroups(current.user, filters, { before, limit })
   return result

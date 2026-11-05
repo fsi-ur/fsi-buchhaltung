@@ -10,6 +10,7 @@ import {
   validateEventRelations,
 } from '~/server/utils/events'
 import { enqueueNotification } from '~/server/utils/notifications/enqueue'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateEventSuccess {
   ok: true
@@ -82,6 +83,6 @@ export default defineEventHandler(async (event): Promise<CreateEventResponse> =>
       return { ok: true, eventId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create event: ${err}` }
+    return internalError('Failed to create event', err)
   }
 })

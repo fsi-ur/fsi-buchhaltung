@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getWikiAccess } from '~/server/utils/wiki/access'
 import { loadPathViews } from '~/server/utils/wiki/paths'
 import type { WikiPathView } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type WikiPathListResponse =
   | { ok: true, paths: WikiPathView[] }
@@ -17,6 +18,6 @@ export default defineEventHandler(async (event): Promise<WikiPathListResponse> =
     const paths = await loadPathViews(index, subjects, { includeUnpublished: subjects.canManage })
     return { ok: true, paths }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the wiki learning paths: ${err}` }
+    return internalError('Failed to load the wiki learning paths', err)
   }
 })

@@ -4,6 +4,7 @@ import { toDbBoolean } from '~/server/utils/api/request'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { getMemberLabels, syncSubdivisionAssignments } from '~/server/utils/subdivisions'
 import type { ActivateResponse } from '~/types/activate'
+import { internalError } from '~/server/utils/api/errors'
 
 interface ActivateSubdivisionBody {
   id: number
@@ -87,6 +88,6 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `An error occured while activating/deactivating the subdivision: ${err}` }
+    return internalError('An error occured while activating/deactivating the subdivision', err)
   }
 })

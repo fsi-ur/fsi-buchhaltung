@@ -41,6 +41,7 @@ const errorMessagesByCode: Record<string, string> = {
   missing_credentials: 'login.errorMissingCredentials',
   invalid_credentials: 'login.errorInvalidCredentials',
   inactive_user: 'login.errorInactiveUser',
+  rate_limited: 'login.errorRateLimited',
   server_error: 'login.errorServer',
   network_error: 'login.errorNetwork',
   session_not_established: 'login.errorSessionNotEstablished',

@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { toDbBoolean } from '~/server/utils/api/request'
 import type { User } from '~/types/user'

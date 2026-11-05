@@ -22,6 +22,8 @@ export interface XlsxColumn {
 
 function escapeXml(value: string) {
   return value
+    // XML 1.0 forbids these control characters; one would make the whole workbook unreadable.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -317,7 +319,8 @@ export function buildXlsxWorkbook(params: {
   const footerRuleWidthPt = A4_WIDTH_PT[orientation] - (2 * PAGE_MARGIN_LR_PT)
   const footerRuleVml = buildFooterRuleVml(footerRuleWidthPt / FOOTER_PICTURE_WIDTH_STRETCH, 14)
 
-  const footerLeft = footerLabel ? `&amp;L&amp;9${escapeXml(footerLabel)}` : ''
+  // "&" starts a header/footer code in Excel; a literal one is written "&&" (e.g. "Kunst & Kultur e.V.").
+  const footerLeft = footerLabel ? `&amp;L&amp;9${escapeXml(footerLabel.replaceAll('&', '&&'))}` : ''
   const worksheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>

@@ -7,6 +7,7 @@ import {
   saveEventWebsiteSettings,
   validateEventWebsitePayload,
 } from '~/server/utils/eventWebsite'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventWebsiteSuccess {
   ok: true
@@ -41,6 +42,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventWebsiteRespo
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update website settings: ${err}` }
+    return internalError('Failed to update website settings', err)
   }
 })

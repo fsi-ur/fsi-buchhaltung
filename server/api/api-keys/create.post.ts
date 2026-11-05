@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { createApiKey, normalizeApiKeyName, validateApiKeyName } from '~/server/utils/apiKeys'
 import { withAuditTransaction } from '~/server/utils/db'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateApiKeySuccess {
   ok: true
@@ -32,6 +33,6 @@ export default defineEventHandler(async (event): Promise<CreateApiKeyResponse> =
       return { ok: true, ...created }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create API key: ${err}` }
+    return internalError('Failed to create API key', err)
   }
 })

@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { ReimbursementOverview } from '~/types/reimbursement'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetReimbursementsSuccess {
   ok: true
@@ -52,6 +53,6 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
       total_amount: Number(row.total_amount),
     }))}
   } catch (err: any) {
-    return { ok: false, error: `Failed to load receipts: ${err}` }
+    return internalError('Failed to load receipts', err)
   }
 })

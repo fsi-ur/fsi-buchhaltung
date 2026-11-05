@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { canReadArticle, getWikiAccess } from '~/server/utils/wiki/access'
 import { MAX_RUNS_PER_CHECKLIST, countRuns, loadChecklistContext } from '~/server/utils/wiki/checklists'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateRunBody {
   checklistId?: number
@@ -57,6 +58,6 @@ export default defineEventHandler(async (event): Promise<CreateWikiChecklistRunR
 
     return { ok: true, runId }
   } catch (err: any) {
-    return { ok: false, error: `Failed to create wiki checklist run: ${err}` }
+    return internalError('Failed to create wiki checklist run', err)
   }
 })

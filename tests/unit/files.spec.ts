@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { ALLOWED_UPLOAD_MIME, MAX_UPLOAD_SIZE, validateUploadedFile } from '~/server/utils/files'
 
+/** A buffer of `size` bytes starting with the magic bytes of `type` (the content is sniffed). */
+function bytesOf(type: string, size = 10) {
+  const data = Buffer.alloc(size)
+  if (type === 'application/pdf') Buffer.from('%PDF-').copy(data)
+  else if (type === 'image/png') Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).copy(data)
+  else Buffer.from([0xFF, 0xD8, 0xFF]).copy(data)
+  return data
+}
+
 // tests/setup/unit-env.ts pins MAX_UPLOAD_MB to 5, so the size limit is deterministic.
 describe('validateUploadedFile', () => {
   it('derives the size limit from MAX_UPLOAD_MB', () => {
@@ -8,7 +17,7 @@ describe('validateUploadedFile', () => {
   })
 
   it.each(ALLOWED_UPLOAD_MIME)('accepts %s', (type) => {
-    expect(validateUploadedFile({ filename: 'beleg', type, data: Buffer.alloc(10) })).toBeNull()
+    expect(validateUploadedFile({ filename: 'beleg', type, data: bytesOf(type) })).toBeNull()
   })
 
   it.each([
@@ -26,9 +35,9 @@ describe('validateUploadedFile', () => {
   })
 
   it('rejects a file over the limit but accepts one exactly at it', () => {
-    expect(validateUploadedFile({ type: 'application/pdf', data: Buffer.alloc(MAX_UPLOAD_SIZE + 1) }))
+    expect(validateUploadedFile({ type: 'application/pdf', data: bytesOf('application/pdf', MAX_UPLOAD_SIZE + 1) }))
       .toBe('File too large')
-    expect(validateUploadedFile({ type: 'application/pdf', data: Buffer.alloc(MAX_UPLOAD_SIZE) }))
+    expect(validateUploadedFile({ type: 'application/pdf', data: bytesOf('application/pdf', MAX_UPLOAD_SIZE) }))
       .toBeNull()
   })
 
