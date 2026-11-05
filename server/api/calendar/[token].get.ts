@@ -1,3 +1,4 @@
+import { calendarSourceAccess } from '~/server/utils/calendarAccess'
 import { defineEventHandler, getRequestHost, getRouterParam, setHeader, setResponseStatus } from 'h3'
 import { getUserByCalendarToken } from '~/server/utils/calendarToken'
 import { query } from '~/server/utils/db'
@@ -96,19 +97,20 @@ export default defineEventHandler(async (event) => {
     to: addMinutesToLocalDateTime(now, APPOINTMENT_FUTURE_DAYS * 24 * 60),
   }
 
-  // The same loaders the in-app calendar uses, so both surfaces can never show different things.
-  const [events, shifts, tasks] = await Promise.all([
-    loadCalendarEvents(null),
-    loadCalendarShifts(memberId, null),
-    loadCalendarTaskDeadlines(memberId, null),
-  ])
-
   // The token route resolves nothing but a user id, so the effective permissions have to be loaded
-  // here — the feed must show exactly what the calendar page would show this user, no more.
+  // here — the feed must show exactly what the calendar page would show this user, no more (SEC-17).
   const [roleIds, positionIds] = await Promise.all([getUserRoleIds(user.id), getUserPositionIds(user.id)])
   const permissions = await getUserPermissions(user.id, roleIds, positionIds)
+  const access = calendarSourceAccess(permissions)
 
-  const appointments = permissions.includes('calendar.view')
+  // The same loaders and the same access rules as the in-app calendar.
+  const [events, shifts, tasks] = await Promise.all([
+    access.events ? loadCalendarEvents(null) : Promise.resolve([]),
+    access.shifts ? loadCalendarShifts(memberId, null) : Promise.resolve([]),
+    access.tasks ? loadCalendarTaskDeadlines(memberId, null) : Promise.resolve([]),
+  ])
+
+  const appointments = access.appointments
     ? await loadCalendarAppointments(
       { userId: user.id, memberId, canManage: permissions.includes('calendar.manage') },
       appointmentWindow,

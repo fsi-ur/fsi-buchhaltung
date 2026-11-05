@@ -1,3 +1,4 @@
+import { calendarSourceAccess } from '~/server/utils/calendarAccess'
 import { defineEventHandler, getQuery } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import {
@@ -48,13 +49,13 @@ export default defineEventHandler(async (event): Promise<GetCalendarEntriesRespo
 
   // Events and shift/task deadlines are only offered to users who may see them at all; a plain
   // calendar user without event access simply gets the appointment source.
-  const canSeeEvents = hasPermission(current.user, ['events.access', 'events.view', 'events.shifts.signup'])
+  const access = calendarSourceAccess(current.user.permissions)
 
   const [appointments, events, shifts, tasks] = await Promise.all([
     loadCalendarAppointments(viewer, window),
-    canSeeEvents ? loadCalendarEvents(window) : Promise.resolve([]),
-    canSeeEvents ? loadCalendarShifts(memberId, window) : Promise.resolve([]),
-    canSeeEvents ? loadCalendarTaskDeadlines(memberId, window) : Promise.resolve([]),
+    access.events ? loadCalendarEvents(window) : Promise.resolve([]),
+    access.shifts ? loadCalendarShifts(memberId, window) : Promise.resolve([]),
+    access.tasks ? loadCalendarTaskDeadlines(memberId, window) : Promise.resolve([]),
   ])
 
   const entries = [

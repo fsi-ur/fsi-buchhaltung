@@ -16,6 +16,14 @@ export async function generateCalendarToken(userId: number, conn?: mariadb.PoolC
   return rawToken
 }
 
+export async function revokeCalendarToken(userId: number, conn?: mariadb.PoolConnection) {
+  await query(
+    `UPDATE users SET calendar_token_hash = NULL, calendar_token_created_at = NULL WHERE id = ?`,
+    [userId],
+    conn,
+  )
+}
+
 export async function hasCalendarToken(userId: number): Promise<boolean> {
   const rows = await query<{ calendar_token_hash: string | null }[]>(
     `SELECT calendar_token_hash FROM users WHERE id = ? LIMIT 1`,

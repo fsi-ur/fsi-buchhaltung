@@ -31,7 +31,7 @@
     </div>
   </CommonCard>
 
-  <PageSettingsCalendarFeedSection />
+  <PageSettingsCalendarFeedSection v-if="hasPermission('calendar.view')" />
   <PageSettingsNotificationPreferencesSection />
 
   <CommonModal
@@ -159,7 +159,7 @@ import type { ChangePasswordResponse } from '~/server/api/auth/change-password.p
 import type { LogoutAllResponse } from '~/server/api/auth/logout-all.post'
 import { MIN_PASSWORD_LENGTH } from '~/config/validation'
 
-const { logout, redirectToLogin } = useAuth()
+const { logout, redirectToLogin, hasPermission } = useAuth()
 const { setPage } = usePage()
 const { language, t, toggleLanguage } = useI18n()
 const toast = useToast()
