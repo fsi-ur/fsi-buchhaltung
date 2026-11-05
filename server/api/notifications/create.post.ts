@@ -8,6 +8,7 @@ import { normalizeAttachmentSelection } from '~/server/utils/attachments'
 import type { AttachmentSelection } from '~/types/attachment'
 import type { RecipientRule } from '~/server/utils/notifications/types'
 import { eventExists } from '~/server/utils/eventShifts'
+import { checkAttachableFiles } from '~/server/utils/fileAccess'
 
 function normalizeSelection(input: unknown): AttachmentSelection {
   const result = normalizeAttachmentSelection(input)
@@ -45,6 +46,10 @@ export default defineEventHandler(async (event): Promise<CreateNotificationRespo
     payload.shift_plan_descriptions = Boolean(body.shiftPlan.includeDescriptions)
   }
 
+  const attachments = normalizeSelection(body.attachments)
+  const fileError = await checkAttachableFiles(event, current.user, attachments.fileIds)
+  if (fileError) return { ok: false, error: fileError }
+
   const result = await withAuditTransaction(current.user, async conn => enqueueNotification({
     type: 'custom.message',
     payload,
@@ -55,7 +60,7 @@ export default defineEventHandler(async (event): Promise<CreateNotificationRespo
     channels: body.channels,
     subjectOverride: body.subject,
     bodyOverride: body.body,
-    attachments: normalizeSelection(body.attachments),
+    attachments,
   }, conn))
 
   return result

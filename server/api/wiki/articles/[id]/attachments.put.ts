@@ -1,7 +1,8 @@
 import { defineEventHandler, readBody } from 'h3'
 import { withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { loadAttachmentItems, normalizeAttachmentSelection, saveAttachmentSelection } from '~/server/utils/attachments'
+import { loadAttachmentItems, loadAttachmentSelection, normalizeAttachmentSelection, saveAttachmentSelection } from '~/server/utils/attachments'
+import { checkAttachableFiles } from '~/server/utils/fileAccess'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
 import { WIKI_ARTICLE_ENTITY_TYPE } from '~/server/utils/wiki/articles'
 import type { WikiAttachment } from '~/types/wiki'
@@ -25,10 +26,16 @@ export default defineEventHandler(async (event): Promise<SaveWikiAttachmentsResp
   if (!selection.ok) return selection
 
   try {
+    const existing = await loadAttachmentSelection(WIKI_ARTICLE_ENTITY_TYPE, articleId)
+    const fileError = await checkAttachableFiles(event, current.user, selection.value.fileIds, existing.fileIds)
+    if (fileError) return { ok: false, error: fileError }
+
     await withAuditTransaction(current.user, conn =>
       saveAttachmentSelection(WIKI_ARTICLE_ENTITY_TYPE, articleId, selection.value, Number(current.user.id), conn))
 
-    return { ok: true, attachments: await loadAttachmentItems(selection.value) }
+    // Echo what is stored now, not what was submitted.
+    const saved = await loadAttachmentSelection(WIKI_ARTICLE_ENTITY_TYPE, articleId)
+    return { ok: true, attachments: await loadAttachmentItems(saved) }
   } catch (err: any) {
     return { ok: false, error: `Failed to save wiki attachments: ${err}` }
   }
