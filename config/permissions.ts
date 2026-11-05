@@ -173,8 +173,7 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'settings.app.access': ['settings.access'],
   'settings.app.snapshots.manage': ['settings.app.access'],
   'settings.apiKeys.manage': ['settings.app.access'],
-  // Whoever may edit every permission can also hand out positions (SEC-01).
-  'permissions.manage': ['settings.access', 'users.view', 'positions.assign'],
+  'permissions.manage': ['settings.access', 'users.view'],
   'positions.assign': ['positions.view'],
   'users.manage': ['users.view'],
   'bank_statements.edit': ['bank_statements.view'],

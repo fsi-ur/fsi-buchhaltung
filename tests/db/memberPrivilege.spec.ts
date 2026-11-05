@@ -108,6 +108,20 @@ describe('member privilege escalation guards', () => {
     expect(refused.result).toEqual({ ok: false, error: POSITION_ASSIGN_EXCEEDS_OWN })
   })
 
+  it('permissions.manage alone does not allow assigning positions', async () => {
+    const admin = await signIn({ permissions: ['members.edit', 'permissions.manage'] })
+    const member = await createMember()
+    const position = await createPosition({ permissions: ['receipts.view'] })
+
+    const { result } = await callHandler(updateMember, {
+      token: admin.token,
+      method: 'PUT',
+      params: { id: member },
+      body: await memberBody(member, { positions: [{ member_id: member, position_id: position, since: '2024-01-01', until: null }] }),
+    })
+    expect(result).toEqual({ ok: false, error: POSITION_ASSIGN_FORBIDDEN })
+  })
+
   it('settings.positions.manage cannot add members to a position without positions.assign', async () => {
     const manager = await signIn({ permissions: ['settings.positions.manage'] })
     const ownMember = await createMember({ accountId: manager.id })

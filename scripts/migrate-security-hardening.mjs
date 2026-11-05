@@ -72,6 +72,35 @@ async function systemEvents(conn) {
   console.log(`${LOG}: ensured system_events`)
 }
 
+async function grantPositionsAssign(conn) {
+  // positions.assign is a permission of its own (SEC-01, owner decision: not implied by
+  // permissions.manage). Once, on upgrade, hand it to everyone who held permissions.manage, so an
+  // existing install keeps someone who can assign positions. The marker keeps later deploys from
+  // re-granting it after an admin deliberately took it away.
+  const MARKER = 'migration.positions_assign_granted'
+  const done = await conn.query(`SELECT id FROM system_events WHERE event_type = ? LIMIT 1`, [MARKER])
+  if (done.length) return
+
+  const grants = [
+    ['role_permissions', 'role_id'],
+    ['position_permissions', 'position_id'],
+    ['user_permissions', 'user_id'],
+  ]
+  const counts = {}
+  for (const [table, column] of grants) {
+    const result = await conn.query(
+      `INSERT IGNORE INTO ${table} (${column}, permission_key)
+       SELECT ${column}, 'positions.assign' FROM ${table} WHERE permission_key = 'permissions.manage'`,
+    )
+    counts[table] = Number(result.affectedRows ?? 0)
+  }
+  await conn.query(
+    `INSERT INTO system_events (event_type, actor_user_id, actor_username, details) VALUES (?, NULL, NULL, ?)`,
+    [MARKER, JSON.stringify(counts)],
+  )
+  console.log(`${LOG}: granted positions.assign to permissions.manage holders ${JSON.stringify(counts)}`)
+}
+
 async function columnExists(conn, table, column) {
   const rows = await conn.query(
     `SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
@@ -124,6 +153,7 @@ async function migrate() {
     conn = await pool.getConnection()
     await uniqueMemberAccount(conn)
     await systemEvents(conn)
+    await grantPositionsAssign(conn)
     await memberDeactivationSkipped(conn)
     await uniqueReimbursedReceipt(conn)
     console.log(`${LOG}: done`)
