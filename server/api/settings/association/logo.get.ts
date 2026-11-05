@@ -1,3 +1,4 @@
+import { storedFileHeaders } from '~/server/utils/securityHeaders'
 import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { createError, defineEventHandler, sendStream, setHeader } from 'h3'
 import fs from 'fs'
@@ -34,9 +35,8 @@ export default defineEventHandler(async (event) => {
     if (!absolutePath || !fs.existsSync(absolutePath)) return { ok: false, error: 'Physical file not found' }
 
     const stat = fs.statSync(absolutePath)
-    setHeader(event, 'Content-Type', logo.mime_type)
+    for (const [name, value] of Object.entries(storedFileHeaders(logo.mime_type, null))) setHeader(event, name, value)
     setHeader(event, 'Content-Length', stat.size)
-    setHeader(event, 'Content-Disposition', 'inline')
     setHeader(event, 'Cache-Control', 'no-transform')
 
     return sendStream(event, fs.createReadStream(absolutePath))

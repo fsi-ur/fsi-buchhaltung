@@ -1,3 +1,4 @@
+import { storedFileHeaders } from '~/server/utils/securityHeaders'
 import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import { defineEventHandler, createError, sendStream, setHeader } from 'h3'
 import { query } from '~/server/utils/db'
@@ -10,6 +11,7 @@ interface FileRecord {
   id: number
   file_path: string
   mime_type: string
+  original_name: string | null
 }
 
 interface GetFileError {
@@ -34,7 +36,7 @@ export default defineEventHandler(async (event): Promise<GetFileResponse> => {
     if (!(await canReadFile(event, current.user, id))) return { ok: false, error: 'Not authorized' }
 
     const result: FileRecord[] = await query(
-      `SELECT id, file_path, mime_type
+      `SELECT id, file_path, mime_type, original_name
       FROM files
       WHERE id = ?
       LIMIT 1`,
@@ -49,9 +51,8 @@ export default defineEventHandler(async (event): Promise<GetFileResponse> => {
 
     const stat = fs.statSync(absolutePath)
 
-    setHeader(event, 'Content-Type', file.mime_type)
+    for (const [name, value] of Object.entries(storedFileHeaders(file.mime_type, file.original_name))) setHeader(event, name, value)
     setHeader(event, 'Content-Length', stat.size)
-    setHeader(event, 'Content-Disposition', 'inline')
     setHeader(event, 'Accept-Ranges', 'bytes')
     setHeader(event, 'Cache-Control', 'no-transform')
 
