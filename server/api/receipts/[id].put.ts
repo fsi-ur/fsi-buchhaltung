@@ -9,7 +9,7 @@ import {
   validateUploadedFile,
 } from '~/server/utils/files'
 import { validateCostCentreSelection } from '~/server/utils/costCentres'
-import { receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
+import { changesLockedReceiptFields, RECEIPT_LOCKED_ERROR, receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import type { ReceiptPosition, ReceiptRow } from '~/types/receipt'
 import { internalError } from '~/server/utils/api/errors'
@@ -69,6 +69,16 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
       const hasExistingFile = Boolean(existingAttachment)
       const hasFileAfterSave = Boolean(multipart.file) || (hasExistingFile && !removeExistingFile)
       const targetStatus = statusLocked ? existingReceipt.status : updated.status
+
+      if (statusLocked) {
+        if (multipart.file || removeExistingFile) return { ok: false, error: RECEIPT_LOCKED_ERROR }
+        const lockedPositions: ReceiptPosition[] = await query(
+          `SELECT * FROM receipt_positions WHERE receipt_id = ?`,
+          [receiptId],
+          conn,
+        )
+        if (changesLockedReceiptFields(existingReceipt, lockedPositions, updated)) return { ok: false, error: RECEIPT_LOCKED_ERROR }
+      }
 
       if (statusLocked && !hasFileAfterSave) {
         return { ok: false, error: 'Receipts that are part of a reimbursement or bank statement must always have a file attached' }
