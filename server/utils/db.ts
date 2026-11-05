@@ -37,12 +37,22 @@ export async function query<T = any>(sql: string, params?: unknown[], conn?: mar
   }
 }
 
+function isFailedResult(result: unknown): boolean {
+  return typeof result === 'object' && result !== null && (result as { ok?: unknown }).ok === false
+}
+
 export async function withTransaction<T>(callback: (conn: mariadb.PoolConnection) => Promise<T>): Promise<T> {
   const conn = await pool.getConnection()
 
   try {
     await conn.beginTransaction()
     const result = await callback(conn)
+    // A handler that reports failure by *returning* `{ ok: false }` must not keep the writes it
+    // made before noticing the problem (e.g. header saved, then file validation fails).
+    if (isFailedResult(result)) {
+      await conn.rollback()
+      return normalizeBigInt(result)
+    }
     await conn.commit()
     return normalizeBigInt(result)
   } catch (err) {
@@ -65,6 +75,12 @@ export async function withAuditTransaction<T>(
     await conn.beginTransaction()
     await setAuditActor(conn, actor, crypto.randomUUID())
     const result = await callback(conn)
+    // A handler that reports failure by *returning* `{ ok: false }` must not keep the writes it
+    // made before noticing the problem (e.g. header saved, then file validation fails).
+    if (isFailedResult(result)) {
+      await conn.rollback()
+      return normalizeBigInt(result)
+    }
     await conn.commit()
     return normalizeBigInt(result)
   } catch (err) {

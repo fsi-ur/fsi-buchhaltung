@@ -172,3 +172,23 @@ export async function createEvent(options: {
     ],
   )
 }
+
+export async function createReceipt(options: {
+  companyId?: number
+  status?: string
+  receiptDate?: string
+  positions?: Array<{ sphere: number, costCentre: number, amount: number, tax?: number }>
+} = {}) {
+  const companyId = options.companyId ?? await createCompany()
+  const id = await insert(
+    'INSERT INTO receipts (company_id, receipt_date, status) VALUES (?, ?, ?)',
+    [companyId, options.receiptDate ?? '2026-03-01', options.status ?? 'draft'],
+  )
+  for (const position of options.positions ?? []) {
+    await insert(
+      'INSERT INTO receipt_positions (receipt_id, sphere, cost_centre, amount, tax) VALUES (?, ?, ?, ?, ?)',
+      [id, position.sphere, position.costCentre, position.amount, position.tax ?? 19],
+    )
+  }
+  return id
+}
