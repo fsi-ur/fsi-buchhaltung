@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { dropFutureReminders } from '~/server/utils/notifications/enqueue'
 import type { EventTaskStatus, MyEventTask } from '~/types/event'

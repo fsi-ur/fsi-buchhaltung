@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import type { User } from '~/types/user'
 
 type AuditActor =

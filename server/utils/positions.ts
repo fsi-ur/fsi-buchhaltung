@@ -1,5 +1,5 @@
 import { MAX_POSITION_ASSIGNMENTS } from '~/server/utils/api/limits'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getMemberLabels } from '~/server/utils/subdivisions'
 import { getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'

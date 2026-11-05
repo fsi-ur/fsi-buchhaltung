@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody } from 'h3'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'

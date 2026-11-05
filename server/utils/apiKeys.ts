@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import type { H3Event } from 'h3'
 import { getRequestHeader, setResponseStatus } from 'h3'
 import { hmacToken, makeToken } from '~/server/utils/auth'

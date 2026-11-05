@@ -1,5 +1,5 @@
 import { PERMISSIONS, type PermissionKey, implied } from '~/config/permissions'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { appTodayLocalDate } from '~/server/utils/time'
 

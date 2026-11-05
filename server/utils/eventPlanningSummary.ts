@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { loadEventChecklists } from '~/server/utils/eventChecklists'
 import { loadEventShiftSlots } from '~/server/utils/eventShifts'
 import { loadEventTasks } from '~/server/utils/eventTasks'

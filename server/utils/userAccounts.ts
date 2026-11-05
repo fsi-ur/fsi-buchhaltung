@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { hashPassword } from '~/server/utils/auth'
 import { query } from '~/server/utils/db'
 import { assignDefaultRoleToUser } from '~/server/utils/roles'

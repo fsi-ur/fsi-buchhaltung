@@ -1,5 +1,5 @@
 import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import type { CreateBankStatementBody, CreateBankStatementPositionBody } from '~/types/bankStatement'
 import { query } from '~/server/utils/db'
 import { isLocalDate, normalizeLocalDateTime } from '~/shared/time'

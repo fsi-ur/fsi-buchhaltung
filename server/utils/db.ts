@@ -1,4 +1,5 @@
 import mariadb from 'mariadb'
+import type { PoolConnection } from 'mariadb'
 import { clearAuditActor, setAuditActor } from '~/server/utils/dbAudit'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { User } from '~/types/user'
@@ -20,7 +21,7 @@ export async function getDbConnection() {
   return await pool.getConnection()
 }
 
-export async function query<T = any>(sql: string, params?: unknown[], conn?: mariadb.PoolConnection): Promise<T> {
+export async function query<T = any>(sql: string, params?: unknown[], conn?: PoolConnection): Promise<T> {
   let connection = conn
   let shouldRelease = false
 
@@ -41,7 +42,7 @@ function isFailedResult(result: unknown): boolean {
   return typeof result === 'object' && result !== null && (result as { ok?: unknown }).ok === false
 }
 
-export async function withTransaction<T>(callback: (conn: mariadb.PoolConnection) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(callback: (conn: PoolConnection) => Promise<T>): Promise<T> {
   const conn = await pool.getConnection()
 
   try {
@@ -67,7 +68,7 @@ type AuditActor = Pick<User, 'id' | 'username'> | { id: number | null, username?
 
 export async function withAuditTransaction<T>(
   actor: AuditActor,
-  callback: (conn: mariadb.PoolConnection) => Promise<T>,
+  callback: (conn: PoolConnection) => Promise<T>,
 ): Promise<T> {
   const conn = await pool.getConnection()
 

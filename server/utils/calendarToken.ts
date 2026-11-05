@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { hmacToken, makeToken } from '~/server/utils/auth'
 import { query } from '~/server/utils/db'
 import { utcNowSql } from '~/server/utils/time'

@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query, getDbConnection } from '~/server/utils/db'
 import { getAuditedTableMetadata, type AuditedTableMetadata } from '~/server/utils/dbAudit'
 import {

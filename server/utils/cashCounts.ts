@@ -1,5 +1,5 @@
 import { MAX_RECORD_POSITIONS } from '~/server/utils/api/limits'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import type { CreateCashCountBody, CreateCashCountPositionBody } from '~/types/cashCount'
 import { query } from '~/server/utils/db'
 import { normalizeLocalDateTime } from '~/shared/time'

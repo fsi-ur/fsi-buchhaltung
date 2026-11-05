@@ -1,5 +1,5 @@
 import { isWellFormedStoredFilePath, resolveStoredFilePath } from '~/server/utils/storedFilePath'
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'

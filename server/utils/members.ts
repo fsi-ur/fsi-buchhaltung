@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getPositionLabels, type PositionAssignmentRow } from '~/server/utils/positions'
 import { getSubdivisionLabels, syncSubdivisionAssignments } from '~/server/utils/subdivisions'

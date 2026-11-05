@@ -1,4 +1,4 @@
-import type mariadb from 'mariadb'
+import type * as mariadb from 'mariadb'
 import { syncScalarCollection } from '~/server/utils/syncScalarCollection'
 import { query } from '~/server/utils/db'
 import { normalizeRelationIds } from '~/server/utils/subdivisions'
