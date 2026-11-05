@@ -1,3 +1,5 @@
+import { query } from '~/server/utils/db'
+import type * as mariadb from 'mariadb'
 import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/limits'
 import type { CreateReimbursementBody } from '~/types/reimbursement'
 import { ReceiptStatus } from '~/types/receipt'
@@ -35,4 +37,42 @@ export function validateReimbursementBody(reimbursement: CreateReimbursementBody
   }
 
   return null
+}
+
+export const REIMBURSEMENT_RECEIPT_TAKEN = 'Mindestens ein Beleg ist bereits Teil einer anderen Erstattung.'
+export const REIMBURSEMENT_RECEIPT_CANCELLED = 'Stornierte Belege können nicht erstattet werden.'
+
+/** Cancelled receipts cannot be reimbursed (SEC-23). Returns an error or null. */
+export async function validateReimbursableReceipts(receiptIds: number[], conn: mariadb.PoolConnection) {
+  if (!receiptIds.length) return null
+  const rows = await query<Array<{ id: number, status: string }>>(
+    `SELECT id, status FROM receipts WHERE id IN (${receiptIds.map(() => '?').join(',')})`,
+    receiptIds,
+    conn,
+  )
+  return rows.some(row => row.status === 'cancelled') ? REIMBURSEMENT_RECEIPT_CANCELLED : null
+}
+
+/**
+ * Receipts taken out of a reimbursement go back to "open" unless a bank statement or another
+ * reimbursement still pays them — instead of keeping the reimbursement's status (SEC-23).
+ */
+export async function releaseRemovedReimbursementReceipts(reimbursementId: number, receiptIds: number[], conn: mariadb.PoolConnection) {
+  for (const receiptId of receiptIds) {
+    const [link] = await query<Array<{ linked: number }>>(
+      `SELECT (
+         EXISTS (SELECT 1 FROM reimbursement_positions WHERE receipt_id = ? AND reimbursement_id <> ?)
+         OR EXISTS (SELECT 1 FROM bank_statement_positions WHERE receipt_id = ?)
+       ) AS linked`,
+      [receiptId, reimbursementId, receiptId],
+      conn,
+    )
+    if (Number(link?.linked)) continue
+    await query(`UPDATE receipts SET status = 'open' WHERE id = ? AND status = 'paid'`, [receiptId], conn)
+  }
+}
+
+/** The UNIQUE(receipt_id) key turns a concurrent double reimbursement into this error. */
+export function isDuplicateReceiptError(err: unknown) {
+  return (err as { code?: string })?.code === 'ER_DUP_ENTRY'
 }

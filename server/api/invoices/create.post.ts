@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { readMultipart } from '~/server/utils/api/request'
@@ -37,7 +38,11 @@ export default defineEventHandler(async (event): Promise<CreateInvoiceResponse> 
   const invoiceJson = multipart.getField('invoice')
   if (!invoiceJson) return { ok: false, error: 'Missing invoice data' }
 
-  let parsed = normalizeInvoicePayload(JSON.parse(invoiceJson))
+  const parsedJson = parseJsonField(invoiceJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  let parsed = normalizeInvoicePayload(parsedJson.value)
   const preValidationError = validateInvoicePayload(parsed.invoice_number ? parsed : { ...parsed, invoice_number: 'DEFAULT' })
   if (preValidationError) return { ok: false, error: preValidationError }
 

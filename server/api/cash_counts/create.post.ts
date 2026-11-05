@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -28,7 +29,11 @@ export default defineEventHandler(async (event): Promise<CreateCashCountResponse
   const cashCountJson = multipart.getField('cashCount')
   if (!cashCountJson) return { ok: false, error: 'Missing cash count data' }
 
-  const cashCount = normalizeCashCountBody(JSON.parse(cashCountJson))
+  const parsedJson = parseJsonField(cashCountJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const cashCount = normalizeCashCountBody(parsedJson.value)
   const validationError = validateCashCountBody(cashCount)
   if (validationError) return { ok: false, error: validationError }
 

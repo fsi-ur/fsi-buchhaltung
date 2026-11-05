@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { isCashCountLocked, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
@@ -43,7 +44,11 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
 
   if (!cashCountJson) return { ok: false, error: 'Missing cash count data' }
 
-  const updated = normalizeCashCountBody(JSON.parse(cashCountJson))
+  const parsedJson = parseJsonField(cashCountJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const updated = normalizeCashCountBody(parsedJson.value)
   const validationError = validateCashCountBody(updated)
   if (validationError) return { ok: false, error: validationError }
 

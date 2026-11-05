@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { getNumericRouteParam, readMultipart } from '~/server/utils/api/request'
@@ -104,7 +105,11 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
   if (!invoiceJson) return { ok: false, error: 'Missing invoice data' }
 
-  let parsed = normalizeInvoicePayload(JSON.parse(invoiceJson))
+  const parsedJson = parseJsonField(invoiceJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  let parsed = normalizeInvoicePayload(parsedJson.value)
   const validationError = validateInvoicePayload(parsed)
   if (validationError) return { ok: false, error: validationError }
 

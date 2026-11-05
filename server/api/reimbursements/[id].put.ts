@@ -1,3 +1,5 @@
+import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, releaseRemovedReimbursementReceipts, validateReimbursableReceipts } from '~/server/utils/reimbursements'
+import { parseJsonField } from '~/server/utils/api/request'
 import { isCashCountLocked, isReimbursementLocked, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
@@ -44,7 +46,9 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
 
   if (!reimbursementJson) return { ok: false, error: 'Missing reimbursement data' }
-  const updated = JSON.parse(reimbursementJson)
+  const parsedJson = parseJsonField(reimbursementJson)
+  if (!parsedJson.ok) return parsedJson
+  const updated = parsedJson.value
 
   const validationError = validateReimbursementBody(updated)
   if (validationError) return { ok: false, error: validationError }
@@ -156,6 +160,9 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
         conn
       )
 
+      const cancelledError = await validateReimbursableReceipts(uniqueIncomingReceiptIds, conn)
+      if (cancelledError) return { ok: false, error: cancelledError }
+
       const existingPositions: ReimbursementPositionRow[] = await query(
         `SELECT * FROM reimbursement_positions WHERE reimbursement_id = ?`,
         [reimbursementId],
@@ -163,6 +170,7 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
       )
 
       const remainingIncomingReceiptIds = [...uniqueIncomingReceiptIds]
+      const removedReceiptIds: number[] = []
 
       for (const position of existingPositions) {
         const matchIndex = remainingIncomingReceiptIds.indexOf(Number(position.receipt_id))
@@ -176,6 +184,7 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
           [position.id],
           conn
         )
+        removedReceiptIds.push(Number(position.receipt_id))
       }
 
       for (const receiptId of remainingIncomingReceiptIds) {
@@ -207,6 +216,8 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
         )
       }
 
+      await releaseRemovedReimbursementReceipts(reimbursementId, removedReceiptIds, conn)
+
       const targetStatus = statusFromReimbursement(updated)
 
       await query(
@@ -220,6 +231,7 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
       return { ok: true }
     })
   } catch (err: any) {
+    if (isDuplicateReceiptError(err)) return { ok: false, error: REIMBURSEMENT_RECEIPT_TAKEN }
     return internalError('Failed to update reimbursement', err)
   }
 })

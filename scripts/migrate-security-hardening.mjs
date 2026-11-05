@@ -8,6 +8,9 @@ import mariadb from 'mariadb'
  *   migration fails and lists them, an admin has to unlink the surplus records first.
  * - SEC-19: `members.account_deactivation_skipped` — set when the editor who marked a member as
  *   "left" may not deactivate the linked account; the leave dispatcher then leaves it active.
+ * - SEC-23: `reimbursement_positions.receipt_id` becomes UNIQUE — a receipt can be reimbursed once;
+ *   two concurrent saves can no longer both pass the "already reimbursed" check. Duplicates fail
+ *   the migration with a list instead of being removed.
  * - SEC-09: `system_events` — durable log (snapshot restores) that a restore itself never touches.
  */
 
@@ -83,6 +86,24 @@ async function memberDeactivationSkipped(conn) {
   console.log(`${LOG}: added members.account_deactivation_skipped`)
 }
 
+async function uniqueReimbursedReceipt(conn) {
+  if (await indexExists(conn, 'reimbursement_positions', 'uq_reimbursement_positions_receipt')) return
+
+  const duplicates = await conn.query(
+    `SELECT receipt_id, GROUP_CONCAT(reimbursement_id ORDER BY reimbursement_id) AS reimbursement_ids
+     FROM reimbursement_positions
+     GROUP BY receipt_id
+     HAVING COUNT(*) > 1`,
+  )
+  if (duplicates.length) {
+    const lines = duplicates.map(row => `  receipt ${row.receipt_id}: reimbursements ${row.reimbursement_ids}`).join('\n')
+    throw new Error(`Receipts are part of more than one reimbursement. Remove the surplus positions first, then re-run:\n${lines}`)
+  }
+
+  await conn.query(`ALTER TABLE reimbursement_positions ADD UNIQUE KEY uq_reimbursement_positions_receipt (receipt_id)`)
+  console.log(`${LOG}: added UNIQUE reimbursement_positions.receipt_id`)
+}
+
 async function migrate() {
   const migrationUser = DB_AUDIT_SETUP_USER || DB_USER
   const migrationPassword = DB_AUDIT_SETUP_USER
@@ -104,6 +125,7 @@ async function migrate() {
     await uniqueMemberAccount(conn)
     await systemEvents(conn)
     await memberDeactivationSkipped(conn)
+    await uniqueReimbursedReceipt(conn)
     console.log(`${LOG}: done`)
   } finally {
     if (conn) conn.release()

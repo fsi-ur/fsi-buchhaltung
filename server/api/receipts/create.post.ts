@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -30,7 +31,11 @@ export default defineEventHandler(async (event): Promise<CreateReceiptResponse> 
   const receiptJson = multipart.getField('receipt')
   if (!receiptJson) return { ok: false, error: 'Missing receipt data' }
 
-  const receipt = JSON.parse(receiptJson)
+  const parsedJson = parseJsonField(receiptJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const receipt = parsedJson.value
   const validationError = validateReceiptPayload(receipt)
   if (validationError) return { ok: false, error: validationError }
 

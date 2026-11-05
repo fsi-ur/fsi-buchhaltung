@@ -1,3 +1,4 @@
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -40,7 +41,11 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
 
   if (!receiptJson) return { ok: false, error: 'Missing receipt' }
 
-  const updated = JSON.parse(receiptJson)
+  const parsedJson = parseJsonField(receiptJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const updated = parsedJson.value
   const validationError = validateReceiptPayload(updated)
   if (validationError) return { ok: false, error: validationError }
 

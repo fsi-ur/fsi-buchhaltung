@@ -1,3 +1,5 @@
+import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, validateReimbursableReceipts } from '~/server/utils/reimbursements'
+import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -31,7 +33,11 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
   const reimbursementJson = multipart.getField('reimbursement')
   if (!reimbursementJson) return { ok: false, error: 'Missing reimbursement data' }
 
-  const reimbursement = JSON.parse(reimbursementJson)
+  const parsedJson = parseJsonField(reimbursementJson)
+
+  if (!parsedJson.ok) return parsedJson
+
+  const reimbursement = parsedJson.value
   const validationError = validateReimbursementBody(reimbursement)
   if (validationError) return { ok: false, error: validationError }
 
@@ -79,6 +85,9 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
       if (receiptIdsWithFiles.size !== uniqueReceiptIds.length) {
         return { ok: false, error: 'Each receipt in a reimbursement must have a file attached' }
       }
+
+      const cancelledError = await validateReimbursableReceipts(uniqueReceiptIds, conn)
+      if (cancelledError) return { ok: false, error: cancelledError }
 
       const reimbursementResult: any = await query(
         `INSERT INTO reimbursements
@@ -134,6 +143,7 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
       return { ok: true, reimbursementId }
     })
   } catch (err: any) {
+    if (isDuplicateReceiptError(err)) return { ok: false, error: REIMBURSEMENT_RECEIPT_TAKEN }
     return internalError('Failed to create reimbursement', err)
   }
 })

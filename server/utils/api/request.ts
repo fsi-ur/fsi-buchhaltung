@@ -95,3 +95,16 @@ export async function readMultipart(event: H3Event, options: { maxBytes?: number
     file,
   }
 }
+
+export const INVALID_JSON_ERROR = 'Ungültige Daten übermittelt.'
+
+/** JSON.parse for form fields: malformed input becomes a regular { ok: false } answer, not a 500 (SEC-23). */
+export function parseJsonField<T = any>(value: string): { ok: true, value: T } | { ok: false, error: string } {
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, error: INVALID_JSON_ERROR }
+    return { ok: true, value: parsed as T }
+  } catch {
+    return { ok: false, error: INVALID_JSON_ERROR }
+  }
+}

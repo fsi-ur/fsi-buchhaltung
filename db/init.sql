@@ -522,6 +522,7 @@ CREATE TABLE IF NOT EXISTS reimbursement_positions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   reimbursement_id BIGINT UNSIGNED NOT NULL,
   receipt_id BIGINT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_reimbursement_positions_receipt (receipt_id),
   FOREIGN KEY (reimbursement_id) REFERENCES reimbursements(id) ON DELETE CASCADE,
   FOREIGN KEY (receipt_id) REFERENCES receipts(id)
 );

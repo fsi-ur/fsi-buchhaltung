@@ -6,9 +6,17 @@ export function validateReceiptPayload(receipt: any) {
     return 'Missing required receipt fields'
   }
   if (receipt.positions.length > MAX_RECORD_POSITIONS) return TOO_MANY_POSITIONS
+  if (!Object.values(ReceiptStatus).includes(receipt.status)) return 'Invalid receipt status'
 
   if (receipt.positions.some((position: any) => !position?.sphere || !position?.cost_centre || position?.amount === null || position?.amount === undefined)) {
     return 'Each position requires sphere, cost centre and amount'
+  }
+
+  for (const position of receipt.positions) {
+    const amount = Number(position.amount)
+    if (!Number.isFinite(amount) || Math.abs(amount) >= 100_000_000) return 'Ungültiger Betrag in einer Position.'
+    const tax = position.tax === undefined || position.tax === null ? 19 : Number(position.tax)
+    if (!Number.isInteger(tax) || tax < 0 || tax > 100) return 'Ungültiger Steuersatz in einer Position.'
   }
 
   return null

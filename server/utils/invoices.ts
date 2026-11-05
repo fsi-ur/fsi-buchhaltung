@@ -58,7 +58,14 @@ export function invoiceNeedsUploadedFile(sourceType: InvoiceSourceType | string)
   return sourceType === InvoiceSourceType.Upload
 }
 
-export function normalizeInvoicePayload(invoice: CreateInvoiceBody): CreateInvoiceBody {
+function trimmedOrNull(value: unknown) {
+  return typeof value === 'string' ? value.trim() || null : null
+}
+
+/** Coerces an untrusted payload into the expected shape (SEC-23) — validation follows separately. */
+export function normalizeInvoicePayload(input: CreateInvoiceBody): CreateInvoiceBody {
+  const invoice = (input && typeof input === 'object' ? input : {}) as CreateInvoiceBody
+  const positions = Array.isArray(invoice.positions) ? invoice.positions.filter(p => p && typeof p === 'object') : []
   return {
     company_id: invoice.company_id ? Number(invoice.company_id) : null,
     source_type: invoice.source_type,
@@ -66,22 +73,22 @@ export function normalizeInvoicePayload(invoice: CreateInvoiceBody): CreateInvoi
     invoice_date: String(invoice.invoice_date || ''),
     due_date: String(invoice.due_date || ''),
     paid_at: invoice.paid_at ? String(invoice.paid_at) : null,
-    contact_person: invoice.contact_person?.trim() || null,
-    recipient_attention: invoice.recipient_attention?.trim() || null,
+    contact_person: trimmedOrNull(invoice.contact_person),
+    recipient_attention: trimmedOrNull(invoice.recipient_attention),
     service_date: invoice.service_date ? String(invoice.service_date) : null,
     invoice_number: String(invoice.invoice_number || '').trim(),
-    subject: invoice.subject?.trim() || null,
-    intro_text: invoice.intro_text?.trim() || null,
-    notes: invoice.notes?.trim() || null,
+    subject: trimmedOrNull(invoice.subject),
+    intro_text: trimmedOrNull(invoice.intro_text),
+    notes: trimmedOrNull(invoice.notes),
     status: invoice.status,
-    positions: invoice.positions.map(position => ({
+    positions: positions.map(position => ({
       id: position.id ? Number(position.id) : undefined,
       name: String(position.name || '').trim(),
       description: String(position.description || '').trim() || null,
       sphere: Number(position.sphere),
       cost_centre: Number(position.cost_centre),
       quantity: Number(position.quantity),
-      unit: position.unit?.trim() || null,
+      unit: trimmedOrNull(position.unit),
       unit_price: Number(position.unit_price),
       tax: Number(position.tax),
     })),
