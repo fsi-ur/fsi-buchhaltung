@@ -24,6 +24,7 @@
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
       :file="file"
       :remove-existing-file="removeExistingFile"
+      :record-unlocked="recordLocked && unlocked"
       :disabled="!canEdit"
       :saving="isSaving"
       :opening-balance="openingBalance"
@@ -136,6 +137,7 @@ onMounted(async () => {
       const res = await apiFetch<GetBankStatementResponse>(String(`/api/bank_statements/${bankStatementId.value}`), { method: 'GET' })
       if (res.ok) {
         recordLocked.value = Boolean(res.locked)
+        unlocked.value = pageMeta.value?.recordUnlocked === true
         openingBalance.value = res.bankStatement.opening_balance
         if (res.file && !removeExistingFile.value) {
           existingFile.value = {
@@ -191,6 +193,7 @@ onMounted(async () => {
       return
     }
 
+    recordLocked.value = Boolean(res.locked)
     form.value = {
       statement_number: res.bankStatement.statement_number,
       checked_by: res.bankStatement.checked_by,

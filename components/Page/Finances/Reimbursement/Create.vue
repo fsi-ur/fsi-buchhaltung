@@ -24,6 +24,7 @@
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
       :file="file"
       :remove-existing-file="removeExistingFile"
+      :record-unlocked="recordLocked && unlocked"
       :disabled="!canEdit"
       :can-create-receipt="canCreateReceipt"
       :can-edit-receipt="canEditReceipt"
@@ -161,6 +162,10 @@ onMounted(async () => {
     if (reimbursementId.value) {
       isEditMode.value = true
       const res = await apiFetch<GetReimbursementResponse>(`/api/reimbursements/${reimbursementId.value}`, { method: 'GET' })
+      if (res.ok) {
+        recordLocked.value = Boolean(res.locked)
+        unlocked.value = pageMeta.value?.recordUnlocked === true
+      }
       if (res.ok && res.file && !removeExistingFile.value) {
         existingFile.value = {
           id: res.file.id,
