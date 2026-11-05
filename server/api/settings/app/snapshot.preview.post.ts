@@ -40,7 +40,7 @@ export default defineEventHandler(async (event): Promise<PreviewSnapshotResponse
       if (!snapshotFile) throw new Error('Missing encrypted snapshot')
 
       const password = multipart.getField('password')
-      const snapshot = parseEncryptedDatabaseSnapshot(snapshotFile.data, password)
+      const snapshot = await parseEncryptedDatabaseSnapshot(snapshotFile.data, password)
       const preview = await previewDatabaseSnapshotForCurrentSchema(snapshot)
       const restoreToken = createSnapshotRestoreSession(current.user.id, snapshot, preview)
 

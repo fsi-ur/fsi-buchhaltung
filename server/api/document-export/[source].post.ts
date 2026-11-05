@@ -1,3 +1,4 @@
+import { acquireExportSlot } from '~/server/utils/documentExport/concurrency'
 import { defineEventHandler, readBody, setHeader } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getAssociationLogoForInvoice, getAssociationProfileForInvoice } from '~/server/utils/invoices'
@@ -29,6 +30,9 @@ export default defineEventHandler(async (event) => {
   if (request.costCentre && !DOCUMENT_EXPORT_COST_CENTRE_SCOPE[key]) {
     return { ok: false as const, error: 'Dieser Export kann nicht nach Kostenstelle erfolgen.' }
   }
+
+  const slot = acquireExportSlot(Number(current.user.id))
+  if (!slot.ok) return { ok: false as const, error: slot.error }
 
   try {
     const resolved = await resolveDocumentExportScope(request.costCentre)
@@ -74,5 +78,7 @@ export default defineEventHandler(async (event) => {
   } catch (err: any) {
     console.error(`document export (${key}) failed`, err)
     return { ok: false as const, error: 'Der Export konnte nicht erstellt werden.' }
+  } finally {
+    slot.release()
   }
 })

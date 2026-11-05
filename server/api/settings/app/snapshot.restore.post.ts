@@ -58,7 +58,7 @@ export default defineEventHandler(async (event): Promise<RestoreSnapshotResponse
 
       const snapshot = restoreToken
         ? consumeSnapshotRestoreSession(current.user.id, restoreToken).snapshot
-        : (() => {
+        : await (async () => {
             if (!snapshotFile) throw new Error('Missing encrypted snapshot')
             const password = multipart.getField('password')
             return parseEncryptedDatabaseSnapshot(snapshotFile.data, password)

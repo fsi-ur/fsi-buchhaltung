@@ -165,18 +165,22 @@ function normalizeSnapshotPassword(password: unknown) {
   return value
 }
 
-function deriveSnapshotEncryptionKey(password: string, salt: Buffer) {
-  return crypto.scryptSync(password, salt, 32, ENCRYPTED_SNAPSHOT_SCRYPT_OPTIONS)
+// scrypt with N=32768 takes a noticeable moment; the async variant runs on the libuv pool instead
+// of blocking every other request on the event loop (SEC-32).
+function deriveSnapshotEncryptionKey(password: string, salt: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 32, ENCRYPTED_SNAPSHOT_SCRYPT_OPTIONS, (err, key) => (err ? reject(err) : resolve(key)))
+  })
 }
 
 export function isEncryptedSnapshotBuffer(value: Buffer) {
   return value.subarray(0, ENCRYPTED_SNAPSHOT_MAGIC.length).equals(ENCRYPTED_SNAPSHOT_MAGIC)
 }
 
-function buildEncryptedSnapshotHeader(password: string) {
+async function buildEncryptedSnapshotHeader(password: string) {
   const salt = crypto.randomBytes(16)
   const iv = crypto.randomBytes(12)
-  const key = deriveSnapshotEncryptionKey(password, salt)
+  const key = await deriveSnapshotEncryptionKey(password, salt)
   const header: EncryptedSnapshotHeader = {
     format: ENCRYPTED_SNAPSHOT_FORMAT,
     version: 1,
@@ -193,13 +197,14 @@ function buildEncryptedSnapshotHeader(password: string) {
 
 export function createEncryptedDatabaseSnapshotStream(passwordValue: unknown) {
   const password = normalizeSnapshotPassword(passwordValue)
-  const { header, key, iv } = buildEncryptedSnapshotHeader(password)
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: ENCRYPTED_SNAPSHOT_TAG_LENGTH })
-  const headerBuffer = Buffer.from(JSON.stringify(header), 'utf8')
-  const headerLength = Buffer.alloc(4)
-  headerLength.writeUInt32BE(headerBuffer.length, 0)
 
   return Readable.from((async function* () {
+    const { header, key, iv } = await buildEncryptedSnapshotHeader(password)
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: ENCRYPTED_SNAPSHOT_TAG_LENGTH })
+    const headerBuffer = Buffer.from(JSON.stringify(header), 'utf8')
+    const headerLength = Buffer.alloc(4)
+    headerLength.writeUInt32BE(headerBuffer.length, 0)
+
     yield ENCRYPTED_SNAPSHOT_MAGIC
     yield headerLength
     yield headerBuffer
@@ -215,7 +220,7 @@ export function createEncryptedDatabaseSnapshotStream(passwordValue: unknown) {
   })())
 }
 
-export function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwordValue: unknown) {
+export async function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwordValue: unknown) {
   if (!isEncryptedSnapshotBuffer(encryptedSnapshot)) throw new SnapshotError('notEncrypted', 'Snapshot is not encrypted')
   const password = normalizeSnapshotPassword(passwordValue)
 
@@ -249,7 +254,7 @@ export function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwor
 
   const salt = Buffer.from(header.salt, 'base64')
   const iv = Buffer.from(header.iv, 'base64')
-  const key = deriveSnapshotEncryptionKey(password, salt)
+  const key = await deriveSnapshotEncryptionKey(password, salt)
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: ENCRYPTED_SNAPSHOT_TAG_LENGTH })
   decipher.setAuthTag(encryptedSnapshot.subarray(tagStart))
 
@@ -264,8 +269,8 @@ export function decryptDatabaseSnapshotBuffer(encryptedSnapshot: Buffer, passwor
   }
 }
 
-export function parseEncryptedDatabaseSnapshot(encryptedSnapshot: Buffer, passwordValue: unknown) {
-  const decrypted = decryptDatabaseSnapshotBuffer(encryptedSnapshot, passwordValue)
+export async function parseEncryptedDatabaseSnapshot(encryptedSnapshot: Buffer, passwordValue: unknown) {
+  const decrypted = await decryptDatabaseSnapshotBuffer(encryptedSnapshot, passwordValue)
   try {
     return JSON.parse(decrypted.toString('utf8'))
   } catch {

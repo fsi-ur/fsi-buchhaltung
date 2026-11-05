@@ -39,7 +39,7 @@ describe('snapshot signing and restore log', () => {
   it('the streamed (downloaded) snapshot carries a valid signature', async () => {
     const chunks: Buffer[] = []
     for await (const chunk of createEncryptedDatabaseSnapshotStream('ein-langes-passwort')) chunks.push(Buffer.from(chunk))
-    const snapshot = parseEncryptedDatabaseSnapshot(Buffer.concat(chunks), 'ein-langes-passwort')
+    const snapshot = await parseEncryptedDatabaseSnapshot(Buffer.concat(chunks), 'ein-langes-passwort')
     const preview = previewDatabaseSnapshot(snapshot)
     expect(preview.integrity.valid).toBe(true)
     expect(preview.signature.valid).toBe(true)
