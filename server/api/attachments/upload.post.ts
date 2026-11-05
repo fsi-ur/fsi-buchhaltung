@@ -1,7 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { hasPermission, requireAuth } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
-import { storeUploadedFile, validateUploadedFile } from '~/server/utils/files'
+import { sniffUploadType, storeUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { withAuditTransaction } from '~/server/utils/db'
 import { ATTACHMENT_UPLOAD_FOLDER } from '~/server/utils/attachments'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event): Promise<UploadAttachmentRespons
         fileId,
         fileName: file.filename || 'Datei',
         fileSize: file.data.length,
-        mimeType: file.type || 'application/octet-stream',
+        mimeType: sniffUploadType(file.data) ?? 'application/octet-stream',
       },
     }
   } catch (err: any) {

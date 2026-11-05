@@ -21,10 +21,33 @@ export const ALLOWED_UPLOAD_MIME = [
 
 export const MAX_UPLOAD_SIZE = Number(process.env.MAX_UPLOAD_MB || 5) * 1024 * 1024
 
+export type SniffedUploadType = 'application/pdf' | 'image/png' | 'image/jpeg'
+
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+const PDF_MAGIC = Buffer.from('%PDF-', 'ascii')
+
+/**
+ * The real type of an upload, from its first bytes (SEC-21) — the client's MIME type and file
+ * extension are not trusted. PDF readers accept up to 1 KB of junk before the header, so do we.
+ */
+export function sniffUploadType(data: Buffer): SniffedUploadType | null {
+  if (data.length >= 8 && data.subarray(0, 8).equals(PNG_MAGIC)) return 'image/png'
+  if (data.length >= 3 && data[0] === 0xFF && data[1] === 0xD8 && data[2] === 0xFF) return 'image/jpeg'
+  if (data.subarray(0, 1024).includes(PDF_MAGIC)) return 'application/pdf'
+  return null
+}
+
+const EXTENSION_BY_TYPE: Record<SniffedUploadType, string> = {
+  'application/pdf': '.pdf',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+}
+
 export function validateUploadedFile(file: UploadedFile | null, requiredMessage?: string) {
   if (!file) return requiredMessage ?? null
   if (!ALLOWED_UPLOAD_MIME.includes(file.type || '')) return 'Invalid file type'
   if (file.data.length > MAX_UPLOAD_SIZE) return 'File too large'
+  if (!sniffUploadType(file.data)) return 'Invalid file type'
   return null
 }
 
@@ -38,7 +61,9 @@ export async function storeUploadedFile(
   const uploadDir = path.join(uploadRoot, folder)
   await fs.mkdir(uploadDir, { recursive: true })
 
-  const ext = path.extname(file.filename || '')
+  // Type and extension come from the bytes, never from the client (SEC-21).
+  const sniffedType = sniffUploadType(file.data)
+  const ext = sniffedType ? EXTENSION_BY_TYPE[sniffedType] : ''
   const filename = crypto.randomUUID() + ext
   const filePath = path.join(uploadDir, filename)
 
@@ -51,7 +76,7 @@ export async function storeUploadedFile(
     [
       `/uploads/${folder}/${filename}`,
       file.filename || filename,
-      file.type || 'application/octet-stream',
+      sniffedType ?? 'application/octet-stream',
       file.data.length,
       userId,
     ],
