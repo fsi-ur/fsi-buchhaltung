@@ -1,5 +1,6 @@
+import { isEventOrganizer } from '~/server/utils/events'
 import { defineEventHandler, readBody } from 'h3'
-import { requirePermission } from '~/server/utils/api/guards'
+import { hasPermission, requirePermission } from '~/server/utils/api/guards'
 import { withAuditTransaction } from '~/server/utils/db'
 import { enqueueNotification } from '~/server/utils/notifications/enqueue'
 import { getScheduleBounds, validateCustomNotification } from '~/server/utils/notifications/custom'
@@ -41,6 +42,10 @@ export default defineEventHandler(async (event): Promise<CreateNotificationRespo
     const eventId = Number(body.shiftPlan.eventId)
     if (!Number.isInteger(eventId) || eventId <= 0 || !await eventExists(eventId)) {
       return { ok: false, error: 'Die Veranstaltung für den Schichtplan wurde nicht gefunden.' }
+    }
+    // The shift plan lists names and shifts of the event — only for senders who may see it (SEC-29).
+    if (!hasPermission(current.user, 'events.view') && !await isEventOrganizer(Number(current.user.id), eventId)) {
+      return { ok: false, error: 'Du darfst den Schichtplan dieser Veranstaltung nicht versenden.' }
     }
     payload.shift_plan_event_id = eventId
     payload.shift_plan_descriptions = Boolean(body.shiftPlan.includeDescriptions)
