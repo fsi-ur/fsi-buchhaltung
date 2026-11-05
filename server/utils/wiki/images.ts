@@ -1,3 +1,4 @@
+import { checkUploadedImageDimensions } from '~/server/utils/imageLimits'
 import { resolveStoredFilePath } from '~/server/utils/storedFilePath'
 import fs from 'fs/promises'
 import path from 'path'
@@ -27,6 +28,8 @@ export function validateWikiImage(file: UploadedFile | null):
   }
   const mimeType = sniffWikiImageType(file.data)
   if (!mimeType) return { ok: false, error: 'Es sind nur Bilder im Format PNG oder JPEG erlaubt.' }
+  const dimensionError = checkUploadedImageDimensions(file.data)
+  if (dimensionError) return { ok: false, error: dimensionError }
   return { ok: true, mimeType }
 }
 

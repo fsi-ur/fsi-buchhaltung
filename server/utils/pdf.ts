@@ -1,3 +1,4 @@
+import { areImageDimensionsAcceptable } from '~/server/utils/imageLimits'
 import { deflateSync, inflateSync } from 'zlib'
 
 export type PdfFontName = 'F1' | 'F2' | 'F3' | 'F4' | 'F5'
@@ -550,6 +551,7 @@ function buildPngImageObject(data: Buffer): PdfImageObject | null {
   const interlace = data[28]
 
   if (!width || !height || compression !== 0 || filter !== 0 || interlace !== 0) return null
+  if (!areImageDimensionsAcceptable(width, height)) return null
   const channels = PNG_CHANNELS[colorType]
   if (!channels || !PNG_BIT_DEPTHS[colorType]!.includes(bitDepth)) return null
 
@@ -573,16 +575,18 @@ function buildPngImageObject(data: Buffer): PdfImageObject | null {
   if (!idatChunks.length) return null
   if (colorType === 3 && !palette) return null
 
+  const bitsPerPixel = channels * bitDepth
+  const bytesPerPixel = Math.max(1, Math.ceil(bitsPerPixel / 8))
+  const stride = Math.ceil((width * bitsPerPixel) / 8)
+
   let inflated: Buffer
   try {
-    inflated = inflateSync(Buffer.concat(idatChunks))
+    // Never inflate more than the header promises (decompression bombs, SEC-11).
+    inflated = inflateSync(Buffer.concat(idatChunks), { maxOutputLength: (stride + 1) * height })
   } catch {
     return null
   }
 
-  const bitsPerPixel = channels * bitDepth
-  const bytesPerPixel = Math.max(1, Math.ceil(bitsPerPixel / 8))
-  const stride = Math.ceil((width * bitsPerPixel) / 8)
   if (inflated.length < (stride + 1) * height) return null
 
   const rows = unfilterPngScanlines(inflated, stride, height, bytesPerPixel)
