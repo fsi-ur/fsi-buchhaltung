@@ -28,7 +28,7 @@ export type LoginResponse = LoginSuccess | LoginError
 
 function rateLimited(event: Parameters<typeof setResponseStatus>[0], retryMs: number): LoginError {
   setResponseStatus(event, 429)
-  setResponseHeader(event, 'Retry-After', String(Math.ceil(retryMs / 1000)))
+  setResponseHeader(event, 'Retry-After', Math.ceil(retryMs / 1000))
   return { ok: false, error: 'Too many login attempts', code: 'rate_limited' }
 }
 

@@ -17,6 +17,6 @@ export default defineEventHandler((event) => {
   if (!retryMs) return
 
   setResponseStatus(event, 429)
-  setResponseHeader(event, 'Retry-After', String(Math.ceil(retryMs / 1000)))
+  setResponseHeader(event, 'Retry-After', Math.ceil(retryMs / 1000))
   return { ok: false, error: 'Too many requests' }
 })
