@@ -48,7 +48,14 @@ export interface WikiRenderOptions {
   knownChecklists?: string[]
   //File ids of the images uploaded into the article
   knownImages?: number[]
+  /**
+   * Publish/preview/agenda save: an image that is not an uploaded `bild:` reference is an error
+   * (SEC-27 — external images are tracking pixels). Otherwise such images render as their alt text.
+   */
+  rejectExternalImages?: boolean
 }
+
+export const EXTERNAL_IMAGE_ERROR = 'Externe Bilder sind nicht erlaubt. Bitte lade das Bild über „Bild einfügen“ hoch.'
 
 interface RenderEnv {
   errors: string[]
@@ -61,6 +68,7 @@ interface RenderEnv {
   images: number[]
   knownChecklists: string[] | null
   knownImages: number[] | null
+  rejectExternalImages: boolean
 }
 
 const CALLOUT_NAMES = ['hinweis', 'warnung', 'tipp'] as const
@@ -313,7 +321,10 @@ function wikiImagesRule(state: any) {
       if (token.type !== 'image') continue
 
       const src = String(token.attrGet('src') ?? '')
-      if (!/^bild:/i.test(src)) continue
+      if (!/^bild:/i.test(src)) {
+        if (env.rejectExternalImages) env.errors.push(EXTERNAL_IMAGE_ERROR)
+        continue
+      }
 
       const fileId = parseWikiImageRef(src)
       if (fileId === null) {
@@ -415,6 +426,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     '*': ['class', 'id', 'data-wiki-image', 'data-wiki-embed', 'data-wiki-args', 'data-wiki-tool', 'data-wiki-tool-meta', 'data-wiki-checklist', 'data-wiki-article', 'data-wiki-glossary', 'data-wiki-callout', 'data-wiki-label'],
     a: ['href', 'title', 'rel', 'target'],
     img: ['src', 'alt', 'title', 'loading'],
+    span: ['class'],
     th: ['colspan', 'rowspan', 'scope'],
     td: ['colspan', 'rowspan'],
   },
@@ -422,6 +434,12 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowProtocolRelative: false,
   disallowedTagsMode: 'discard',
   transformTags: {
+    // Only uploaded article images (/api/files/<id>); anything else becomes its alt text, so old
+    // content and cached HTML with external images stop loading them (SEC-27).
+    img: (tagName, attribs) => {
+      if (/^\/api\/files\/\d+$/.test(attribs.src ?? '')) return { tagName, attribs }
+      return { tagName: 'span', attribs: { class: 'wiki-image-removed' }, text: attribs.alt ?? '' }
+    },
     a: (tagName, attribs) => {
       if (!attribs.href) return { tagName, attribs }
       return { tagName, attribs: { ...attribs, target: '_blank', rel: 'noopener noreferrer' } }
@@ -472,6 +490,7 @@ export function renderArticle(markdown: string, options: WikiRenderOptions = {})
     images: [],
     knownChecklists: options.knownChecklists ?? null,
     knownImages: options.knownImages ?? null,
+    rejectExternalImages: options.rejectExternalImages === true,
   }
 
   const source = markdown ?? ''
@@ -515,7 +534,13 @@ export function parseArticleTokens(markdown: string, options: WikiRenderOptions 
     images: [],
     knownChecklists: options.knownChecklists ?? null,
     knownImages: options.knownImages ?? null,
+    rejectExternalImages: options.rejectExternalImages === true,
   }
 
   return renderer.parse(markdown ?? '', { wiki: env })
+}
+
+/** Re-sanitizes stored HTML with the current rules (cached content_html from older renderers). */
+export function sanitizeWikiHtml(html: string) {
+  return sanitizeHtml(html, SANITIZE_OPTIONS)
 }

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event): Promise<PreviewResponse> => {
     if (canReadArticle(index, subjects, articleId)) knownImages = await loadArticleImageIds(articleId)
   }
 
-  const rendered = renderArticle(markdown, { knownChecklists, knownImages })
+  const rendered = renderArticle(markdown, { knownChecklists, knownImages, rejectExternalImages: true })
   if (!rendered.ok) return rendered
 
   return { ok: true, html: rendered.html, headings: rendered.headings }

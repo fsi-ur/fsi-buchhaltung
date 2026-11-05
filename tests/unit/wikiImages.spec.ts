@@ -1,6 +1,6 @@
 import { deflateSync, inflateSync } from 'zlib'
 import { describe, expect, it } from 'vitest'
-import { renderArticle } from '~/server/utils/wiki/render'
+import { renderArticle, sanitizeWikiHtml, EXTERNAL_IMAGE_ERROR } from '~/server/utils/wiki/render'
 import { altFromFileName, sniffWikiImageType, validateWikiImage, wikiImageMarkdown } from '~/server/utils/wiki/images'
 import { findImageReferencesInText } from '~/shared/wikiImages'
 import { buildImageObject, buildPdfDocument } from '~/server/utils/pdf'
@@ -88,9 +88,10 @@ describe('renderArticle with bild: images', () => {
     expect(outcome.ok && outcome.images).toEqual([7])
   })
 
-  it('leaves external images alone', () => {
+  it('does not load external images — they render as their alt text (SEC-27)', () => {
     const outcome = renderArticle('![Logo](https://example.org/logo.png)', { knownImages: [] })
-    expect(outcome.ok && outcome.html).toContain('<img src="https://example.org/logo.png" alt="Logo" />')
+    expect(outcome.ok && outcome.html).toContain('<span class="wiki-image-removed">Logo</span>')
+    expect(outcome.ok && outcome.html).not.toContain('example.org')
   })
 })
 
@@ -220,5 +221,29 @@ describe('buildWikiArticlePdf', () => {
     expect(pdf.match(/\/Im2 Do/g)).toHaveLength(2)
     expect(pdf).not.toContain('/Im3')
     expect(pdf).toContain('[Bild: Fehlt]')
+  })
+})
+
+describe('external images (SEC-27)', () => {
+  const markdown = 'Text ![Logo](https://tracker.example/pixel.gif) mehr'
+
+  it('renders external images as their alt text', () => {
+    const outcome = renderArticle(markdown)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.html).not.toContain('tracker.example')
+    expect(outcome.html).toContain('Logo')
+    expect(outcome.html).not.toContain('<img')
+  })
+
+  it('refuses them on publish/preview', () => {
+    expect(renderArticle(markdown, { rejectExternalImages: true })).toEqual({ ok: false, error: EXTERNAL_IMAGE_ERROR })
+  })
+
+  it('strips external images from cached HTML', () => {
+    const cached = '<p><img src="https://tracker.example/p.gif" alt="x"><img class="wiki-image" src="/api/files/5" alt="ok"></p>'
+    const clean = sanitizeWikiHtml(cached)
+    expect(clean).not.toContain('tracker.example')
+    expect(clean).toContain('/api/files/5')
   })
 })

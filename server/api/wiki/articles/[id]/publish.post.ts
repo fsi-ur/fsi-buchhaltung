@@ -52,6 +52,7 @@ export default defineEventHandler(async (event): Promise<PublishWikiArticleRespo
   const rendered = renderArticle(markdown, {
     knownChecklists: checklistRows.map(row => row.key_slug),
     knownImages: await loadArticleImageIds(articleId),
+    rejectExternalImages: true,
   })
   if (!rendered.ok) return rendered
 
