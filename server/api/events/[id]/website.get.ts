@@ -3,6 +3,7 @@ import { hasPermission, requireAuth } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import { loadEventWebsiteSettings } from '~/server/utils/eventWebsite'
 import type { EventWebsiteSettings } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventWebsiteSuccess {
   ok: true
@@ -34,6 +35,6 @@ export default defineEventHandler(async (event): Promise<GetEventWebsiteResponse
 
     return { ok: true, website, canPublish: hasPermission(current.user, 'events.publish') }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load website settings: ${err}` }
+    return internalError('Failed to load website settings', err)
   }
 })

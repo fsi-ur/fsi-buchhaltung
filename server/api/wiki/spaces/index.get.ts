@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { WikiSpaceAdminView } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type WikiSpaceListResponse =
   | { ok: true, spaces: WikiSpaceAdminView[] }
@@ -58,6 +59,6 @@ export default defineEventHandler(async (event): Promise<WikiSpaceListResponse> 
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the wiki spaces: ${err}` }
+    return internalError('Failed to load the wiki spaces', err)
   }
 })

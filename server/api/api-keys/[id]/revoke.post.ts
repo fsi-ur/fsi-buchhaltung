@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import { revokeApiKey } from '~/server/utils/apiKeys'
 import { withAuditTransaction } from '~/server/utils/db'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RevokeApiKeySuccess {
   ok: true
@@ -28,6 +29,6 @@ export default defineEventHandler(async (event): Promise<RevokeApiKeyResponse> =
       return revoked ? { ok: true } : { ok: false, error: 'API key not found or already revoked' }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to revoke API key: ${err}` }
+    return internalError('Failed to revoke API key', err)
   }
 })

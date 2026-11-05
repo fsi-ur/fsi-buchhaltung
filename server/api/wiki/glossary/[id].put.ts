@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { glossaryKey, isGlossaryKeyTaken, parseGlossaryInput, replaceAliases } from '~/server/utils/wiki/glossary'
+import { internalError } from '~/server/utils/api/errors'
 
 export type UpdateWikiGlossaryTermResponse = { ok: true } | { ok: false, error: string }
 
@@ -45,6 +46,6 @@ export default defineEventHandler(async (event): Promise<UpdateWikiGlossaryTermR
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to update the glossary term: ${err}` }
+    return internalError('Failed to update the glossary term', err)
   }
 })

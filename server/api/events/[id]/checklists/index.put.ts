@@ -10,6 +10,7 @@ import {
 } from '~/server/utils/eventChecklists'
 import { eventExists } from '~/server/utils/eventShifts'
 import type { EventChecklist } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventChecklistsSuccess {
   ok: true
@@ -53,6 +54,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventChecklistsRe
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update event checklists: ${err}` }
+    return internalError('Failed to update event checklists', err)
   }
 })

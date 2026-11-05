@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { isPageHelpMapped, normalizeSectionKey, validatePageHelpInput } from '~/server/utils/wiki/pageHelp'
+import { internalError } from '~/server/utils/api/errors'
 
 export type CreateWikiPageHelpResponse =
   | { ok: true, entryId: number }
@@ -53,6 +54,6 @@ export default defineEventHandler(async (event): Promise<CreateWikiPageHelpRespo
 
     return { ok: true, entryId }
   } catch (err: any) {
-    return { ok: false, error: `Failed to create the page help mapping: ${err}` }
+    return internalError('Failed to create the page help mapping', err)
   }
 })

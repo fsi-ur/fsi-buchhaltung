@@ -7,6 +7,7 @@ import { getAttachedFile, getEntityIdsWithActiveFiles } from '~/server/utils/fil
 import type { Reimbursement, ReimbursementPosition, ReimbursementRow } from '~/types/reimbursement'
 import { ReceiptStatus } from '~/types/receipt'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetReimbursementSuccess {
   ok: true
@@ -141,6 +142,6 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
       file: file ?? null
     }
   } catch (err: any) {
-    return { ok: false, error: `An error occurred while fetching a reimbursement: ${err}` }
+    return internalError('An error occurred while fetching a reimbursement', err)
   }
 })

@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { toggleActiveRecord } from '~/server/utils/api/toggle'
 import type { ActivateBody, ActivateResponse } from '~/types/activate'
 import { canManageUser } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 export default defineEventHandler(async (event): Promise<ActivateResponse> => {
   const current = await requirePermission(event, 'users.manage')
@@ -26,6 +27,6 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       notFoundMessage: 'No matching user in database',
     })
   } catch (err: any) {
-    return { ok: false, error: `An error occured while activating/deactivating the user: ${err}` }
+    return internalError('An error occured while activating/deactivating the user', err)
   }
 })

@@ -4,6 +4,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { MIN_PASSWORD_LENGTH } from '~/config/validation'
 import { canManageUser } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 interface AdminSetPasswordBody {
   user_id?: number
@@ -57,7 +58,7 @@ export default defineEventHandler(async (event): Promise<AdminSetPasswordRespons
     })
   } catch (err: any) {
     if (err?.message === 'User not found') return { ok: false, error: 'User not found' }
-    return { ok: false, error: err?.code || 'Failed to set password' }
+    return internalError('Failed to set password', err)
   }
 
   return { ok: true }

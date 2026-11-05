@@ -6,6 +6,7 @@ import { getAttachedFile } from '~/server/utils/files'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { BankStatementRow, BankStatementPositionDetail } from '~/types/bankStatement'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetBankStatementSuccess {
   ok: true
@@ -136,6 +137,6 @@ export default defineEventHandler(async (event): Promise<GetBankStatementRespons
       file: fileRow ? normalizeBigInt(fileRow) : null,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load bank statement: ${err}` }
+    return internalError('Failed to load bank statement', err)
   }
 })

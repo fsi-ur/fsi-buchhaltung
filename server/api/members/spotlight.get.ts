@@ -5,6 +5,7 @@ import { MemberStatus, type MemberBirthday, type MemberSpotlightStats } from '~/
 import { parseMemberStatus } from '~/server/utils/members'
 import { appTodayLocalDate } from '~/server/utils/time'
 import { addDaysToLocalDate, diffLocalDates, isLocalDate, type LocalDate } from '~/shared/time'
+import { internalError } from '~/server/utils/api/errors'
 
 const BIRTHDAY_HORIZON_DAYS = 60
 const MAX_BIRTHDAYS = 4
@@ -124,6 +125,6 @@ export default defineEventHandler(async (event): Promise<GetMemberSpotlightRespo
       canViewUsers,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load member spotlight: ${err}` }
+    return internalError('Failed to load member spotlight', err)
   }
 })

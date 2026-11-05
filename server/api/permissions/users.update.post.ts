@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { isValidPermissionKey } from '~/server/utils/permissions'
 import { syncScalarCollection } from '~/server/utils/syncScalarCollection'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateUserAccessBody {
   user_id: number
@@ -123,6 +124,6 @@ export default defineEventHandler(async (event): Promise<UpdateUserAccessRespons
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to update user access: ${err}` }
+    return internalError('Failed to update user access', err)
   }
 })

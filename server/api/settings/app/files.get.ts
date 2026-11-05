@@ -114,6 +114,7 @@ export default defineEventHandler(async (event) => {
 
     return sendStream(event, Readable.from(tarArchiveStream(files)))
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to create files archive', message: String(err?.message || err) })
+    console.error('Failed to create files archive:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to create files archive' })
   }
 })

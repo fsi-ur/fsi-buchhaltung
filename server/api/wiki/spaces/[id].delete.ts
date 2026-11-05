@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getWikiAccess, invalidateWikiAccess } from '~/server/utils/wiki/access'
 import { deleteScopeGrants } from '~/server/utils/wiki/grants'
+import { internalError } from '~/server/utils/api/errors'
 
 export type DeleteWikiSpaceResponse = { ok: true } | { ok: false, error: string }
 
@@ -34,6 +35,6 @@ export default defineEventHandler(async (event): Promise<DeleteWikiSpaceResponse
     invalidateWikiAccess(event)
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to delete wiki space: ${err}` }
+    return internalError('Failed to delete wiki space', err)
   }
 })

@@ -4,6 +4,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
 import type { CostCentreRow, SaveCostCentreBody } from '~/types/costCentre'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveCostCentreSuccess {
   ok: true
@@ -139,6 +140,6 @@ export default defineEventHandler(async (event): Promise<SaveCostCentreResponse>
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the cost centre: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the cost centre', err)
   }
 })

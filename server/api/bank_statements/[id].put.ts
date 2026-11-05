@@ -16,6 +16,7 @@ import {
 import { ReceiptStatus } from '~/types/receipt'
 import { InvoiceStatus } from '~/types/invoice'
 import type { BankStatementPositionRow } from '~/types/bankStatement'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateBankStatementSuccess {
   ok: true
@@ -196,6 +197,6 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update bank statement: ${err}` }
+    return internalError('Failed to update bank statement', err)
   }
 })

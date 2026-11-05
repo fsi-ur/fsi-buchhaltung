@@ -4,6 +4,7 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { isEventOrganizer } from '~/server/utils/events'
 import { eventExists, loadCurrentMemberIdForUser, loadEventShiftSlots, loadEventShiftTemplates, loadEventShiftTypeDescriptions } from '~/server/utils/eventShifts'
 import type { EventShiftSlot, EventShiftTemplate, EventShiftTypeDescriptions } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventShiftsSuccess {
   ok: true
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<GetEventShiftsResponse>
       canSelfSignup: hasPermission(current.user, ['events.edit', 'events.shifts.signup']) || organizer,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load event shifts: ${err}` }
+    return internalError('Failed to load event shifts', err)
   }
 })

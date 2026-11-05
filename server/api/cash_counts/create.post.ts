@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
 import { normalizeCashCountBody, validateCashCountBody, validateCashCountRelations } from '~/server/utils/cashCounts'
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateCashCountSuccess {
   ok: true
@@ -84,6 +85,6 @@ export default defineEventHandler(async (event): Promise<CreateCashCountResponse
       return { ok: true, cashCountId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create cash count: ${err}` }
+    return internalError('Failed to create cash count', err)
   }
 })

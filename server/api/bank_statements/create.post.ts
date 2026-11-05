@@ -10,6 +10,7 @@ import {
 } from '~/server/utils/bankStatements'
 import { ReceiptStatus } from '~/types/receipt'
 import { InvoiceStatus } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateBankStatementSuccess {
   ok: true
@@ -104,6 +105,6 @@ export default defineEventHandler(async (event): Promise<CreateBankStatementResp
       return { ok: true, bankStatementId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create bank statement: ${err}` }
+    return internalError('Failed to create bank statement', err)
   }
 })

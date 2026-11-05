@@ -13,6 +13,7 @@ import {
 } from '~/server/utils/appointments'
 import { formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import type { AppointmentEditScope } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface DeleteAppointmentSuccess {
   ok: true
@@ -121,6 +122,6 @@ export default defineEventHandler(async (event): Promise<DeleteAppointmentRespon
       return { ok: true as const }
     })
   } catch (err: any) {
-    return { ok: false, error: `Der Termin konnte nicht gelöscht werden: ${err?.code ?? err}` }
+    return internalError('Der Termin konnte nicht gelöscht werden', err)
   }
 })

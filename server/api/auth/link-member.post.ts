@@ -8,6 +8,7 @@ import {
   MemberAlreadyLinkedError,
   MemberNotFoundError,
 } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 interface LinkMemberBody {
   user_id: number
@@ -58,7 +59,7 @@ export default defineEventHandler(async (event): Promise<LinkMemberResponse> => 
       if (err instanceof MemberNotFoundError) {
         return { ok: false, error: 'Member not found' }
       }
-      return { ok: false, error: err.code }
+      return internalError('Failed to link member', err)
     }
 
     return { ok: true }

@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveRoleBody {
   id?: number
@@ -91,6 +92,6 @@ export default defineEventHandler(async (event): Promise<SaveRoleResponse> => {
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `An error occured while saving the role: ${err.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the role', err)
   }
 })

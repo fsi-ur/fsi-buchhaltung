@@ -41,6 +41,7 @@ export default defineEventHandler(async (event) => {
 
     return sendStream(event, fs.createReadStream(absolutePath))
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to get association logo', message: err })
+    console.error('Failed to get association logo:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to get association logo' })
   }
 })

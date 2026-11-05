@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { canReadArticle, getWikiAccess } from '~/server/utils/wiki/access'
 import { itemBelongsToChecklist, loadRunContext } from '~/server/utils/wiki/checklists'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RunStateBody {
   itemId?: number
@@ -46,6 +47,6 @@ export default defineEventHandler(async (event): Promise<WikiChecklistRunStateRe
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to save wiki checklist run state: ${err}` }
+    return internalError('Failed to save wiki checklist run state', err)
   }
 })

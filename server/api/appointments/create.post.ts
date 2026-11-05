@@ -10,6 +10,7 @@ import {
   syncAppointmentScope,
 } from '~/server/utils/appointments'
 import type { SaveAppointmentBody } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateAppointmentSuccess {
   ok: true
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<CreateAppointmentRespon
       return { ok: true as const, id: appointmentId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Der Termin konnte nicht gespeichert werden: ${err?.code ?? err}` }
+    return internalError('Der Termin konnte nicht gespeichert werden', err)
   }
 })

@@ -7,6 +7,7 @@ import { ensureSubjectId, validateMemberPayload } from '~/server/utils/members'
 import { getSubdivisionLabels, normalizeRelationIds, syncSubdivisionAssignments, validateSubdivisionSelection } from '~/server/utils/subdivisions'
 import { normalizePositionAssignments, syncPositionAssignments } from '~/server/utils/positions'
 import { scheduleMemberWelcome } from '~/server/utils/memberWelcome'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateMemberSuccess {
   ok: true
@@ -137,6 +138,6 @@ export default defineEventHandler(async (event): Promise<CreateMemberResponse> =
     if (err instanceof DuplicateUsernameError) {
       return { ok: false, error: 'Username already exists' }
     }
-    return { ok: false, error: `Failed to create member: ${err?.code || err}` }
+    return internalError('Failed to create member', err)
   }
 })

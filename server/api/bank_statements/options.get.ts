@@ -2,6 +2,7 @@ import { defineEventHandler, getQuery } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { BankStatementReceiptOption, BankStatementInvoiceOption, BankStatementEventOption } from '~/types/bankStatement'
+import { internalError } from '~/server/utils/api/errors'
 
 interface OptionsSuccess {
   ok: true
@@ -92,6 +93,6 @@ export default defineEventHandler(async (event): Promise<OptionsResponse> => {
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load options: ${err}` }
+    return internalError('Failed to load options', err)
   }
 })

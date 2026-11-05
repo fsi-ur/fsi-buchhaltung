@@ -10,6 +10,7 @@ import {
   replaceEventShiftSlots,
 } from '~/server/utils/eventShifts'
 import type { EventShiftSlot } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventShiftsSuccess {
   ok: true
@@ -56,6 +57,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventShiftsRespon
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update event shifts: ${err}` }
+    return internalError('Failed to update event shifts', err)
   }
 })

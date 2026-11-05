@@ -1,6 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 interface ReceiptAssignment {
   receipt_id: number
@@ -39,6 +40,6 @@ export default defineEventHandler(async (event): Promise<GetAssignmentsResponse>
       }))
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load reimbursement receipt assignments: ${err}` }
+    return internalError('Failed to load reimbursement receipt assignments', err)
   }
 })

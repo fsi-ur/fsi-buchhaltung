@@ -53,7 +53,7 @@ export default defineEventHandler(async (event): Promise<PreviewSnapshotResponse
     throw createError({
       statusCode: 400,
       statusMessage: 'Failed to preview database snapshot',
-      message: String(err?.message || err),
+      message: err instanceof SnapshotError ? err.message : 'Unexpected error',
       data: err instanceof SnapshotError ? { snapshotErrorCode: err.code, snapshotErrorParams: err.params } : undefined,
     })
   }

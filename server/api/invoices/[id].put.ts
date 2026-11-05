@@ -9,6 +9,7 @@ import { detachFileAttachment, getActiveFileAttachment, storeAndAttachUploadedFi
 import { getAssociationBoardLineForInvoice, getAssociationLogoForInvoice, getAssociationProfileForInvoice, getInvoiceCompany, invoiceNeedsUploadedFile, invoiceNumberExists, materializeFinalInvoiceTexts, normalizeInvoicePayload, validateInvoicePayload } from '~/server/utils/invoices'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import { InvoiceSourceType, InvoiceStatus, type InvoicePosition } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateInvoiceSuccess {
   ok: true
@@ -393,6 +394,6 @@ export default defineEventHandler(async (event): Promise<UpdateInvoiceResponse> 
   } catch (err: any) {
     const error = err as MysqlError
     if (error.code === 'ER_DUP_ENTRY') return { ok: false, error: 'Invoice number already exists' }
-    return { ok: false, error: `Failed to update invoice: ${err}` }
+    return internalError('Failed to update invoice', err)
   }
 })

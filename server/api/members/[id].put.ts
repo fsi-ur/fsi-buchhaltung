@@ -10,6 +10,7 @@ import { clearPendingChangeForField } from '~/server/utils/memberSelfEdit'
 import { retargetPendingMemberWelcome } from '~/server/utils/memberWelcome'
 import { SELF_EDIT_ELIGIBLE_FIELDS } from '~/config/memberSelfEdit'
 import { authorizeMemberAccountLink } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateMemberSuccess {
   ok: true
@@ -196,6 +197,6 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
       return { ok: true, id: memberId, status_actions: statusActions }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update member: ${err?.code || err}` }
+    return internalError('Failed to update member', err)
   }
 })

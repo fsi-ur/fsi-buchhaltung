@@ -12,6 +12,7 @@ import { validateCostCentreSelection } from '~/server/utils/costCentres'
 import { receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import type { ReceiptPosition, ReceiptRow } from '~/types/receipt'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateReceiptSuccess {
   ok: true
@@ -201,6 +202,6 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
       return { ok: true }
     })
   } catch (err) {
-    return { ok: false, error: `An error occured during the update of the receipt: ${err}` }
+    return internalError('An error occured during the update of the receipt', err)
   }
 })

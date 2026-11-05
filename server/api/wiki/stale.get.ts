@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { filterVisibleArticles, getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
 import { isStale } from '~/server/utils/wiki/articles'
 import { parseInstant } from '~/shared/time'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiStaleArticle {
   id: number
@@ -71,6 +72,6 @@ export default defineEventHandler(async (event): Promise<WikiStaleResponse> => {
 
     return { ok: true, articles }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the wiki review report: ${err}` }
+    return internalError('Failed to load the wiki review report', err)
   }
 })

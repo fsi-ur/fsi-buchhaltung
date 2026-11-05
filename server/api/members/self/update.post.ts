@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { withAuditTransaction } from '~/server/utils/db'
 import { applySelfEdit, getMemberForUser } from '~/server/utils/memberSelfEdit'
 import { isSelfEditFieldName, type SelfEditFieldName } from '~/config/memberSelfEdit'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateSelfSuccess {
   ok: true
@@ -41,6 +42,6 @@ export default defineEventHandler(async (event): Promise<UpdateMemberSelfRespons
       return result
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update member data: ${err?.code || err}` }
+    return internalError('Failed to update member data', err)
   }
 })

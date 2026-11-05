@@ -1,3 +1,4 @@
+import { internalError } from '~/server/utils/api/errors'
 import { query } from '~/server/utils/db'
 import { NOTIFICATION_TYPE_MAP, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
@@ -94,7 +95,7 @@ export async function enqueueNotification(args: EnqueueNotificationArgs, conn?: 
     return { ok: true, id }
   } catch (err: any) {
     if (err?.code === 'ER_DUP_ENTRY') return { ok: true, id: 0 }
-    return { ok: false, error: `Benachrichtigung konnte nicht eingeplant werden: ${err}` }
+    return internalError('Benachrichtigung konnte nicht eingeplant werden', err)
   }
 }
 

@@ -3,6 +3,7 @@ import { comparePassword, hashPassword, hmacToken } from '~/server/utils/auth'
 import { withAuditTransaction, query } from '~/server/utils/db'
 import { getCurrentUserFromEvent } from '~/server/utils/sessionGuard'
 import { MIN_PASSWORD_LENGTH } from '~/config/validation'
+import { internalError } from '~/server/utils/api/errors'
 
 interface ChangePasswordBody {
   currentPassword?: string
@@ -73,7 +74,7 @@ export default defineEventHandler(async (event): Promise<ChangePasswordResponse>
       )
     })
   } catch (err: any) {
-    return { ok: false, error: err?.code || 'Password change failed' }
+    return internalError('Password change failed', err)
   }
 
   return { ok: true }

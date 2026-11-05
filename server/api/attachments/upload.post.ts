@@ -9,6 +9,7 @@ import { ATTACHMENT_SCOPES, type AttachmentFileInfo, type AttachmentScope } from
 import type { PermissionKey } from '~/config/permissions'
 import type { H3Event } from 'h3'
 import type { User } from '~/types/user'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UploadAttachmentSuccess { ok: true, file: AttachmentFileInfo }
 interface UploadAttachmentError { ok: false, error: string }
@@ -72,6 +73,6 @@ export default defineEventHandler(async (event): Promise<UploadAttachmentRespons
       },
     }
   } catch (err: any) {
-    return { ok: false, error: `Die Datei konnte nicht gespeichert werden: ${err}` }
+    return internalError('Die Datei konnte nicht gespeichert werden', err)
   }
 })

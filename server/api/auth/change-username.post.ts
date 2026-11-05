@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { canManageUser } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 interface ChangeUsernameBody {
   user_id?: number
@@ -53,7 +54,7 @@ export default defineEventHandler(async (event): Promise<ChangeUsernameResponse>
     const error = err as MysqlError
     if (error.code === 'ER_DUP_ENTRY') return { ok: false, error: 'Username already exists' }
     if (error.message === 'User not found') return { ok: false, error: 'User not found' }
-    return { ok: false, error: error.code || 'Failed to change username' }
+    return internalError('Failed to change username', error)
   }
 
   return { ok: true }

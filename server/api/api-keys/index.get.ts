@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { listApiKeys } from '~/server/utils/apiKeys'
 import type { ApiKey } from '~/types/apiKey'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetApiKeysSuccess {
   ok: true
@@ -22,6 +23,6 @@ export default defineEventHandler(async (event): Promise<GetApiKeysResponse> => 
   try {
     return { ok: true, apiKeys: await listApiKeys() }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load API keys: ${err}` }
+    return internalError('Failed to load API keys', err)
   }
 })

@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
+import { internalError } from '~/server/utils/api/errors'
 
 export type RestoreRevisionResponse = { ok: true } | { ok: false, error: string }
 
@@ -37,6 +38,6 @@ export default defineEventHandler(async (event): Promise<RestoreRevisionResponse
     })
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to restore wiki revision: ${err}` }
+    return internalError('Failed to restore wiki revision', err)
   }
 })

@@ -53,7 +53,7 @@ export default defineEventHandler(async (event): Promise<PreviewFilesSnapshotRes
     throw createError({
       statusCode: 400,
       statusMessage: 'Failed to preview snapshot files archive',
-      message: String(err?.message || err),
+      message: err instanceof SnapshotError ? err.message : 'Unexpected error',
       data: err instanceof SnapshotError ? { snapshotErrorCode: err.code, snapshotErrorParams: err.params } : undefined,
     })
   }

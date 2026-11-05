@@ -4,6 +4,7 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { query } from '~/server/utils/db'
 import { isEventOrganizer, loadEventRelations } from '~/server/utils/events'
 import type { Event, EventRow } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventSuccess {
   ok: true
@@ -66,6 +67,6 @@ export default defineEventHandler(async (event): Promise<GetEventResponse> => {
       canViewAll: hasPermission(current.user, 'events.view') || organizer,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load event: ${err}` }
+    return internalError('Failed to load event', err)
   }
 })

@@ -11,6 +11,7 @@ import {
 } from '~/server/utils/files'
 import type { ReimbursementPositionRow, ReimbursementRow } from '~/types/reimbursement'
 import { statusFromReimbursement, validateReimbursementBody } from '~/server/utils/reimbursements'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateReimbursementSuccess {
   ok: true
@@ -211,6 +212,6 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update reimbursement: ${err}` }
+    return internalError('Failed to update reimbursement', err)
   }
 })

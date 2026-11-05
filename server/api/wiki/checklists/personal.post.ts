@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { canReadArticle, getWikiAccess } from '~/server/utils/wiki/access'
 import { itemBelongsToChecklist, loadChecklistContext } from '~/server/utils/wiki/checklists'
+import { internalError } from '~/server/utils/api/errors'
 
 interface PersonalStateBody {
   checklistId?: number
@@ -52,6 +53,6 @@ export default defineEventHandler(async (event): Promise<WikiChecklistPersonalRe
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to save wiki checklist state: ${err}` }
+    return internalError('Failed to save wiki checklist state', err)
   }
 })

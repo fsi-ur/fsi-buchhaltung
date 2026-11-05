@@ -7,6 +7,7 @@ import {
   replaceEventChecklistTemplates,
 } from '~/server/utils/eventChecklists'
 import type { EventChecklistTemplate } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventChecklistTemplatesSuccess {
   ok: true
@@ -42,6 +43,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventChecklistTem
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update event checklist templates: ${err}` }
+    return internalError('Failed to update event checklist templates', err)
   }
 })

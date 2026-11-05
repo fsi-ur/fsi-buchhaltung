@@ -6,6 +6,7 @@ import { loadAppointment, loadOverrides } from '~/server/utils/appointments'
 import { expandOccurrences, formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import { getMemberIdForUser, loadAppointmentAudience } from '~/server/utils/appointments/visibility'
 import type { AppointmentResponseValue } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RespondSuccess {
   ok: true
@@ -88,7 +89,7 @@ export default defineEventHandler(async (event): Promise<RespondAppointmentRespo
       return { ok: true as const }
     })
   } catch (err: any) {
-    return { ok: false, error: `Deine Antwort konnte nicht gespeichert werden: ${err?.code ?? err}` }
+    return internalError('Deine Antwort konnte nicht gespeichert werden', err)
   }
 })
 

@@ -3,6 +3,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getWikiAccess } from '~/server/utils/wiki/access'
 import { buildVisibleTree, loadSpaceRows, loadTreeArticleRows } from '~/server/utils/wiki/articles'
 import type { WikiTreeSpace } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type WikiTreeResponse =
   | { ok: true, spaces: WikiTreeSpace[] }
@@ -22,6 +23,6 @@ export default defineEventHandler(async (event): Promise<WikiTreeResponse> => {
 
     return { ok: true, spaces: buildVisibleTree(spaces, articles, index, subjects, { includeDrafts }) }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load wiki tree: ${err}` }
+    return internalError('Failed to load wiki tree', err)
   }
 })

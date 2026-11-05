@@ -4,6 +4,7 @@ import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
 import type { SaveSphereBody, SphereRow } from '~/types/sphere'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveSphereSuccess {
   ok: true
@@ -64,6 +65,6 @@ export default defineEventHandler(async (event): Promise<SaveSphereResponse> => 
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the sphere: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the sphere', err)
   }
 })

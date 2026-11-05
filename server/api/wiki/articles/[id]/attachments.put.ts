@@ -6,6 +6,7 @@ import { checkAttachableFiles } from '~/server/utils/fileAccess'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
 import { WIKI_ARTICLE_ENTITY_TYPE } from '~/server/utils/wiki/articles'
 import type { WikiAttachment } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type SaveWikiAttachmentsResponse =
   | { ok: true, attachments: WikiAttachment[] }
@@ -37,6 +38,6 @@ export default defineEventHandler(async (event): Promise<SaveWikiAttachmentsResp
     const saved = await loadAttachmentSelection(WIKI_ARTICLE_ENTITY_TYPE, articleId)
     return { ok: true, attachments: await loadAttachmentItems(saved) }
   } catch (err: any) {
-    return { ok: false, error: `Failed to save wiki attachments: ${err}` }
+    return internalError('Failed to save wiki attachments', err)
   }
 })

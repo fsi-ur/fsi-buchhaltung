@@ -1,6 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 export type DeleteWikiGlossaryTermResponse = { ok: true } | { ok: false, error: string }
 
@@ -26,6 +27,6 @@ export default defineEventHandler(async (event): Promise<DeleteWikiGlossaryTermR
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to delete the glossary term: ${err}` }
+    return internalError('Failed to delete the glossary term', err)
   }
 })

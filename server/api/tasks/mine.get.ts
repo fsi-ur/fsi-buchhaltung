@@ -4,6 +4,7 @@ import { getMemberIdForUser } from '~/server/utils/appointments/visibility'
 import { getOrganizerEventIds } from '~/server/utils/events'
 import { loadMyOpenTasks } from '~/server/utils/myTasks'
 import type { MyEventTask } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetMyTasksSuccess {
   ok: true
@@ -41,6 +42,6 @@ export default defineEventHandler(async (event): Promise<GetMyTasksResponse> => 
       tasks: tasks.map(task => ({ ...task, canOpenEvent: canViewAll || organizerEventIds.has(task.eventId) })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load tasks: ${err}` }
+    return internalError('Failed to load tasks', err)
   }
 })

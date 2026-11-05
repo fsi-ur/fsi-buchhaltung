@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
 import { statusFromReimbursement, validateReimbursementBody } from '~/server/utils/reimbursements'
 import { getEntityIdsWithActiveFiles, storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateReimbursementSuccess {
   ok: true
@@ -133,6 +134,6 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
       return { ok: true, reimbursementId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create reimbursement: ${err}` }
+    return internalError('Failed to create reimbursement', err)
   }
 })

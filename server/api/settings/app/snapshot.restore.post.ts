@@ -99,7 +99,7 @@ export default defineEventHandler(async (event): Promise<RestoreSnapshotResponse
     throw createError({
       statusCode: 400,
       statusMessage: 'Failed to restore database snapshot',
-      message: String(err?.message || err),
+      message: err instanceof SnapshotError ? err.message : 'Unexpected error',
       data: err instanceof SnapshotError ? { snapshotErrorCode: err.code, snapshotErrorParams: err.params } : undefined,
     })
   }

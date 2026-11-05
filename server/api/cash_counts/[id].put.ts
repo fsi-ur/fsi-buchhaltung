@@ -14,6 +14,7 @@ import {
   validateCashCountRelations,
 } from '~/server/utils/cashCounts'
 import type { CashCountPositionRow, CashCountRow } from '~/types/cashCount'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateCashCountSuccess {
   ok: true
@@ -168,6 +169,6 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update cash count: ${err}` }
+    return internalError('Failed to update cash count', err)
   }
 })

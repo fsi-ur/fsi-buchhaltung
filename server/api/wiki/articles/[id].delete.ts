@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { requireArticleAdmin, requireArticleWrite } from '~/server/utils/wiki/access'
 import { collectSubtreeIds, deleteScopeGrants } from '~/server/utils/wiki/grants'
+import { internalError } from '~/server/utils/api/errors'
 
 export type DeleteWikiArticleResponse = { ok: true, archived: boolean } | { ok: false, error: string }
 
@@ -38,6 +39,6 @@ export default defineEventHandler(async (event): Promise<DeleteWikiArticleRespon
 
     return { ok: true, archived: !hard }
   } catch (err: any) {
-    return { ok: false, error: `Failed to delete wiki article: ${err}` }
+    return internalError('Failed to delete wiki article', err)
   }
 })

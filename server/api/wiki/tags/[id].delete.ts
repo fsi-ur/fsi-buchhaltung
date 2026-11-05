@@ -1,6 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 export type DeleteWikiTagResponse = { ok: true } | { ok: false, error: string }
 
@@ -24,6 +25,6 @@ export default defineEventHandler(async (event): Promise<DeleteWikiTagResponse> 
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to delete the wiki tag: ${err}` }
+    return internalError('Failed to delete the wiki tag', err)
   }
 })

@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { hasPermission, requireAuth } from '~/server/utils/api/guards'
 import { isAnyEventOrganizer, loadEventOptions } from '~/server/utils/events'
 import type { EventCostCentreOption, EventMemberOption, EventSphereOption, EventSubdivisionOption } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventOptionsSuccess {
   ok: true
@@ -36,6 +37,6 @@ export default defineEventHandler(async (event): Promise<GetEventOptionsResponse
       spheres: options.spheres,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load event options: ${err}` }
+    return internalError('Failed to load event options', err)
   }
 })

@@ -5,6 +5,7 @@ import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
 import { normalizePositionAssignments, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SavePositionSuccess {
   ok: true
@@ -102,6 +103,6 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the position: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the position', err)
   }
 })

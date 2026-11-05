@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { loadPageHelpRows, normalizeSectionKey } from '~/server/utils/wiki/pageHelp'
 import type { WikiArticleStatus } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiPageHelpAdminEntry {
   id: number
@@ -59,6 +60,6 @@ export default defineEventHandler(async (event): Promise<WikiPageHelpAdminRespon
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the page help mapping: ${err}` }
+    return internalError('Failed to load the page help mapping', err)
   }
 })

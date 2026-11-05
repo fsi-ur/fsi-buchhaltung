@@ -10,6 +10,7 @@ import {
   MemberAlreadyLinkedError,
   MemberNotFoundError,
 } from '~/server/utils/userAccounts'
+import { internalError } from '~/server/utils/api/errors'
 
 interface RegisterBody {
   username: string
@@ -61,7 +62,7 @@ export default defineEventHandler(async (event): Promise<RegisterResponse> => {
     if (err instanceof MemberNotFoundError) {
       return { ok: false, error: 'Member not found' }
     }
-    return { ok: false, error: err.code }
+    return internalError('Failed to create user', err)
   }
 
   return { ok: true }

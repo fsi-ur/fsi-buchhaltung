@@ -58,6 +58,7 @@ export default defineEventHandler(async (event): Promise<GetFileResponse> => {
 
     return sendStream(event, fs.createReadStream(absolutePath))
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to get file', message: err })
+    console.error('Failed to get file:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to get file' })
   }
 })

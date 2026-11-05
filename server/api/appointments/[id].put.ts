@@ -23,6 +23,7 @@ import {
 import { formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import type { DbConn } from '~/server/utils/notifications/types'
 import type { AppointmentEditScope, AppointmentSeries, SaveAppointmentBody } from '~/types/appointment'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateAppointmentSuccess {
   ok: true
@@ -157,7 +158,7 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentRespon
       return { ok: true as const, id: updated.id }
     })
   } catch (err: any) {
-    return { ok: false, error: `Der Termin konnte nicht gespeichert werden: ${err?.code ?? err}` }
+    return internalError('Der Termin konnte nicht gespeichert werden', err)
   }
 })
 

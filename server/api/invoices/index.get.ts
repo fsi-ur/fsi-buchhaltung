@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { InvoiceSourceType, InvoiceStatus, type InvoiceRow } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetInvoicesSuccess {
   ok: true
@@ -67,6 +68,6 @@ export default defineEventHandler(async (event): Promise<GetInvoicesResponse> =>
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load invoices: ${err}` }
+    return internalError('Failed to load invoices', err)
   }
 })

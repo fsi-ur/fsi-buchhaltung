@@ -9,6 +9,7 @@ import {
   loadEventShiftSlots,
 } from '~/server/utils/eventShifts'
 import type { EventShiftSlot } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface AddSelfToShiftSuccess {
   ok: true
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<AddSelfToShiftResponse>
       }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to assign shift member: ${err}` }
+    return internalError('Failed to assign shift member', err)
   }
 })

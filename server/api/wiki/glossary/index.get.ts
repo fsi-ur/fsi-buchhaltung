@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getWikiAccess } from '~/server/utils/wiki/access'
 import { loadGlossaryRows, toGlossaryViews, type GlossaryTermView } from '~/server/utils/wiki/glossary'
 import type { WikiArticleStatus } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiGlossaryArticleOption {
   id: number
@@ -46,6 +47,6 @@ export default defineEventHandler(async (event): Promise<WikiGlossaryResponse> =
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the wiki glossary: ${err}` }
+    return internalError('Failed to load the wiki glossary', err)
   }
 })

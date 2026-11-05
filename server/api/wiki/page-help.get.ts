@@ -2,6 +2,7 @@ import { defineEventHandler, getQuery } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { filterVisibleArticles, getWikiAccess } from '~/server/utils/wiki/access'
 import { loadPageHelpRows, normalizeSectionKey, validatePageHelpInput } from '~/server/utils/wiki/pageHelp'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiPageHelpArticle {
   id: number
@@ -40,6 +41,6 @@ export default defineEventHandler(async (event): Promise<WikiPageHelpResponse> =
       })),
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the page help mapping: ${err}` }
+    return internalError('Failed to load the page help mapping', err)
   }
 })

@@ -7,6 +7,7 @@ import { eventExists } from '~/server/utils/eventShifts'
 import { loadEventTasks } from '~/server/utils/eventTasks'
 import { getAssignedTaskIds } from '~/server/utils/myTasks'
 import type { EventTask } from '~/types/event'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventTasksSuccess {
   ok: true
@@ -48,6 +49,6 @@ export default defineEventHandler(async (event): Promise<GetEventTasksResponse> 
       assignedTaskIds: memberId ? await getAssignedTaskIds(memberId, eventId) : [],
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load event tasks: ${err}` }
+    return internalError('Failed to load event tasks', err)
   }
 })

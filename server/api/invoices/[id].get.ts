@@ -5,6 +5,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getAttachedFile } from '~/server/utils/files'
 import type { FileRow } from '~/types/file'
 import type { Invoice, InvoicePosition } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetInvoiceSuccess {
   ok: true
@@ -115,6 +116,6 @@ export default defineEventHandler(async (event): Promise<GetInvoiceResponse> => 
         : null,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load invoice: ${err}` }
+    return internalError('Failed to load invoice', err)
   }
 })

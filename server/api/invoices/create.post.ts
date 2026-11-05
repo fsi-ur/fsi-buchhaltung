@@ -9,6 +9,7 @@ import { getAssociationBoardLineForInvoice, getAssociationLogoForInvoice, getAss
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { validateSphereSelection } from '~/server/utils/spheres'
 import { InvoiceSourceType, InvoiceStatus } from '~/types/invoice'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateInvoiceSuccess {
   ok: true
@@ -166,6 +167,6 @@ export default defineEventHandler(async (event): Promise<CreateInvoiceResponse> 
   } catch (err: any) {
     const error = err as MysqlError
     if (error.code === 'ER_DUP_ENTRY') return { ok: false, error: 'Invoice number already exists' }
-    return { ok: false, error: `Failed to create invoice: ${err}` }
+    return internalError('Failed to create invoice', err)
   }
 })

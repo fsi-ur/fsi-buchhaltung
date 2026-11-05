@@ -10,6 +10,7 @@ import {
   savePathItems,
   validatePathFields,
 } from '~/server/utils/wiki/paths'
+import { internalError } from '~/server/utils/api/errors'
 
 export type CreateWikiPathResponse =
   | { ok: true, pathId: number }
@@ -61,6 +62,6 @@ export default defineEventHandler(async (event): Promise<CreateWikiPathResponse>
 
     return { ok: true, pathId }
   } catch (err: any) {
-    return { ok: false, error: `Failed to create the wiki learning path: ${err}` }
+    return internalError('Failed to create the wiki learning path', err)
   }
 })

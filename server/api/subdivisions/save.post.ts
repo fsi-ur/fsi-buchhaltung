@@ -4,6 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
 import { getMemberLabels, normalizeRelationIds, syncSubdivisionAssignments } from '~/server/utils/subdivisions'
 import type { SaveSubdivisionBody } from '~/types/subdivision'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SubdivisionRow {
   id: number
@@ -132,6 +133,6 @@ export default defineEventHandler(async (event): Promise<SaveSubdivisionResponse
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the subdivision: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the subdivision', err)
   }
 })

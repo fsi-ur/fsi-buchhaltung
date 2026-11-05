@@ -3,6 +3,7 @@ import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getEntityIdsWithActiveFiles } from '~/server/utils/files'
 import { ReceiptStatus, type ReceiptRow } from '~/types/receipt'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetReceiptsSuccess {
   ok: true
@@ -55,6 +56,6 @@ export default defineEventHandler(async (event): Promise<GetReceiptsResponse> =>
       total_amount: Number(receipt.total_amount),
     }))}
   } catch (err: any) {
-    return { ok: false, error: `Failed to load receipts: ${err}` }
+    return internalError('Failed to load receipts', err)
   }
 })

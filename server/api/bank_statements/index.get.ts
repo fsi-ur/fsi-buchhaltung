@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import type { BankStatementOverview } from '~/types/bankStatement'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetBankStatementsSuccess {
   ok: true
@@ -61,6 +62,6 @@ export default defineEventHandler(async (event): Promise<GetBankStatementsRespon
 
     return { ok: true, bankStatements: result.reverse() }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load bank statements: ${err}` }
+    return internalError('Failed to load bank statements', err)
   }
 })

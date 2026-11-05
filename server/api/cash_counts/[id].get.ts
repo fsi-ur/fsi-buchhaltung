@@ -6,6 +6,7 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import { getAttachedFile } from '~/server/utils/files'
 import type { CashCount, CashCountPosition, CashCountRow } from '~/types/cashCount'
 import type { FileRow } from '~/types/file'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetCashCountSuccess {
   ok: true
@@ -89,6 +90,6 @@ export default defineEventHandler(async (event): Promise<GetCashCountResponse> =
       file: file ? normalizeBigInt(file) : null,
     }
   } catch (err: any) {
-    return { ok: false, error: `An error occurred while fetching a cash count: ${err}` }
+    return internalError('An error occurred while fetching a cash count', err)
   }
 })

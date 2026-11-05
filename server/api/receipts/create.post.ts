@@ -6,6 +6,7 @@ import { validateCostCentreSelection } from '~/server/utils/costCentres'
 import { receiptRequiresFile, validateReceiptPayload } from '~/server/utils/receipts'
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { validateSphereSelection } from '~/server/utils/spheres'
+import { internalError } from '~/server/utils/api/errors'
 
 interface CreateReceiptSuccess {
   ok: true
@@ -107,6 +108,6 @@ export default defineEventHandler(async (event): Promise<CreateReceiptResponse> 
       return { ok: true, receiptId }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to create receipt: ${err}` }
+    return internalError('Failed to create receipt', err)
   }
 })

@@ -6,6 +6,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { appTodayLocalDate } from '~/server/utils/time'
 import { getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
 import { POSITION_ASSIGN_EXCEEDS_OWN } from '~/server/utils/positions'
+import { internalError } from '~/server/utils/api/errors'
 
 interface PositionActivateBody {
   id: number
@@ -134,6 +135,6 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       return { ok: true as const }
     })
   } catch (err: any) {
-    return { ok: false, error: `An error occured while activating/deactivating the position: ${err}` }
+    return internalError('An error occured while activating/deactivating the position', err)
   }
 })

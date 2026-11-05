@@ -12,6 +12,7 @@ import {
   wikiImageMarkdown,
 } from '~/server/utils/wiki/images'
 import type { WikiImage } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export type UploadWikiImageResponse =
   | { ok: true, image: WikiImage, markdown: string }
@@ -52,6 +53,6 @@ export default defineEventHandler(async (event): Promise<UploadWikiImageResponse
       markdown: wikiImageMarkdown(fileId, altFromFileName(upload.filename)),
     }
   } catch (err: any) {
-    return { ok: false, error: `Das Bild konnte nicht gespeichert werden: ${err}` }
+    return internalError('Das Bild konnte nicht gespeichert werden', err)
   }
 })

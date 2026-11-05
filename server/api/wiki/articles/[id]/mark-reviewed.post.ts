@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { levelAtLeast, requireArticleWrite } from '~/server/utils/wiki/access'
+import { internalError } from '~/server/utils/api/errors'
 
 export type MarkReviewedResponse = { ok: true } | { ok: false, error: string }
 
@@ -29,6 +30,6 @@ export default defineEventHandler(async (event): Promise<MarkReviewedResponse> =
     })
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to mark wiki article as reviewed: ${err}` }
+    return internalError('Failed to mark wiki article as reviewed', err)
   }
 })

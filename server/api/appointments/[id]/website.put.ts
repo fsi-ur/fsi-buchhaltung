@@ -8,6 +8,7 @@ import {
   saveAppointmentWebsiteSettings,
 } from '~/server/utils/appointmentWebsite'
 import { isAppointmentVisible, resolveAppointmentViewer } from '~/server/utils/appointments/visibility'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateAppointmentWebsiteSuccess {
   ok: true
@@ -42,6 +43,6 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentWebsit
       return { ok: true as const }
     })
   } catch (err: any) {
-    return { ok: false, error: `Die Website-Einstellungen konnten nicht gespeichert werden: ${err?.code ?? err}` }
+    return internalError('Die Website-Einstellungen konnten nicht gespeichert werden', err)
   }
 })

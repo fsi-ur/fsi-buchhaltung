@@ -277,3 +277,16 @@ describe('typed fetch', () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe('error responses', () => {
+  // SEC-13: driver errors contain SQL text and fs errors contain server paths. Handlers log them
+  // and answer through internalError() (server/utils/api/errors.ts) instead of interpolating them.
+  it('never interpolates a caught error into an API response', () => {
+    const offenders = sourceFiles('server/api')
+      .flatMap(file => read(file).split('\n')
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => /\$\{(err|error)\b/.test(line) || /error: (err|error)(\?)?\.(code|message)\b/.test(line))
+        .map(({ index }) => `${file}:${index + 1}`))
+    expect(offenders).toEqual([])
+  })
+})

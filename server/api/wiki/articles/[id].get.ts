@@ -1,6 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { loadArticleDetail, type WikiArticleDetailResult } from '~/server/utils/wiki/detail'
+import { internalError } from '~/server/utils/api/errors'
 
 export default defineEventHandler(async (event): Promise<WikiArticleDetailResult> => {
   const current = await requirePermission(event, 'wiki.view')
@@ -15,6 +16,6 @@ export default defineEventHandler(async (event): Promise<WikiArticleDetailResult
   try {
     return await loadArticleDetail(event, current.user, articleId)
   } catch (err: any) {
-    return { ok: false, error: `Failed to load wiki article: ${err}` }
+    return internalError('Failed to load wiki article', err)
   }
 })

@@ -13,6 +13,7 @@ import { checkUploadedImageDimensions } from '~/server/utils/imageLimits'
 import { detachFileAttachment, getActiveFileAttachment, storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { AssociationProfileRow } from '~/types/association'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SaveAssociationProfileSuccess {
   ok: true
@@ -232,6 +233,6 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
     })
   } catch (err: unknown) {
     const error = err as MysqlError
-    return { ok: false, error: `An error occured while saving the association profile: ${error.code ?? 'DB_ERROR'}` }
+    return internalError('An error occured while saving the association profile', err)
   }
 })

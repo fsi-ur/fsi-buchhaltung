@@ -5,6 +5,7 @@ import { filterVisibleArticles, getEffectiveLevel, getWikiAccess, levelAtLeast }
 import { buildVisibleTree, isStale, loadSpaceRows, loadTreeArticleRows } from '~/server/utils/wiki/articles'
 import { loadPathViews } from '~/server/utils/wiki/paths'
 import type { WikiPathView, WikiTreeSpace } from '~/types/wiki'
+import { internalError } from '~/server/utils/api/errors'
 
 export interface WikiHomeArticle {
   id: number
@@ -112,6 +113,6 @@ export default defineEventHandler(async (event): Promise<WikiHomeResponse> => {
       canEditSomewhere,
     }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load the wiki home page: ${err}` }
+    return internalError('Failed to load the wiki home page', err)
   }
 })

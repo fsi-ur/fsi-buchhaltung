@@ -14,6 +14,7 @@ import type { EventRow } from '~/types/event'
 import { enqueueNotification, dropFutureReminders } from '~/server/utils/notifications/enqueue'
 import { pickChangedFields } from '~/server/utils/notifications/changeDescription'
 import { formatLocalDateTime } from '~/server/utils/notifications/render'
+import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateEventSuccess {
   ok: true
@@ -159,6 +160,6 @@ export default defineEventHandler(async (event): Promise<UpdateEventResponse> =>
       return { ok: true }
     })
   } catch (err: any) {
-    return { ok: false, error: `Failed to update event: ${err}` }
+    return internalError('Failed to update event', err)
   }
 })

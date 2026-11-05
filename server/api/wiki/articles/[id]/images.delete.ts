@@ -3,6 +3,7 @@ import { withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { requireArticleWrite } from '~/server/utils/wiki/access'
 import { deleteArticleImage, unlinkStoredFile } from '~/server/utils/wiki/images'
+import { internalError } from '~/server/utils/api/errors'
 
 export type DeleteWikiImageResponse = { ok: true } | { ok: false, error: string }
 
@@ -25,6 +26,6 @@ export default defineEventHandler(async (event): Promise<DeleteWikiImageResponse
     await unlinkStoredFile(result.filePath)
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Das Bild konnte nicht gelöscht werden: ${err}` }
+    return internalError('Das Bild konnte nicht gelöscht werden', err)
   }
 })

@@ -7,6 +7,7 @@ import { loadCurrentMemberIdForUser, loadEventShiftSlots } from '~/server/utils/
 import type { EventRow, EventSpotlight, EventSpotlightStatus } from '~/types/event'
 import { appNowLocalDateTime } from '~/server/utils/time'
 import { diffLocalDates, normalizeLocalDateTime, type LocalDateTime } from '~/shared/time'
+import { internalError } from '~/server/utils/api/errors'
 
 interface GetEventSpotlightSuccess {
   ok: true
@@ -136,6 +137,6 @@ export default defineEventHandler(async (event): Promise<GetEventSpotlightRespon
 
     return { ok: true, upcoming, latest }
   } catch (err: any) {
-    return { ok: false, error: `Failed to load event spotlight: ${err}` }
+    return internalError('Failed to load event spotlight', err)
   }
 })

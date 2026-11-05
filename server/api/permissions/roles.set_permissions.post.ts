@@ -3,6 +3,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { isValidPermissionKey } from '~/server/utils/permissions'
 import { syncScalarCollection } from '~/server/utils/syncScalarCollection'
 import { requirePermission } from '~/server/utils/api/guards'
+import { internalError } from '~/server/utils/api/errors'
 
 interface SetRolePermissionsBody {
   role_id: number
@@ -76,6 +77,6 @@ export default defineEventHandler(async (event): Promise<SetRolePermissionsRespo
 
     return { ok: true }
   } catch (err: any) {
-    return { ok: false, error: `Failed to update role permissions: ${err}` }
+    return internalError('Failed to update role permissions', err)
   }
 })
