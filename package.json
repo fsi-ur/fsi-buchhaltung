@@ -45,6 +45,7 @@
     "setup:audit": "node --env-file=.env scripts/ensure-audit-infrastructure.mjs",
     "setup:prune:audit-log": "node --env-file=.env scripts/prune-audit-log.mjs",
     "setup:connection-db-user": "node --env-file=.env scripts/create-connection-db-user.mjs",
+    "setup:runtime-db-user": "node --env-file=.env scripts/create-runtime-db-user.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

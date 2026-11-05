@@ -192,14 +192,15 @@ describe('migrations', () => {
   })
 
   /**
-   * The `app` service in docker-compose.yml runs the migrations on every deploy. It must go
+   * The `migrate` service in docker-compose.yml (the first service, so its command is matched here)
+   * runs the migrations on every deploy. It must go
    * through scripts/migrate.mjs (which walks the shared list) rather than naming scripts itself,
    * or a fresh install and the test database get different schemas -- exactly the kind of drift
    * that makes a green test run worthless.
    */
   it('runs them in docker-compose.yml through scripts/migrate.mjs only', () => {
     const command = compose.match(/command:\s*sh -c "([^"]+)"/)?.[1]
-    expect(command, 'app service command not found in docker-compose.yml').toBeTruthy()
+    expect(command, 'migrate service command not found in docker-compose.yml').toBeTruthy()
 
     expect(command).toContain('node scripts/migrate.mjs')
     expect(command!.match(/scripts\/migrate-[\w-]+\.mjs/g) ?? []).toEqual([])

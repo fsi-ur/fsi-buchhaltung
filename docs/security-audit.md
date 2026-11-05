@@ -156,6 +156,8 @@ These override the "Fix" text of the individual findings where they differ.
 3. Set `MARIADB_ROOT_HOST=localhost` on the db service.
 4. Same for the app port `3002` if it's always behind a reverse proxy (document; don't silently break existing deployments — mention in the commit message).
 
+> **Note (implementation):** `MARIADB_ROOT_HOST=localhost` was **not** set. The setup scripts (migrations, `create-*-db-user.mjs`) connect as `root` from the `migrate` container over the Docker network (`DB_AUDIT_SETUP_USER=root`), which a localhost-only root would break on fresh installs (the variable only applies when the volume is first initialised). Doing it needs a dedicated, network-reachable setup user with `CREATE USER`/`GRANT` rights first — open for the owner. App port 3002 left unchanged (owner decision).
+
 ---
 
 ## Medium
@@ -228,6 +230,8 @@ Then grep all `withTransaction`/`withAuditTransaction` callers for any that *int
 1. New migration script that creates/updates a restricted runtime user: `SELECT, INSERT, UPDATE, DELETE` on app tables; `SELECT` (+ `DELETE` only if in-app pruning exists — check `entity_versions` deletion paths such as `server/utils/entityVersions.ts:157` and snapshot restore) on `entity_versions`; no `TRIGGER/ALTER/DROP/CREATE/SUPER`. Triggers run as DEFINER (setup user) so audit inserts keep working — verify with `npm run test:db`.
 2. Run migrations in a separate one-shot compose service so the app container doesn't receive root/setup passwords.
 3. Note: snapshot restore deletes/inserts `entity_versions` — interacts with SEC-09; decide together.
+
+> **Note (implementation):** the runtime user gets `SELECT, INSERT, DELETE` (no `UPDATE`) on `entity_versions`, because snapshot restore replaces the table and the retention job prunes it. It can no longer drop/alter triggers or tables (verified against the test DB). Fully read-only audit history would require restore and pruning to run with separate credentials.
 
 ### SEC-11 — PNG decompression bomb
 - [ ] done
