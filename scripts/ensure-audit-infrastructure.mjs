@@ -39,6 +39,8 @@ const TABLE_COMPARISON_IGNORED_COLUMNS = new Map([
   ['wiki_articles', ['draft_md', 'draft_updated_at', 'draft_updated_by']],
   // Refreshed by every website request authenticated with the key.
   ['api_keys', ['last_used_at']],
+  // Internal flag written next to every member save (SEC-19).
+  ['members', ['account_deactivation_skipped']],
 ])
 
 function buildComparisonColumns(table) {

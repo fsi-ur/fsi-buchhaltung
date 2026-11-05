@@ -162,6 +162,18 @@
       </section>
 
       <section
+        v-if="leftStatusResult.account_deactivation_skipped"
+        class="rounded-lg border border-warning-200 bg-warning-50 p-4"
+      >
+        <p class="text-sm font-medium text-warning-900">
+          {{ t('member.leftStatusResult.accountSkippedTitle') }}
+        </p>
+        <p class="mt-2 text-sm text-warning-900">
+          {{ t('member.leftStatusResult.accountSkippedText', { username: leftStatusResult.account_deactivation_skipped.username }) }}
+        </p>
+      </section>
+
+      <section
         v-if="leftStatusResult.removed_subdivisions.length"
         class="rounded-lg border border-base-200 bg-base-50 p-4"
       >
@@ -425,8 +437,9 @@ const leftStatusPreview = computed(() => {
     .map(subdivisionId => subdivisionLabelById.value.get(subdivisionId) ?? `#${subdivisionId}`)
   const showSubdivisionSection = removedSubdivisionLabels.length > 0
     || (isEditMode.value && !canManageSubdivisions.value)
-  const accountWillBeDeactivated = Boolean(form.value.account)
-    || Boolean(form.value.new_account && form.value.new_account.is_active !== false)
+  // Only users.manage may deactivate accounts (SEC-19); the server may still skip higher-privileged ones.
+  const accountWillBeDeactivated = canManageUsers.value && (Boolean(form.value.account)
+    || Boolean(form.value.new_account && form.value.new_account.is_active !== false))
   const hasConsequences = accountWillBeDeactivated
     || showSubdivisionSection
     || closedPositions.length > 0
@@ -447,6 +460,7 @@ const leftStatusResultHasChanges = computed(() => {
   if (!result) return false
 
   return Boolean(result.account_deactivated)
+    || Boolean(result.account_deactivation_skipped)
     || result.removed_subdivisions.length > 0
     || result.closed_positions.length > 0
     || result.removed_positions.length > 0

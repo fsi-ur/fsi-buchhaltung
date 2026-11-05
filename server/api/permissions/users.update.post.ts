@@ -1,3 +1,4 @@
+import { withLastAdminGuard } from '~/server/utils/permissions'
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { isValidPermissionKey } from '~/server/utils/permissions'
@@ -56,7 +57,7 @@ export default defineEventHandler(async (event): Promise<UpdateUserAccessRespons
   }
 
   try {
-    await withAuditTransaction(current.user, async (conn) => {
+    const result = await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const existingRoleRows = await query<{ role_id: number }[]>(
         `SELECT role_id
          FROM user_roles
@@ -120,9 +121,10 @@ export default defineEventHandler(async (event): Promise<UpdateUserAccessRespons
           )
         },
       })
-    })
+      return { ok: true as const }
+    }))
 
-    return { ok: true }
+    return result
   } catch (err: any) {
     return internalError('Failed to update user access', err)
   }

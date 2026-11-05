@@ -62,6 +62,11 @@ interface ApplyMemberStatusActionsOptions {
   leftAt: string | null
   memberLabel: string
   userId: number
+  /**
+   * false = the acting user may not deactivate the linked account (SEC-19); the account stays
+   * active and the summary reports it as skipped.
+   */
+  deactivateAccount?: boolean
   conn: mariadb.PoolConnection
 }
 
@@ -111,11 +116,23 @@ async function deactivateLinkedAccount(
     [account.id],
     conn,
   )
+  // A deactivated account loses its push subscriptions — the only automatic removal (SEC-20).
+  await query('DELETE FROM notification_push_subscriptions WHERE user_id = ?', [account.id], conn)
 
   return {
     id: Number(account.id),
     username: String(account.username),
   }
+}
+
+async function activeAccountSummary(accountId: number, conn: mariadb.PoolConnection): Promise<MemberStatusActionAccountChange | null> {
+  const [account] = await query<UserAccountStateRow[]>(
+    `SELECT id, username, is_active FROM users WHERE id = ? LIMIT 1`,
+    [accountId],
+    conn,
+  )
+  if (!account || !isTruthyDbBoolean(account.is_active)) return null
+  return { id: Number(account.id), username: String(account.username) }
 }
 
 async function removeMemberFromAllSubdivisions(
@@ -241,15 +258,18 @@ export async function applyMemberLeftStatusActions({
   leftAt,
   memberLabel,
   userId,
+  deactivateAccount = true,
   conn,
 }: Omit<ApplyMemberStatusActionsOptions, 'previousStatus' | 'nextStatus'> & { leftAt: string }): Promise<MemberStatusActionSummary> {
-  const accountDeactivated = await deactivateLinkedAccount(accountId, userId, conn)
+  const accountDeactivated = deactivateAccount ? await deactivateLinkedAccount(accountId, userId, conn) : null
+  const accountDeactivationSkipped = !deactivateAccount && accountId ? await activeAccountSummary(accountId, conn) : null
   const removedSubdivisions = await removeMemberFromAllSubdivisions(memberId, memberLabel, userId, conn)
   const positionChanges = await closeMemberPositionsAfterLeftDate(memberId, leftAt, userId, conn)
 
   return {
     left_at: leftAt,
     account_deactivated: accountDeactivated,
+    account_deactivation_skipped: accountDeactivationSkipped,
     removed_subdivisions: removedSubdivisions,
     closed_positions: positionChanges.closed_positions,
     removed_positions: positionChanges.removed_positions,
@@ -268,6 +288,7 @@ export async function applyMemberStatusActions({
   leftAt,
   memberLabel,
   userId,
+  deactivateAccount = true,
   conn,
 }: ApplyMemberStatusActionsOptions): Promise<MemberStatusActionSummary | null> {
   if (previousStatus === MemberStatus.Left || nextStatus !== MemberStatus.Left || !leftAt) {
@@ -284,6 +305,7 @@ export async function applyMemberStatusActions({
     leftAt,
     memberLabel,
     userId,
+    deactivateAccount,
     conn,
   })
 }

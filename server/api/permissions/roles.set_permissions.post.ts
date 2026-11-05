@@ -1,3 +1,4 @@
+import { withLastAdminGuard } from '~/server/utils/permissions'
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { isValidPermissionKey } from '~/server/utils/permissions'
@@ -40,7 +41,7 @@ export default defineEventHandler(async (event): Promise<SetRolePermissionsRespo
     : []
 
   try {
-    await withAuditTransaction(current.user, async (conn) => {
+    const result = await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const existingRows = await query<{ permission_key: string }[]>(
         `SELECT permission_key
          FROM role_permissions
@@ -73,9 +74,10 @@ export default defineEventHandler(async (event): Promise<SetRolePermissionsRespo
           )
         },
       })
-    })
+      return { ok: true as const }
+    }))
 
-    return { ok: true }
+    return result
   } catch (err: any) {
     return internalError('Failed to update role permissions', err)
   }

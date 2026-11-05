@@ -9,7 +9,9 @@ import { normalizePositionAssignments, syncPositionAssignments, type PositionAss
 import { clearPendingChangeForField } from '~/server/utils/memberSelfEdit'
 import { retargetPendingMemberWelcome } from '~/server/utils/memberWelcome'
 import { SELF_EDIT_ELIGIBLE_FIELDS } from '~/config/memberSelfEdit'
-import { authorizeMemberAccountLink } from '~/server/utils/userAccounts'
+import { authorizeMemberAccountLink, canManageUser } from '~/server/utils/userAccounts'
+import { withLastAdminGuard } from '~/server/utils/permissions'
+import { MemberStatus } from '~/types/member'
 import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateMemberSuccess {
@@ -47,7 +49,7 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
   if (positionAssignments === null) return { ok: false, error: 'Invalid position list' }
 
   try {
-    return await withAuditTransaction(current.user, async (conn) => {
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const existingRows = await query<any[]>(`SELECT * FROM members WHERE id = ? LIMIT 1`, [memberId], conn)
       const existing = existingRows[0]
       if (!existing) return { ok: false, error: 'Member not found' }
@@ -181,6 +183,20 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
 
       const memberAccountId = nextAccount
 
+      // Setting "left" deactivates the linked account — only for editors who may manage that
+      // account, and never the editor's own (SEC-19). Otherwise the account stays active, also for
+      // the later leave dispatcher, which reads account_deactivation_skipped.
+      const mayDeactivateAccount = memberAccountId === null || (
+        memberAccountId !== Number(current.user.id)
+        && current.user.permissions.includes('users.manage')
+        && !await canManageUser(current.user.permissions, memberAccountId, conn)
+      )
+      await query(
+        `UPDATE members SET account_deactivation_skipped = ? WHERE id = ?`,
+        [body.status === MemberStatus.Left && !mayDeactivateAccount ? 1 : 0, memberId],
+        conn,
+      )
+
       const statusActions = await applyMemberStatusActions({
         memberId,
         accountId: memberAccountId,
@@ -189,13 +205,14 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         leftAt: body.left_at || null,
         memberLabel: `${body.first_name} ${body.last_name}`.trim(),
         userId: current.user.id,
+        deactivateAccount: mayDeactivateAccount,
         conn,
       })
 
      await retargetPendingMemberWelcome(memberId, conn)
 
       return { ok: true, id: memberId, status_actions: statusActions }
-    })
+    }))
   } catch (err: any) {
     return internalError('Failed to update member', err)
   }

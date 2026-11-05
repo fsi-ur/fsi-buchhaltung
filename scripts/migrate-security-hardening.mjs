@@ -6,6 +6,8 @@ import mariadb from 'mariadb'
  * - SEC-01: `members.account` becomes UNIQUE — one account per member record, so linking can't be
  *   used to inherit another member's positions. Duplicates are NOT resolved automatically: the
  *   migration fails and lists them, an admin has to unlink the surplus records first.
+ * - SEC-19: `members.account_deactivation_skipped` — set when the editor who marked a member as
+ *   "left" may not deactivate the linked account; the leave dispatcher then leaves it active.
  * - SEC-09: `system_events` — durable log (snapshot restores) that a restore itself never touches.
  */
 
@@ -67,6 +69,20 @@ async function systemEvents(conn) {
   console.log(`${LOG}: ensured system_events`)
 }
 
+async function columnExists(conn, table, column) {
+  const rows = await conn.query(
+    `SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
+    [table, column],
+  )
+  return rows.length > 0
+}
+
+async function memberDeactivationSkipped(conn) {
+  if (await columnExists(conn, 'members', 'account_deactivation_skipped')) return
+  await conn.query(`ALTER TABLE members ADD COLUMN account_deactivation_skipped TINYINT(1) NOT NULL DEFAULT 0 AFTER left_at`)
+  console.log(`${LOG}: added members.account_deactivation_skipped`)
+}
+
 async function migrate() {
   const migrationUser = DB_AUDIT_SETUP_USER || DB_USER
   const migrationPassword = DB_AUDIT_SETUP_USER
@@ -87,6 +103,7 @@ async function migrate() {
     conn = await pool.getConnection()
     await uniqueMemberAccount(conn)
     await systemEvents(conn)
+    await memberDeactivationSkipped(conn)
     console.log(`${LOG}: done`)
   } finally {
     if (conn) conn.release()

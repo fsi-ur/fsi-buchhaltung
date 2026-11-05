@@ -181,3 +181,48 @@ export function permissionsBeyond(wanted: Iterable<PermissionKey>, held: Iterabl
   const heldSet = new Set(held)
   return expandImpliedPermissions(wanted).filter(key => !heldSet.has(key))
 }
+
+export const LAST_ADMIN_ERROR = 'Diese Änderung würde den letzten aktiven Benutzer mit der Berechtigung „Berechtigungen verwalten“ entfernen.'
+
+/** Active users who hold `permissions.manage` through a role, a direct grant or a current position. */
+export async function countActivePermissionAdmins(conn?: mariadb.PoolConnection): Promise<number> {
+  const today = await appTodayLocalDate(conn)
+  const [row] = await query<Array<{ count: number }>>(
+    `SELECT COUNT(*) AS count
+     FROM users u
+     WHERE u.is_active = 1
+       AND (
+         EXISTS (SELECT 1 FROM user_permissions up WHERE up.user_id = u.id AND up.permission_key = 'permissions.manage')
+         OR EXISTS (
+           SELECT 1 FROM user_roles ur
+           JOIN roles r ON r.id = ur.role_id AND r.is_active = 1
+           JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission_key = 'permissions.manage'
+           WHERE ur.user_id = u.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM members m
+           JOIN member_positions mp ON mp.member_id = m.id AND mp.since <= ? AND (mp.until IS NULL OR mp.until >= ?)
+           JOIN positions p ON p.id = mp.position_id AND p.is_active = 1
+           JOIN position_permissions pp ON pp.position_id = p.id AND pp.permission_key = 'permissions.manage'
+           WHERE m.account = u.id
+         )
+       )`,
+    [today, today],
+    conn,
+  )
+  return Number(row?.count ?? 0)
+}
+
+/**
+ * Wraps a transaction callback so it fails (and, via withTransaction, rolls back) when it would
+ * leave no active `permissions.manage` holder although there was one before (SEC-24).
+ */
+export function withLastAdminGuard<T>(callback: (conn: mariadb.PoolConnection) => Promise<T>) {
+  return async (conn: mariadb.PoolConnection): Promise<T | { ok: false, error: string }> => {
+    const before = await countActivePermissionAdmins(conn)
+    const result = await callback(conn)
+    if (result && typeof result === 'object' && (result as { ok?: unknown }).ok === false) return result
+    if (before > 0 && await countActivePermissionAdmins(conn) === 0) return { ok: false, error: LAST_ADMIN_ERROR }
+    return result
+  }
+}

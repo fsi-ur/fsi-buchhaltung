@@ -4,7 +4,7 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { toggleActiveRecord } from '~/server/utils/api/toggle'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { appTodayLocalDate } from '~/server/utils/time'
-import { getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
+import { getPositionPermissionKeys, permissionsBeyond, withLastAdminGuard } from '~/server/utils/permissions'
 import { POSITION_ASSIGN_EXCEEDS_OWN } from '~/server/utils/positions'
 import { internalError } from '~/server/utils/api/errors'
 
@@ -70,7 +70,7 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       })
     }
 
-    return await withAuditTransaction(current.user, async (conn) => {
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const existingRows = await query<PositionRow[]>(
         `SELECT id, code, name, is_active
          FROM positions
@@ -133,7 +133,7 @@ export default defineEventHandler(async (event): Promise<ActivateResponse> => {
       }
 
       return { ok: true as const }
-    })
+    }))
   } catch (err: any) {
     return internalError('An error occured while activating/deactivating the position', err)
   }
