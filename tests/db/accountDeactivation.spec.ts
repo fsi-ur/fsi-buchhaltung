@@ -165,3 +165,34 @@ describe('last-admin guard (SEC-24)', () => {
     expect(result.ok).toBe(false)
   })
 })
+
+describe('push subscription re-binding needs the keys (SEC-20)', () => {
+  beforeEach(async () => {
+    await resetDatabase()
+    resetFixtureCounter()
+  })
+
+  it('moves an endpoint to another user only with matching keys', async () => {
+    const { default: subscribe } = await import('~/server/api/notifications/push-subscribe.post')
+    const owner = await signIn({ permissions: [] })
+    const attacker = await signIn({ permissions: [] })
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/device-1'
+
+    expect((await callHandler(subscribe, { token: owner.token, body: { endpoint, keys: { p256dh: 'pk', auth: 'secret' } } })).result).toEqual({ ok: true })
+
+    const hijack = await callHandler(subscribe, { token: attacker.token, body: { endpoint, keys: { p256dh: 'x', auth: 'y' } } })
+    expect(hijack.result.ok).toBe(false)
+    expect(await pushCount(owner.id)).toBe(1)
+
+    const sameDevice = await callHandler(subscribe, { token: attacker.token, body: { endpoint, keys: { p256dh: 'pk', auth: 'secret' } } })
+    expect(sameDevice.result).toEqual({ ok: true })
+    expect(await pushCount(attacker.id)).toBe(1)
+  })
+
+  it('refuses endpoints outside the push services', async () => {
+    const { default: subscribe } = await import('~/server/api/notifications/push-subscribe.post')
+    const user = await signIn({ permissions: [] })
+    const { result } = await callHandler(subscribe, { token: user.token, body: { endpoint: 'https://10.0.0.5/x', keys: { p256dh: 'a', auth: 'b' } } })
+    expect(result.ok).toBe(false)
+  })
+})
