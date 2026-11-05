@@ -235,6 +235,7 @@ export const messages = {
     },
     finances: {
       title: 'Finanzen',
+      recordLockedHint: 'Dieser Datensatz ist abgeschlossen und kann nur mit der Berechtigung zum nachträglichen Ändern bearbeitet werden.',
     },
     settings: {
       title: 'Einstellungen',
@@ -797,8 +798,10 @@ export const messages = {
         invoicesEdit: 'Rechnungen bearbeiten',
         reimbursementsView: 'Erstattungen ansehen',
         reimbursementsEdit: 'Erstattungen bearbeiten',
+        reimbursementsUnlock: 'Ausgezahlte Erstattungen nachträglich ändern',
         cashCountsView: 'Kassenzählungen ansehen',
         cashCountsEdit: 'Kassenzählungen bearbeiten',
+        cashCountsUnlock: 'Bestätigte Kassenzählungen nachträglich ändern',
         budgetsView: 'Haushaltspläne ansehen',
         budgetsEdit: 'Haushaltspläne bearbeiten',
         eventsAccess: 'Veranstaltungsbereich sehen',
@@ -827,6 +830,7 @@ export const messages = {
         usersManage: 'Benutzer verwalten',
         bankStatementsView: 'Kontoauszüge ansehen',
         bankStatementsEdit: 'Kontoauszüge bearbeiten',
+        bankStatementsUnlock: 'Gespeicherte Kontoauszüge nachträglich ändern',
         notificationsSend: 'Benachrichtigungen versenden',
         notificationsView: 'Postausgang einsehen',
         settingsNotificationsManage: 'Benachrichtigungseinstellungen verwalten',
@@ -3656,6 +3660,7 @@ export const messages = {
     },
     finances: {
       title: 'Finances',
+      recordLockedHint: 'This record is closed and can only be changed with the permission to edit it afterwards.',
     },
     settings: {
       title: 'Settings',
@@ -4218,8 +4223,10 @@ export const messages = {
         invoicesEdit: 'Edit invoices',
         reimbursementsView: 'View reimbursements',
         reimbursementsEdit: 'Edit reimbursements',
+        reimbursementsUnlock: 'Change disbursed reimbursements',
         cashCountsView: 'View cash counts',
         cashCountsEdit: 'Edit cash counts',
+        cashCountsUnlock: 'Change confirmed cash counts',
         budgetsView: 'View budgets',
         budgetsEdit: 'Edit budgets',
         eventsAccess: 'See events area',
@@ -4248,6 +4255,7 @@ export const messages = {
         usersManage: 'Manage users',
         bankStatementsView: 'View bank statements',
         bankStatementsEdit: 'Edit bank statements',
+        bankStatementsUnlock: 'Change saved bank statements',
         notificationsSend: 'Send notifications',
         notificationsView: 'View notification outbox',
         settingsNotificationsManage: 'Manage notification settings',

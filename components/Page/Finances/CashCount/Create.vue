@@ -13,6 +13,13 @@
       <PageAuditHistoryButton table="cash_counts" :record-id="cashCountId" />
     </div>
 
+    <p
+      v-if="lockedForUser && hasPermission('cash_counts.edit')"
+      class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
+    >
+      {{ t('finances.recordLockedHint') }}
+    </p>
+
     <CashCountForm
       v-model="form"
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
@@ -53,7 +60,10 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('CashCountList')
 
-const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('cash_counts.edit'))
+// Booked records are read-only without the unlock permission (SEC-22).
+const recordLocked = ref(false)
+const lockedForUser = computed(() => recordLocked.value && !hasPermission('cash_counts.unlock'))
+const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('cash_counts.edit') && !lockedForUser.value)
 const canViewFiles = computed(() => hasPermission(['files.view', 'cash_counts.view']) && (canEdit.value || existingFile.value !== null))
 
 const isEditMode = ref(false)
@@ -85,6 +95,7 @@ onMounted(async () => {
     return
   }
 
+  recordLocked.value = Boolean(res.locked)
   form.value = {
     event_id: res.cashCount.event_id,
     counted_by_first: res.cashCount.counted_by_first,

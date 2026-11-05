@@ -13,6 +13,13 @@
       <PageAuditHistoryButton table="reimbursements" :record-id="reimbursementId" />
     </div>
 
+    <p
+      v-if="lockedForUser && hasPermission('reimbursements.edit')"
+      class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
+    >
+      {{ t('finances.recordLockedHint') }}
+    </p>
+
     <ReimbursementForm
       v-model="form"
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
@@ -51,7 +58,10 @@ const toast = useToast()
 const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('ReimbursementList')
 
-const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit'))
+// Booked records are read-only without the unlock permission (SEC-22).
+const recordLocked = ref(false)
+const lockedForUser = computed(() => recordLocked.value && !hasPermission('reimbursements.unlock'))
+const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit') && !lockedForUser.value)
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
 const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
 const canViewReceipt = computed(() => hasPermission('receipts.view'))
@@ -180,6 +190,7 @@ onMounted(async () => {
     return
   }
 
+  recordLocked.value = Boolean(res.locked)
   form.value = {
     ...res.reimbursement,
     positions: res.reimbursement.positions.map(position => ({

@@ -1,3 +1,4 @@
+import { lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -37,6 +38,10 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
   const id = getNumericRouteParam(event)
   if (!id) return { ok: false, error: 'Invalid bank statement id' }
 
+  // Saved statements are locked (SEC-22); answer that before any payload validation.
+  const earlyLock = lockError(true, current.user.permissions, 'bank_statements.unlock')
+  if (earlyLock) return { ok: false, error: earlyLock }
+
   const multipart = await readMultipart(event)
   if (!multipart) return { ok: false, error: 'Missing form data' }
 
@@ -57,6 +62,8 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
         conn,
       )
       if (!existingRows.length) return { ok: false, error: 'Bank statement not found' }
+      const locked = lockError(true, current.user.permissions, 'bank_statements.unlock')
+      if (locked) return { ok: false, error: locked }
 
       const relationError = await validateBankStatementRelations(body, conn, id)
       if (relationError) return { ok: false, error: relationError }

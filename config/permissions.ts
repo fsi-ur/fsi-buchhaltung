@@ -17,8 +17,10 @@ export type PermissionKey =
   | 'invoices.edit'
   | 'reimbursements.view'
   | 'reimbursements.edit'
+  | 'reimbursements.unlock'
   | 'cash_counts.view'
   | 'cash_counts.edit'
+  | 'cash_counts.unlock'
   | 'budgets.view'
   | 'budgets.edit'
   | 'events.access'
@@ -47,6 +49,7 @@ export type PermissionKey =
   | 'users.manage'
   | 'bank_statements.view'
   | 'bank_statements.edit'
+  | 'bank_statements.unlock'
   | 'notifications.view'
   | 'notifications.send'
   | 'settings.notifications.manage'
@@ -89,8 +92,10 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'invoices.edit', labelKey: 'permissions.items.invoicesEdit', categoryKey: 'permissions.categories.invoices' },
   { key: 'reimbursements.view', labelKey: 'permissions.items.reimbursementsView', categoryKey: 'permissions.categories.reimbursements' },
   { key: 'reimbursements.edit', labelKey: 'permissions.items.reimbursementsEdit', categoryKey: 'permissions.categories.reimbursements' },
+  { key: 'reimbursements.unlock', labelKey: 'permissions.items.reimbursementsUnlock', categoryKey: 'permissions.categories.reimbursements' },
   { key: 'cash_counts.view', labelKey: 'permissions.items.cashCountsView', categoryKey: 'permissions.categories.cashCounts' },
   { key: 'cash_counts.edit', labelKey: 'permissions.items.cashCountsEdit', categoryKey: 'permissions.categories.cashCounts' },
+  { key: 'cash_counts.unlock', labelKey: 'permissions.items.cashCountsUnlock', categoryKey: 'permissions.categories.cashCounts' },
   { key: 'budgets.view', labelKey: 'permissions.items.budgetsView', categoryKey: 'permissions.categories.budgets' },
   { key: 'budgets.edit', labelKey: 'permissions.items.budgetsEdit', categoryKey: 'permissions.categories.budgets' },
   { key: 'events.access', labelKey: 'permissions.items.eventsAccess', categoryKey: 'permissions.categories.events' },
@@ -119,6 +124,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'users.manage', labelKey: 'permissions.items.usersManage', categoryKey: 'permissions.categories.users' },
   { key: 'bank_statements.view', labelKey: 'permissions.items.bankStatementsView', categoryKey: 'permissions.categories.bankStatements' },
   { key: 'bank_statements.edit', labelKey: 'permissions.items.bankStatementsEdit', categoryKey: 'permissions.categories.bankStatements' },
+  { key: 'bank_statements.unlock', labelKey: 'permissions.items.bankStatementsUnlock', categoryKey: 'permissions.categories.bankStatements' },
   { key: 'notifications.view', labelKey: 'permissions.items.notificationsView', categoryKey: 'permissions.categories.notifications' },
   { key: 'notifications.send', labelKey: 'permissions.items.notificationsSend', categoryKey: 'permissions.categories.notifications' },
   { key: 'settings.notifications.manage', labelKey: 'permissions.items.settingsNotificationsManage', categoryKey: 'permissions.categories.notifications' },
@@ -145,6 +151,9 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'invoices.view': ['companies.view', 'spheres.view', 'cost_centres.view'],
   'invoices.edit': ['invoices.view'],
   'reimbursements.edit': ['reimbursements.view'],
+  'reimbursements.unlock': ['reimbursements.edit'],
+  'cash_counts.unlock': ['cash_counts.edit'],
+  'bank_statements.unlock': ['bank_statements.edit'],
   'cash_counts.view': ['spheres.view', 'cost_centres.view'],
   'cash_counts.edit': ['cash_counts.view'],
   'budgets.view': ['cost_centres.view'],

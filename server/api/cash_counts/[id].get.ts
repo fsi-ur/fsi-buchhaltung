@@ -1,3 +1,4 @@
+import { isCashCountLocked } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
@@ -10,6 +11,8 @@ import { internalError } from '~/server/utils/api/errors'
 
 interface GetCashCountSuccess {
   ok: true
+  /** Booked (SEC-22): read-only without cash_counts.unlock. */
+  locked: boolean
   cashCount: CashCount
   file: FileRow | null
 }
@@ -76,6 +79,7 @@ export default defineEventHandler(async (event): Promise<GetCashCountResponse> =
 
     return {
       ok: true,
+      locked: await isCashCountLocked(id),
       cashCount: {
         id: Number(cashCount.id),
         event_id: cashCount.event_id === null ? null : Number(cashCount.event_id),

@@ -1,3 +1,4 @@
+import { isCashCountLocked, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -55,6 +56,8 @@ export default defineEventHandler(async (event): Promise<UpdateCashCountResponse
       )
 
       if (!existingRows.length) return { ok: false, error: 'Cash count not found' }
+      const locked = lockError(await isCashCountLocked(cashCountId, conn), current.user.permissions, 'cash_counts.unlock')
+      if (locked) return { ok: false, error: locked }
       const relationError = await validateCashCountRelations(updated, conn)
       if (relationError) return { ok: false, error: relationError }
 

@@ -10,6 +10,8 @@ import { internalError } from '~/server/utils/api/errors'
 
 interface GetBankStatementSuccess {
   ok: true
+  /** Booked (SEC-22): read-only without bank_statements.unlock. */
+  locked: boolean
   bankStatement: BankStatementRow & { opening_balance: number; closing_balance: number }
   positions: BankStatementPositionDetail[]
   file: FileRow | null
@@ -124,6 +126,7 @@ export default defineEventHandler(async (event): Promise<GetBankStatementRespons
 
     return {
       ok: true,
+      locked: true,
       bankStatement: {
         id: Number(row.id),
         statement_number: String(row.statement_number),

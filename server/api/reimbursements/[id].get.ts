@@ -1,3 +1,4 @@
+import { isReimbursementLocked } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
@@ -11,6 +12,8 @@ import { internalError } from '~/server/utils/api/errors'
 
 interface GetReimbursementSuccess {
   ok: true
+  /** Booked (SEC-22): read-only without reimbursements.unlock. */
+  locked: boolean
   reimbursement: Reimbursement
   file: FileRow | null
 }
@@ -123,6 +126,7 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
 
     return {
       ok: true,
+      locked: isReimbursementLocked(reimbursement),
       reimbursement: {
         id: Number(reimbursement.id),
         paid_by: Number(reimbursement.paid_by),
