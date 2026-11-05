@@ -31,6 +31,15 @@ export async function comparePassword(password: string, hash: string) {
   return bcrypt.compare(password, hash)
 }
 
+// A real cost-12 hash of a random string, so an unknown username costs as much as a wrong password
+// and response times don't reveal which usernames exist (SEC-18).
+let dummyHash: Promise<string> | null = null
+export async function compareAgainstDummyHash(password: string) {
+  dummyHash ??= hashPassword(crypto.randomBytes(16).toString('hex'))
+  await bcrypt.compare(password, await dummyHash)
+  return false
+}
+
 export async function createSession(userId: number, token: string) {
   const tokenHash = hmacToken(token)
   const now = new Date()
