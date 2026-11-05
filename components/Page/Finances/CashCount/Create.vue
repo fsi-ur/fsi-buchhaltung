@@ -54,7 +54,7 @@ const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('CashCountList')
 
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('cash_counts.edit'))
-const canViewFiles = computed(() => hasPermission('files.view') && (canEdit.value || existingFile.value !== null))
+const canViewFiles = computed(() => hasPermission(['files.view', 'cash_counts.view']) && (canEdit.value || existingFile.value !== null))
 
 const isEditMode = ref(false)
 const cashCountId = ref<number | null>(null)

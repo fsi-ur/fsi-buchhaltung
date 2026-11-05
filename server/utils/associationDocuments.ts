@@ -1,9 +1,23 @@
 import { query } from '~/server/utils/db'
 import type mariadb from 'mariadb'
 import type { AssociationDocument, SaveAssociationDocumentBody } from '~/types/document'
+import type { PermissionKey } from '~/config/permissions'
 
 export const DOCUMENT_ENTITY_TYPE = 'association_document'
 export const DOCUMENT_UPLOAD_FOLDER = 'documents'
+
+/**
+ * Who may list the document library — and therefore open its files. The pickers (notifications,
+ * notification templates, wiki) let these users attach and send any document, so refusing them the
+ * download would protect nothing and only stop them checking what they picked.
+ */
+export const DOCUMENT_ACCESS_PERMISSIONS: PermissionKey[] = [
+  'documents.view',
+  'settings.documents.manage',
+  'notifications.send',
+  'settings.notifications.manage',
+  'wiki.edit',
+]
 
 const SELECT_DOCUMENTS = `
   SELECT d.id, d.title, d.description, d.is_active, d.created_at,

@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { query } from '~/server/utils/db'
+import { canReadFile } from '~/server/utils/fileAccess'
 import type { AttachmentFileInfo } from '~/types/attachment'
 
 interface ResolveAttachmentFilesSuccess { ok: true, files: AttachmentFileInfo[] }
@@ -17,9 +18,15 @@ export default defineEventHandler(async (event): Promise<ResolveAttachmentFilesR
     : []
   if (!fileIds.length) return { ok: true, files: [] }
 
+  const readable: number[] = []
+  for (const id of fileIds) {
+    if (await canReadFile(event, current.user, id)) readable.push(id)
+  }
+  if (!readable.length) return { ok: true, files: [] }
+
   const rows = await query<Array<{ id: number, original_name: string, file_size: number, mime_type: string }>>(
-    `SELECT id, original_name, file_size, mime_type FROM files WHERE id IN (${fileIds.map(() => '?').join(',')})`,
-    fileIds,
+    `SELECT id, original_name, file_size, mime_type FROM files WHERE id IN (${readable.map(() => '?').join(',')})`,
+    readable,
   )
 
   return {

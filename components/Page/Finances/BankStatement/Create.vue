@@ -55,7 +55,7 @@ const { hasPermission } = useAuth()
 const { goToReturnTarget } = useReturnTarget('BankStatementList')
 
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('bank_statements.edit'))
-const canViewFiles = computed(() => hasPermission('files.view') && (canEdit.value || existingFile.value !== null))
+const canViewFiles = computed(() => hasPermission(['files.view', 'bank_statements.view']) && (canEdit.value || existingFile.value !== null))
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
 const canCreateInvoice = computed(() => hasPermission('invoices.edit'))
 const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))

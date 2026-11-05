@@ -55,7 +55,7 @@ const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
 const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
 const canViewReceipt = computed(() => hasPermission('receipts.view'))
-const canViewFiles = computed(() => hasPermission('files.view') && (canEdit.value || existingFile.value !== null))
+const canViewFiles = computed(() => hasPermission(['files.view', 'reimbursements.view']) && (canEdit.value || existingFile.value !== null))
 
 const isEditMode = ref(false)
 const reimbursementId = ref<number | null>(null)

@@ -24,7 +24,7 @@
         />
 
         <a
-          v-if="item.fileId && canOpenFiles && !item.unavailable"
+          v-if="canOpen(item)"
           :href="`/api/files/${item.fileId}`"
           target="_blank"
           rel="noopener noreferrer"
@@ -133,7 +133,6 @@
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
-import { useAuth } from '~/composables/useAuth'
 import { useAssociationDocuments } from '~/composables/useAssociationDocuments'
 import { useAppRefresh } from '~/composables/useAppRefresh'
 import type { UploadAttachmentResponse } from '~/server/api/attachments/upload.post'
@@ -164,7 +163,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const toast = useToast()
-const { hasPermission } = useAuth()
 const { documents, ensureLoaded, refresh: refreshDocuments } = useAssociationDocuments()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -173,9 +171,13 @@ const pickerOpen = ref(false)
 const search = ref('')
 const draftDocumentIds = ref<number[]>([])
 
+/**
+ * Files the server has confirmed this user may open — the upload response and `/api/attachments/files`
+ * only ever return those. `checkedFiles` remembers ids already asked about, so an unreadable one is not
+ * re-requested on every selection change.
+ */
 const uploadedFiles = ref(new Map<number, AttachmentFileInfo>())
-
-const canOpenFiles = computed(() => hasPermission(['files.view']))
+const checkedFiles = new Set<number>()
 
 const selectionSize = computed(() => props.modelValue.documentIds.length + props.modelValue.fileIds.length)
 const full = computed(() => selectionSize.value >= props.max)
@@ -232,6 +234,15 @@ const filteredDocuments = computed(() => {
   return documents.value.filter(document =>
     document.title.toLowerCase().includes(needle) || document.description.toLowerCase().includes(needle))
 })
+
+/**
+ * Documents come from the library list, and everyone allowed to load that list may open its files.
+ * Single files are linked only once the server has confirmed access, so no link leads to a refusal.
+ */
+function canOpen(item: AttachmentItem) {
+  if (!item.fileId || item.unavailable) return false
+  return item.kind === 'document' || uploadedFiles.value.has(item.fileId)
+}
 
 function itemTitle(item: AttachmentItem) {
   if (item.unavailable) return t('attachments.unavailable')
@@ -304,8 +315,9 @@ async function uploadFile(event: Event) {
 }
 
 async function resolveUnknownFiles() {
-  const missing = props.modelValue.fileIds.filter(fileId => !fileInfo(fileId))
+  const missing = props.modelValue.fileIds.filter(fileId => !uploadedFiles.value.has(fileId) && !checkedFiles.has(fileId))
   if (!missing.length) return
+  for (const fileId of missing) checkedFiles.add(fileId)
 
   try {
     const res = await apiFetch<ResolveAttachmentFilesResponse>('/api/attachments/files', {
@@ -316,6 +328,8 @@ async function resolveUnknownFiles() {
     for (const file of res.files) uploadedFiles.value.set(file.fileId, file)
   } catch {
     // Leaving the placeholder title in place is enough — the selection itself is unaffected.
+    // Forget the ids so a later change or refresh asks again instead of treating them as unreadable.
+    for (const fileId of missing) checkedFiles.delete(fileId)
   }
 }
 
@@ -327,6 +341,7 @@ onMounted(() => {
 watch(() => props.modelValue.fileIds, resolveUnknownFiles)
 
 useAppRefresh().onRefresh(() => {
+  checkedFiles.clear()
   resolveUnknownFiles()
   return refreshDocuments()
 })

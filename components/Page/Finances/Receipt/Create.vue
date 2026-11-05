@@ -65,7 +65,7 @@ const { openLinkedRecord } = useLinkedRecord('ReceiptCreate', 'ReceiptList')
 
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
 const canEditCompany = computed(() => canEdit.value && hasPermission('companies.edit'))
-const canViewFiles = computed(() => hasPermission('files.view') && (canEdit.value || existingFile.value !== null))
+const canViewFiles = computed(() => hasPermission(['files.view', 'receipts.view']) && (canEdit.value || existingFile.value !== null))
 
 const isEditMode = ref(false)
 const receiptId = ref<number | null>(null)
