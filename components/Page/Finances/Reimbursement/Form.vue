@@ -312,6 +312,7 @@ const saveDisabled = computed(() => disabled.value || Boolean(props.saving) || v
 const members = ref<FinanceMemberOption[]>([])
 const receipts = ref<ReceiptRow[]>([])
 const receiptAssignments = ref<{ receipt_id: number, reimbursement_id: number }[]>([])
+const bankStatementReceiptIds = ref<Set<number>>(new Set())
 const paidByQuery = ref('')
 const checkedByQuery = ref('')
 const disbursedByQuery = ref('')
@@ -363,7 +364,9 @@ async function loadReceipts() {
 
 async function loadReceiptAssignments() {
   const res = await apiFetch<ApiResponse<'/api/reimbursements/receipt_assignments'>>('/api/reimbursements/receipt_assignments', { method: 'GET' })
-  if (res.ok) receiptAssignments.value = res.assignments
+  if (!res.ok) return
+  receiptAssignments.value = res.assignments
+  bankStatementReceiptIds.value = new Set(res.bankStatementReceiptIds)
 }
 
 async function loadSupportData() {
@@ -536,8 +539,19 @@ function createNewReceipt() {
   )
 }
 
+/**
+ * A receipt can be edited from here while this reimbursement is editable — the receipt editor then
+ * lifts the booking freeze for it (SEC-16). Receipts paid by a bank statement or taken by another
+ * reimbursement stay frozen, so they only get the view icon.
+ */
 function canEditSelectedReceipt(index: number) {
-  return canEditReceipt.value && Boolean(selectedReceipt(index))
+  if (disabled.value || !canEditReceipt.value) return false
+  const receipt = selectedReceipt(index)
+  if (!receipt) return false
+  if (bankStatementReceiptIds.value.has(receipt.id)) return false
+  const assignedReimbursementId = receiptAssignments.value.find(assignment => assignment.receipt_id === receipt.id)?.reimbursement_id
+  const currentReimbursementId = Number(pageMeta.value?.reimbursementId || 0)
+  return !assignedReimbursementId || assignedReimbursementId === currentReimbursementId
 }
 
 function canViewSelectedReceipt(index: number) {

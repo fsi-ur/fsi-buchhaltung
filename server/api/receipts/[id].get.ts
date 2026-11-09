@@ -1,4 +1,4 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, getQuery } from 'h3'
 import { query } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
@@ -7,12 +7,17 @@ import { getAttachedFile, getEntityIdsWithActiveFiles } from '~/server/utils/fil
 import type { Receipt, ReceiptPosition, ReceiptRow } from '~/types/receipt'
 import type { FileRow } from '~/types/file'
 import { internalError } from '~/server/utils/api/errors'
+import { getReceiptLinkState, parseViaReimbursementId } from '~/server/utils/receiptLinks'
+import { isUnlockRequested } from '~/server/utils/recordLocks'
 
 interface GetReceiptSuccess {
   ok: true
   receipt: Receipt
   file: FileRow | null
+  /** Linked to a reimbursement or bank statement: the status follows that record. */
   statusLocked: boolean
+  /** Company, date, number, positions and file are frozen (SEC-16) for this request. */
+  fieldsLocked: boolean
   reimbursementId: number | null
   bankStatementId: number | null
 }
@@ -67,20 +72,12 @@ export default defineEventHandler(async (event): Promise<GetReceiptResponse> => 
       [id]
     )
 
-    const reimbursementLinks: Array<{ reimbursement_id: number }> = await query(
-      `
-      SELECT reimbursement_id
-      FROM reimbursement_positions
-      WHERE receipt_id = ?
-      LIMIT 1
-      `,
-      [id]
-    )
-
-    const bankStatementLinks: Array<{ bank_statement_id: number }> = await query(
-      `SELECT bank_statement_id FROM bank_statement_positions WHERE receipt_id = ? LIMIT 1`,
-      [id]
-    )
+    const requestQuery = getQuery(event)
+    const links = await getReceiptLinkState(id, {
+      viaReimbursementId: parseViaReimbursementId(requestQuery.viaReimbursement),
+      unlockRequested: isUnlockRequested(requestQuery.unlock),
+      permissions: current.user.permissions,
+    })
 
     const file = await getAttachedFile('receipt', id)
     const receiptIdsWithFiles = await getEntityIdsWithActiveFiles('receipt', [id])
@@ -98,9 +95,10 @@ export default defineEventHandler(async (event): Promise<GetReceiptResponse> => 
         positions: normalizeBigInt(positions) as ReceiptPosition[],
       }),
       file: file ? normalizeBigInt(file) : null,
-      statusLocked: reimbursementLinks.length > 0 || bankStatementLinks.length > 0,
-      reimbursementId: reimbursementLinks[0] ? Number(reimbursementLinks[0].reimbursement_id) : null,
-      bankStatementId: bankStatementLinks[0] ? Number(bankStatementLinks[0].bank_statement_id) : null,
+      statusLocked: links.linked,
+      fieldsLocked: links.fieldsLocked,
+      reimbursementId: links.reimbursementId,
+      bankStatementId: links.bankStatementId,
     }
   } catch (err: any) {
     return internalError('An error occurred while fetching a receipt', err)

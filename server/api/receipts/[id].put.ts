@@ -14,6 +14,8 @@ import { changesLockedReceiptFields, RECEIPT_LOCKED_ERROR, receiptRequiresFile, 
 import { validateSphereSelection } from '~/server/utils/spheres'
 import type { ReceiptPosition, ReceiptRow } from '~/types/receipt'
 import { internalError } from '~/server/utils/api/errors'
+import { getReceiptLinkState, parseViaReimbursementId } from '~/server/utils/receiptLinks'
+import { isUnlockRequested } from '~/server/utils/recordLocks'
 
 interface UpdateReceiptSuccess {
   ok: true
@@ -38,6 +40,8 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
 
   const receiptJson = multipart.getField('receipt')
   const removeExistingFile = multipart.getField('removeExistingFile') === 'true'
+  const viaReimbursementId = parseViaReimbursementId(multipart.getField('viaReimbursement'))
+  const unlockRequested = isUnlockRequested(multipart.getField('unlock'))
 
   if (!receiptJson) return { ok: false, error: 'Missing receipt' }
 
@@ -59,23 +63,17 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
 
       if (!existingRows.length) return { ok: false, error: 'No matching receipts in database' }
       const existingReceipt = existingRows[0]!
-      const reimbursementLinks: Array<{ reimbursement_id: number }> = await query(
-        `SELECT reimbursement_id FROM reimbursement_positions WHERE receipt_id = ? LIMIT 1`,
-        [receiptId],
+      const { linked, fieldsLocked } = await getReceiptLinkState(
+        receiptId,
+        { viaReimbursementId, unlockRequested, permissions: current.user.permissions },
         conn,
       )
-      const bankStatementLinks: Array<{ bank_statement_id: number }> = await query(
-        `SELECT bank_statement_id FROM bank_statement_positions WHERE receipt_id = ? LIMIT 1`,
-        [receiptId],
-        conn,
-      )
-      const statusLocked = reimbursementLinks.length > 0 || bankStatementLinks.length > 0
       const existingAttachment = await getActiveFileAttachment('receipt', receiptId, conn)
       const hasExistingFile = Boolean(existingAttachment)
       const hasFileAfterSave = Boolean(multipart.file) || (hasExistingFile && !removeExistingFile)
-      const targetStatus = statusLocked ? existingReceipt.status : updated.status
+      const targetStatus = linked ? existingReceipt.status : updated.status
 
-      if (statusLocked) {
+      if (fieldsLocked) {
         if (multipart.file || removeExistingFile) return { ok: false, error: RECEIPT_LOCKED_ERROR }
         const lockedPositions: ReceiptPosition[] = await query(
           `SELECT * FROM receipt_positions WHERE receipt_id = ?`,
@@ -85,7 +83,7 @@ export default defineEventHandler(async (event): Promise<UpdateReceiptResponse> 
         if (changesLockedReceiptFields(existingReceipt, lockedPositions, updated)) return { ok: false, error: RECEIPT_LOCKED_ERROR }
       }
 
-      if (statusLocked && !hasFileAfterSave) {
+      if (linked && !hasFileAfterSave) {
         return { ok: false, error: 'Receipts that are part of a reimbursement or bank statement must always have a file attached' }
       }
       if (receiptRequiresFile(targetStatus) && !hasFileAfterSave) {

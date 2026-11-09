@@ -64,7 +64,8 @@ const unlocked = ref(false)
 const lockedForUser = computed(() => recordLocked.value && !(unlocked.value && hasPermission('reimbursements.unlock')))
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit') && !lockedForUser.value)
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
-const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
+// Linked receipts are only editable from here while the reimbursement itself is editable (SEC-16).
+const canEditReceipt = computed(() => canEdit.value && hasPermission('receipts.edit'))
 const canViewReceipt = computed(() => hasPermission('receipts.view'))
 const canViewFiles = computed(() => hasPermission(['files.view', 'reimbursements.view']) && (canEdit.value || existingFile.value !== null))
 

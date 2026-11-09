@@ -12,6 +12,7 @@ import { callHandler, multipartBody } from '../helpers/handler'
 describe('locked receipts', () => {
   let token: string
   let receiptId: number
+  let reimbursementId: number
   let base: Record<string, any>
 
   beforeEach(async () => {
@@ -28,15 +29,25 @@ describe('locked receipts', () => {
     )
     await attachFileToEntity(Number(file.insertId), 'receipt', receiptId, editor.id)
     const reimbursement = await query<any>(`INSERT INTO reimbursements (paid_by, submitted_at, cash) VALUES (?, '2026-03-01', 0)`, [await createMember()])
-    await query('INSERT INTO reimbursement_positions (reimbursement_id, receipt_id) VALUES (?, ?)', [Number(reimbursement.insertId), receiptId])
+    reimbursementId = Number(reimbursement.insertId)
+    await query('INSERT INTO reimbursement_positions (reimbursement_id, receipt_id) VALUES (?, ?)', [reimbursementId, receiptId])
 
     const [receipt] = await query<any[]>('SELECT * FROM receipts WHERE id = ?', [receiptId])
     const positions = await query<any[]>('SELECT id, sphere, cost_centre, amount, tax FROM receipt_positions WHERE receipt_id = ?', [receiptId])
     base = { company_id: receipt.company_id, receipt_date: receipt.receipt_date, receipt_number: null, status: 'paid', positions }
   })
 
-  function put(receipt: Record<string, any>) {
-    return callHandler(updateReceipt, { token, method: 'PUT', params: { id: receiptId }, ...multipartBody({ receipt: JSON.stringify(receipt) }) })
+  function put(receipt: Record<string, any>, extra: Record<string, string> = {}, as = token) {
+    return callHandler(updateReceipt, { token: as, method: 'PUT', params: { id: receiptId }, ...multipartBody({ receipt: JSON.stringify(receipt), ...extra }) })
+  }
+
+  async function storedAmount() {
+    const [position] = await query<any[]>('SELECT amount FROM receipt_positions WHERE receipt_id = ?', [receiptId])
+    return Number(position.amount)
+  }
+
+  function changedAmount() {
+    return { ...base, positions: [{ ...base.positions[0], amount: 99 }] }
   }
 
   it('refuses changing the amount', async () => {
@@ -54,5 +65,55 @@ describe('locked receipts', () => {
   it('still saves an unchanged receipt (and description changes)', async () => {
     const { result } = await put({ ...base, description: 'Notiz' })
     expect(result).toEqual({ ok: true })
+  })
+
+  describe('opened from its reimbursement', () => {
+    it('allows changes for a user who may edit the reimbursement', async () => {
+      const editor = await signIn({ permissions: ['receipts.edit', 'reimbursements.edit'] })
+      const { result } = await put(changedAmount(), { viaReimbursement: String(reimbursementId) }, editor.token)
+      expect(result).toEqual({ ok: true })
+      expect(await storedAmount()).toBe(99)
+    })
+
+    it('keeps the status of the reimbursement', async () => {
+      const editor = await signIn({ permissions: ['receipts.edit', 'reimbursements.edit'] })
+      await put({ ...changedAmount(), status: 'draft' }, { viaReimbursement: String(reimbursementId) }, editor.token)
+      const [receipt] = await query<any[]>('SELECT status FROM receipts WHERE id = ?', [receiptId])
+      expect(receipt.status).toBe('paid')
+    })
+
+    it('stays frozen without reimbursements.edit', async () => {
+      const { result } = await put(changedAmount(), { viaReimbursement: String(reimbursementId) })
+      expect(result).toEqual({ ok: false, error: RECEIPT_LOCKED_ERROR })
+      expect(await storedAmount()).toBe(10)
+    })
+
+    it('stays frozen when another reimbursement is named', async () => {
+      const editor = await signIn({ permissions: ['receipts.edit', 'reimbursements.edit'] })
+      const { result } = await put(changedAmount(), { viaReimbursement: String(reimbursementId + 1) }, editor.token)
+      expect(result).toEqual({ ok: false, error: RECEIPT_LOCKED_ERROR })
+    })
+
+    it('needs the unlock while the reimbursement is booked', async () => {
+      await query(`UPDATE reimbursements SET disbursed_at = '2026-03-05', disbursed_by = paid_by WHERE id = ?`, [reimbursementId])
+      const editor = await signIn({ permissions: ['receipts.edit', 'reimbursements.edit', 'reimbursements.unlock'] })
+      const via = { viaReimbursement: String(reimbursementId) }
+
+      expect((await put(changedAmount(), via, editor.token)).result).toEqual({ ok: false, error: RECEIPT_LOCKED_ERROR })
+      expect((await put(changedAmount(), { ...via, unlock: 'true' }, editor.token)).result).toEqual({ ok: true })
+      expect(await storedAmount()).toBe(99)
+    })
+
+    it('stays frozen while a bank statement also pays the receipt', async () => {
+      const member = await createMember()
+      const statement = await query<any>(`INSERT INTO bank_statements (statement_number, checked_by, statement_date) VALUES ('1', ?, '2026-03-10')`, [member])
+      await query(
+        `INSERT INTO bank_statement_positions (bank_statement_id, position_type, position_date, receipt_id, amount) VALUES (?, 'receipt', '2026-03-10', ?, 10)`,
+        [Number(statement.insertId), receiptId],
+      )
+      const editor = await signIn({ permissions: ['receipts.edit', 'reimbursements.edit'] })
+      const { result } = await put(changedAmount(), { viaReimbursement: String(reimbursementId) }, editor.token)
+      expect(result).toEqual({ ok: false, error: RECEIPT_LOCKED_ERROR })
+    })
   })
 })
