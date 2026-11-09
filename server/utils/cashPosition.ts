@@ -1,4 +1,5 @@
 import { query } from '~/server/utils/db'
+import { balancesByAccount, loadBankMovements, reimbursementTotalSql, sumBankMovements } from '~/server/utils/bankBalances'
 import type { FinanceLiquidityRow, FinanceLiquidityRowType } from '~/types/financeAnalysis'
 
 export interface RegisterBalance {
@@ -8,6 +9,8 @@ export interface RegisterBalance {
 
 export interface CashPositionResult {
   bankBalance: number
+  /** Balance per account id (accounts without movements are missing). */
+  bankBalancesByAccount: Map<number, number>
   cashTotal: number
   totalMoney: number
   registerBalances: RegisterBalance[]
@@ -18,61 +21,16 @@ function rc(v: number) {
 }
 
 /**
- * Bank balance at (or strictly before) dateStr.
- * Formula: Σ bank_statement_positions ≤ D − Σ bank-disbursed reimbursements ≤ D
+ * Bank balance at (or strictly before) dateStr, total and per account.
+ * Formula: Σ bank_statement_positions ≤ D − Σ bank-disbursed reimbursements ≤ D (transfers net to 0).
  */
+export async function computeBankBalances(dateStr: string, exclusive = false) {
+  const movements = await loadBankMovements({ until: dateStr, exclusive })
+  return { total: sumBankMovements(movements), byAccount: balancesByAccount(movements) }
+}
+
 export async function computeBankBalance(dateStr: string, exclusive = false): Promise<number> {
-  const op = exclusive ? '<' : '<='
-
-  const bspRows: any[] = await query(
-    `SELECT bsp.position_type, bsp.amount, bsp.receipt_id, bsp.invoice_id
-     FROM bank_statement_positions bsp
-     WHERE bsp.position_date ${op} ?`,
-    [dateStr],
-  )
-
-  const receiptIds = bspRows.filter(r => r.position_type === 'receipt' && r.receipt_id != null).map(r => Number(r.receipt_id))
-  const invoiceIds = bspRows.filter(r => r.position_type === 'invoice' && r.invoice_id != null).map(r => Number(r.invoice_id))
-
-  const receiptTotals = new Map<number, number>()
-  if (receiptIds.length) {
-    const rows: any[] = await query(
-      `SELECT receipt_id, IFNULL(SUM(amount), 0) AS total FROM receipt_positions WHERE receipt_id IN (${receiptIds.map(() => '?').join(',')}) GROUP BY receipt_id`,
-      receiptIds,
-    )
-    for (const r of rows) receiptTotals.set(Number(r.receipt_id), Number(r.total))
-  }
-
-  const invoiceTotals = new Map<number, number>()
-  if (invoiceIds.length) {
-    const rows: any[] = await query(
-      `SELECT invoice_id, IFNULL(SUM(quantity * unit_price * (1 + tax / 100)), 0) AS total FROM invoice_positions WHERE invoice_id IN (${invoiceIds.map(() => '?').join(',')}) GROUP BY invoice_id`,
-      invoiceIds,
-    )
-    for (const r of rows) invoiceTotals.set(Number(r.invoice_id), Number(r.total))
-  }
-
-  let bank = 0
-  for (const row of bspRows) {
-    if (row.position_type === 'receipt') bank -= receiptTotals.get(Number(row.receipt_id)) ?? 0
-    else if (row.position_type === 'invoice') bank += invoiceTotals.get(Number(row.invoice_id)) ?? 0
-    else if (row.position_type === 'event') bank += Number(row.amount ?? 0)
-  }
-
-  const reimbRows: any[] = await query(
-    `SELECT reimb.id, IFNULL(SUM(rp.amount), 0) AS total_amount
-     FROM reimbursements reimb
-     INNER JOIN reimbursement_positions rlink ON rlink.reimbursement_id = reimb.id
-     INNER JOIN receipt_positions rp ON rp.receipt_id = rlink.receipt_id
-     WHERE reimb.cash = 0
-       AND reimb.disbursed_at IS NOT NULL
-       AND DATE(reimb.disbursed_at) ${op} ?
-     GROUP BY reimb.id`,
-    [dateStr],
-  )
-  for (const r of reimbRows) bank -= Number(r.total_amount)
-
-  return rc(bank)
+  return (await computeBankBalances(dateStr, exclusive)).total
 }
 
 interface CashTransaction {
@@ -357,8 +315,8 @@ function assignTransactions(
  * Compute the total money the association holds at the given date.
  */
 export async function computeTotalMoney(dateStr: string, exclusive = false): Promise<CashPositionResult> {
-  const [bankBalance, txns, anchorsByRegister] = await Promise.all([
-    computeBankBalance(dateStr, exclusive),
+  const [bankBalances, txns, anchorsByRegister] = await Promise.all([
+    computeBankBalances(dateStr, exclusive),
     loadCashTransactions(dateStr, exclusive),
     loadRegisterAnchors(dateStr, exclusive),
   ])
@@ -379,8 +337,10 @@ export async function computeTotalMoney(dateStr: string, exclusive = false): Pro
 
   cashTotal = rc(cashTotal)
 
+  const bankBalance = bankBalances.total
   return {
     bankBalance,
+    bankBalancesByAccount: bankBalances.byAccount,
     cashTotal,
     totalMoney: rc(bankBalance + cashTotal),
     registerBalances,
@@ -388,56 +348,11 @@ export async function computeTotalMoney(dateStr: string, exclusive = false): Pro
 }
 
 /**
- * Shared gross bank balance helper for current-balance.get.ts.
+ * Current bank balance (all movements regardless of date), total and per account.
  */
-export async function computeCurrentBankBalance(): Promise<number> {
-  const rows: any[] = await query(
-    `SELECT bsp.position_type, bsp.receipt_id, bsp.invoice_id, bsp.amount
-     FROM bank_statement_positions bsp
-     ORDER BY bsp.position_date ASC, bsp.id ASC`,
-  )
-
-  if (!rows.length) return 0
-
-  const receiptIds = rows.filter(r => r.position_type === 'receipt' && r.receipt_id != null).map(r => Number(r.receipt_id))
-  const invoiceIds = rows.filter(r => r.position_type === 'invoice' && r.invoice_id != null).map(r => Number(r.invoice_id))
-
-  const receiptTotals = new Map<number, number>()
-  if (receiptIds.length) {
-    const res: any[] = await query(
-      `SELECT receipt_id, IFNULL(SUM(amount), 0) AS total FROM receipt_positions WHERE receipt_id IN (${receiptIds.map(() => '?').join(',')}) GROUP BY receipt_id`,
-      receiptIds,
-    )
-    for (const r of res) receiptTotals.set(Number(r.receipt_id), Number(r.total))
-  }
-
-  const invoiceTotals = new Map<number, number>()
-  if (invoiceIds.length) {
-    const res: any[] = await query(
-      `SELECT invoice_id, IFNULL(SUM(quantity * unit_price * (1 + tax / 100)), 0) AS total FROM invoice_positions WHERE invoice_id IN (${invoiceIds.map(() => '?').join(',')}) GROUP BY invoice_id`,
-      invoiceIds,
-    )
-    for (const r of res) invoiceTotals.set(Number(r.invoice_id), Number(r.total))
-  }
-
-  let bank = 0
-  for (const row of rows) {
-    if (row.position_type === 'receipt') bank -= receiptTotals.get(Number(row.receipt_id)) ?? 0
-    else if (row.position_type === 'invoice') bank += invoiceTotals.get(Number(row.invoice_id)) ?? 0
-    else if (row.position_type === 'event') bank += Number(row.amount ?? 0)
-  }
-
-  const reimbRows: any[] = await query(
-    `SELECT reimb.id, IFNULL(SUM(rp.amount), 0) AS total_amount
-     FROM reimbursements reimb
-     INNER JOIN reimbursement_positions rlink ON rlink.reimbursement_id = reimb.id
-     INNER JOIN receipt_positions rp ON rp.receipt_id = rlink.receipt_id
-     WHERE reimb.cash = 0 AND reimb.disbursed_at IS NOT NULL
-     GROUP BY reimb.id`,
-  )
-  for (const r of reimbRows) bank -= Number(r.total_amount)
-
-  return rc(bank)
+export async function computeCurrentBankBalances() {
+  const movements = await loadBankMovements()
+  return { total: sumBankMovements(movements), byAccount: balancesByAccount(movements) }
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +404,7 @@ function makeLedgerRow(
     label,
     reference,
     register_number,
+    account_name: null,
     delta_amount: rc(delta_amount),
     bank_balance: rc(bank_balance),
     cash_balance: rc(cash_balance),
@@ -499,6 +415,10 @@ function makeLedgerRow(
     has_discrepancy: discrepancy_amount !== null && discrepancy_amount !== 0,
     note,
   }
+}
+
+function withAccount(row: FinanceLiquidityRow, accountName: string | null): FinanceLiquidityRow {
+  return { ...row, account_name: accountName }
 }
 
 /**
@@ -528,9 +448,21 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
               r.receipt_number, cr.name AS receipt_company,
               i.invoice_number, ci.name AS invoice_company,
               e.name AS event_name,
-              bs.statement_number
+              bs.statement_number,
+              bs.account_id, fa.name AS account_name,
+              bsp.counter_account_id, cfa.name AS counter_account_name,
+              bsp.linked_position_id, bsp.reimbursement_id,
+              src.amount AS source_amount,
+              EXISTS (SELECT 1 FROM bank_statement_positions conf WHERE conf.linked_position_id = bsp.id) AS is_confirmed,
+              CONCAT(rm.first_name, ' ', rm.last_name) AS reimbursement_member,
+              ${reimbursementTotalSql('bsp.reimbursement_id')} AS reimbursement_total
        FROM bank_statement_positions bsp
+       LEFT JOIN bank_statement_positions src ON src.id = bsp.linked_position_id
+       LEFT JOIN reimbursements rreimb ON rreimb.id = bsp.reimbursement_id
+       LEFT JOIN members rm ON rm.id = rreimb.paid_by
        INNER JOIN bank_statements bs ON bs.id = bsp.bank_statement_id
+       LEFT JOIN finance_accounts fa ON fa.id = bs.account_id
+       LEFT JOIN finance_accounts cfa ON cfa.id = bsp.counter_account_id
        LEFT JOIN receipts r ON r.id = bsp.receipt_id
        LEFT JOIN companies cr ON cr.id = r.company_id
        LEFT JOIN invoices i ON i.id = bsp.invoice_id
@@ -548,18 +480,21 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
               rlink.receipt_id,
               r.receipt_number,
               c.name AS company_name,
-              IFNULL(SUM(rp.amount), 0) AS receipt_amount
+              IFNULL(SUM(rp.amount), 0) AS receipt_amount,
+              fa.name AS account_name
        FROM reimbursements reimb
        INNER JOIN members m ON m.id = reimb.paid_by
        INNER JOIN reimbursement_positions rlink ON rlink.reimbursement_id = reimb.id
        INNER JOIN receipts r ON r.id = rlink.receipt_id
        INNER JOIN receipt_positions rp ON rp.receipt_id = rlink.receipt_id
        LEFT JOIN companies c ON c.id = r.company_id
+       LEFT JOIN finance_accounts fa ON fa.id = reimb.paid_from_account_id
        WHERE reimb.cash = 0
          AND reimb.disbursed_at IS NOT NULL
          AND DATE(reimb.disbursed_at) <= ?
+         AND NOT EXISTS (SELECT 1 FROM bank_statement_positions conf WHERE conf.reimbursement_id = reimb.id)
        GROUP BY reimb.id, reimb.disbursed_at, m.first_name, m.last_name,
-                rlink.receipt_id, r.receipt_number, c.name
+                rlink.receipt_id, r.receipt_number, c.name, fa.name
        ORDER BY DATE(reimb.disbursed_at) ASC, reimb.id ASC, rlink.receipt_id ASC`,
       [endDate],
     ),
@@ -641,10 +576,11 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
     ),
     // Bank statements for checkpoint metadata (checked_by)
     query<any>(
-      `SELECT bs.id, bs.statement_number,
+      `SELECT bs.id, bs.statement_number, fa.name AS account_name,
               CONCAT(m.first_name, ' ', m.last_name) AS checked_by_name
        FROM bank_statements bs
-       LEFT JOIN members m ON m.id = bs.checked_by`,
+       LEFT JOIN members m ON m.id = bs.checked_by
+       LEFT JOIN finance_accounts fa ON fa.id = bs.account_id`,
     ),
   ])
 
@@ -681,7 +617,7 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
   function bspSignedAmount(row: any): number {
     if (row.position_type === 'receipt') return -(bspReceiptTotals.get(Number(row.receipt_id)) ?? 0)
     if (row.position_type === 'invoice') return bspInvoiceTotals.get(Number(row.invoice_id)) ?? 0
-    if (row.position_type === 'event') return Number(row.event_amount ?? 0)
+    if (row.position_type === 'event' || row.position_type === 'transfer' || row.position_type === 'reimbursement') return Number(row.event_amount ?? 0)
     return 0
   }
 
@@ -797,11 +733,12 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
     if (!current || d > current) maxPositionDateByStatement.set(stmtId, d)
   }
 
-  const stmtInfoById = new Map<number, { statement_number: string; checked_by_name: string }>()
+  const stmtInfoById = new Map<number, { statement_number: string; checked_by_name: string; account_name: string | null }>()
   for (const row of bankStatementRows) {
     stmtInfoById.set(Number(row.id), {
       statement_number: String(row.statement_number || ''),
       checked_by_name: String(row.checked_by_name || ''),
+      account_name: row.account_name ? String(row.account_name) : null,
     })
   }
 
@@ -887,6 +824,60 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
   for (const evt of events) {
     const seq = rowSeq++
 
+    if (evt.kind === 'bankPosition' && (evt.row.linked_position_id != null || evt.row.position_type === 'reimbursement')) {
+      // A confirmation: what was expected moves on the confirmed date; a differing amount follows as
+      // a separate bank difference row (counted with the cash differences in the reconciliation).
+      const isTransfer = evt.row.position_type === 'transfer'
+      const confirmed = bspSignedAmount(evt.row)
+      const expected = rc(isTransfer ? -Number(evt.row.source_amount ?? 0) : -Number(evt.row.reimbursement_total ?? 0))
+      const accountName = evt.row.account_name ? String(evt.row.account_name) : null
+      const reference = evt.row.statement_number ? String(evt.row.statement_number) : null
+      const date = String(evt.row.position_date)
+      bank = rc(bank + expected)
+      rows.push(withAccount(makeLedgerRow(
+        `${isTransfer ? 'bankTransfer' : 'reimbursementReceipt'}-${evt.row.id}-${seq}`,
+        isTransfer ? 'bankTransfer' : 'reimbursementReceipt',
+        date, 'bank',
+        isTransfer ? String(evt.row.counter_account_name || '') : String(evt.row.reimbursement_member || ''),
+        reference, null, expected, bank, cashSum(),
+        isTransfer ? null : `reimbursementNote:${evt.row.reimbursement_member || ''}`,
+      ), accountName))
+      const difference = rc(confirmed - expected)
+      if (difference !== 0) {
+        bank = rc(bank + difference)
+        rows.push(withAccount(makeLedgerRow(
+          `bankDifference-${evt.row.id}-${seq}`, 'bankDifference', date, 'bank',
+          isTransfer ? String(evt.row.counter_account_name || '') : String(evt.row.reimbursement_member || ''),
+          reference, null, difference, bank, cashSum(), null,
+          expected, confirmed, difference,
+        ), accountName))
+      }
+      continue
+    }
+
+    if (evt.kind === 'bankPosition' && evt.row.position_type === 'transfer') {
+      // An entered transfer. Until the other account confirms it, that account moves by the
+      // expected amount on the same date — the total bank balance does not change.
+      const signed = bspSignedAmount(evt.row)
+      const accountName = evt.row.account_name ? String(evt.row.account_name) : null
+      const counterName = evt.row.counter_account_name ? String(evt.row.counter_account_name) : null
+      const reference = evt.row.statement_number ? String(evt.row.statement_number) : null
+      const date = String(evt.row.position_date)
+      bank = rc(bank + signed)
+      rows.push(withAccount(makeLedgerRow(
+        `bankTransfer-${evt.row.id}-${seq}`, 'bankTransfer', date, 'bank',
+        counterName ?? '', reference, null, signed, bank, cashSum(), null,
+      ), accountName))
+      if (evt.row.counter_account_id != null && !Number(evt.row.is_confirmed)) {
+        bank = rc(bank - signed)
+        rows.push(withAccount(makeLedgerRow(
+          `bankTransfer-${evt.row.id}-counter-${seq}`, 'bankTransfer', date, 'bank',
+          accountName ?? '', reference, null, -signed, bank, cashSum(), null,
+        ), counterName))
+      }
+      continue
+    }
+
     if (evt.kind === 'bankPosition') {
       const signed = bspSignedAmount(evt.row)
       bank = rc(bank + signed)
@@ -910,11 +901,11 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
         reference = evt.row.statement_number ? String(evt.row.statement_number) : null
       }
 
-      rows.push(makeLedgerRow(
+      rows.push(withAccount(makeLedgerRow(
         `${type}-${evt.row.id}-${seq}`, type,
         String(evt.row.position_date), 'bank', label, reference, null,
         signed, bank, cash, null,
-      ))
+      ), evt.row.account_name ? String(evt.row.account_name) : null))
       continue
     }
 
@@ -927,14 +918,14 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
       if (isFirst) bankReimbStarted.add(evt.reimbId)
       const receiptLabel = [evt.row.receipt_number, evt.row.company_name].filter(Boolean).join(' ')
       const label = receiptLabel || String(reimbData.member_name)
-      rows.push(makeLedgerRow(
+      rows.push(withAccount(makeLedgerRow(
         `reimbursementReceipt-bank-${evt.reimbId}-${evt.row.receipt_id}-${seq}`,
         'reimbursementReceipt',
         reimbData.effective_date, 'bank', label,
         evt.row.receipt_number ? String(evt.row.receipt_number) : null,
         null, amount, bank, cash,
         `reimbursementNote:${reimbData.member_name}`,
-      ))
+      ), evt.row.account_name ? String(evt.row.account_name) : null))
       continue
     }
 
@@ -1062,7 +1053,7 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
     if (evt.kind === 'bankStatementCheckpoint') {
       const stmtInfo = stmtInfoById.get(evt.stmtId)
       const cash = cashSum()
-      rows.push(makeLedgerRow(
+      rows.push(withAccount(makeLedgerRow(
         `bankStatementCheckpoint-${evt.stmtId}-${seq}`,
         'bankStatementCheckpoint',
         evt.sortDate, 'bank',
@@ -1070,7 +1061,7 @@ export async function buildCashLedger(endDate: string): Promise<CashLedgerResult
         stmtInfo?.statement_number ? String(stmtInfo.statement_number) : null,
         null, 0, bank, cash,
         stmtInfo?.checked_by_name ? `bankCheckedNote:${evt.sortDate}:${stmtInfo.checked_by_name}` : `bankCheckedNote:${evt.sortDate}:`,
-      ))
+      ), stmtInfo?.account_name ?? null))
       continue
     }
   }

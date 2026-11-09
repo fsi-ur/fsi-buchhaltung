@@ -3,8 +3,18 @@
     <section class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 space-y-4">
       <h2 class="text-lg font-semibold">{{ t('bankStatement.title') }}</h2>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="field">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="field min-w-0">
+          <label class="text-sm font-medium text-base-600">{{ t('bankStatement.account') }}</label>
+          <PageFinancesAccountSelect
+            v-model="accountIdInput"
+            :accounts="statementAccountOptions"
+            :placeholder="t('bankStatement.accountPlaceholder')"
+            :disabled="disabled"
+          />
+        </div>
+
+        <div class="field min-w-0">
           <label class="text-sm font-medium text-base-600">{{ t('bankStatement.statementNumber') }}</label>
           <input
             v-model="form.statement_number"
@@ -13,29 +23,27 @@
           >
         </div>
 
-        <div class="grid grid-cols-2 gap-4 md:contents lg:grid lg:grid-cols-2 xl:contents">
-          <div class="field">
-            <label class="text-sm font-medium text-base-600">{{ t('bankStatement.checkedBy') }}</label>
-            <CommonSearchSelect
-              v-model="checkedByQuery"
-              :options="memberOptions"
-              :selected-label="selectedMemberLabel(form.checked_by)"
-              :placeholder="t('bankStatement.memberSearch')"
-              :empty-text="t('bankStatement.noMatchingMembers')"
-              :disabled="disabled"
-              @select="onCheckedBySelect"
-              @clear-selection="form.checked_by = 0"
-            />
-          </div>
+        <div class="field min-w-0">
+          <label class="text-sm font-medium text-base-600">{{ t('bankStatement.checkedBy') }}</label>
+          <CommonSearchSelect
+            v-model="checkedByQuery"
+            :options="memberOptions"
+            :selected-label="selectedMemberLabel(form.checked_by)"
+            :placeholder="t('bankStatement.memberSearch')"
+            :empty-text="t('bankStatement.noMatchingMembers')"
+            :disabled="disabled"
+            @select="onCheckedBySelect"
+            @clear-selection="form.checked_by = 0"
+          />
+        </div>
 
-          <div class="field">
-            <label class="text-sm font-medium text-base-600">{{ t('bankStatement.statementDate') }}</label>
-            <CommonDateInput
-              v-model="statementDateInput"
-              mode="datetime"
-              :disabled="disabled"
-            />
-          </div>
+        <div class="field min-w-0">
+          <label class="text-sm font-medium text-base-600">{{ t('bankStatement.statementDate') }}</label>
+          <CommonDateInput
+            v-model="statementDateInput"
+            mode="datetime"
+            :disabled="disabled"
+          />
         </div>
       </div>
     </section>
@@ -62,8 +70,13 @@
           class="grid gap-3 items-start"
           :class="form.positions.length > 1 ? 'grid-cols-[auto_1fr_5.5rem_auto] 2xl:grid-cols-[auto_3fr_5.5rem_5.5rem_2fr_auto]' : 'grid-cols-[auto_1fr_5.5rem] 2xl:grid-cols-[auto_3fr_5.5rem_5.5rem_2fr]'"
         >
-          <!-- Type dropdown -->
-          <div class="self-end">
+          <!-- Type: fixed for a confirmation, otherwise a dropdown -->
+          <div v-if="isConfirmation(position)" class="self-end">
+            <div class="input flex items-center whitespace-nowrap bg-base-100 text-base-700">
+              {{ t(`bankStatement.types.${position.position_type}`) }}
+            </div>
+          </div>
+          <div v-else class="self-end">
             <MenuDropdown v-model="openTypeIndex" :id="i" :disabled="disabled">
               <template #trigger="{ styling }">
                 <button
@@ -79,12 +92,56 @@
                 <button :class="styling" type="button" @click="setPositionType(i, 'receipt')">{{ t('bankStatement.types.receipt') }}</button>
                 <button :class="styling" type="button" @click="setPositionType(i, 'invoice')">{{ t('bankStatement.types.invoice') }}</button>
                 <button :class="styling" type="button" @click="setPositionType(i, 'event')">{{ t('bankStatement.types.event') }}</button>
+                <button v-if="transferTargets(i).length" :class="styling" type="button" @click="setPositionType(i, 'transfer')">{{ t('bankStatement.types.transfer') }}</button>
               </template>
             </MenuDropdown>
           </div>
 
+          <!-- Confirmation: what it confirms (read-only) -->
+          <div v-if="isConfirmation(position)" class="field min-w-0">
+            <div class="input flex min-w-0 items-center bg-base-100 text-base-700" :title="confirmationLabel(position)">
+              <span class="truncate">{{ confirmationLabel(position) }}</span>
+            </div>
+          </div>
+
+          <!-- Transfer: direction + counter account -->
+          <div v-else-if="position.position_type === 'transfer'" class="field min-w-0">
+            <div class="flex min-w-0 gap-2">
+              <!-- Compact trigger ("An"/"Von"), so the counter account keeps the room it needs. -->
+              <MenuDropdown
+                v-model="openDirectionIndex"
+                :id="i"
+                :disabled="disabled"
+                wrapper-class="relative w-auto shrink-0"
+              >
+                <template #trigger="{ styling }">
+                  <button
+                    :class="[styling, !disabled ? 'cursor-pointer' : '']"
+                    :disabled="disabled"
+                    :title="isOutgoing(position) ? t('bankStatement.transferTo') : t('bankStatement.transferFrom')"
+                    type="button"
+                  >
+                    <span class="whitespace-nowrap">{{ isOutgoing(position) ? t('bankStatement.transferToShort') : t('bankStatement.transferFromShort') }}</span>
+                    <Icon v-if="!disabled" name="material-symbols:keyboard-arrow-down-rounded" class="shrink-0" />
+                  </button>
+                </template>
+                <template #default="{ styling }">
+                  <button :class="styling" type="button" @click="setTransferDirection(i, true)">{{ t('bankStatement.transferTo') }}</button>
+                  <button :class="styling" type="button" @click="setTransferDirection(i, false)">{{ t('bankStatement.transferFrom') }}</button>
+                </template>
+              </MenuDropdown>
+              <PageFinancesAccountSelect
+                v-model="position.counter_account_id"
+                :accounts="transferTargets(i)"
+                :placeholder="t('bankStatement.counterAccountPlaceholder')"
+                :disabled="disabled"
+                wrapper-class="relative min-w-0 flex-1 basis-0"
+              />
+            </div>
+          </div>
+
           <!-- Entity search select -->
-          <div class="field min-w-0">
+          <div v-else class="field min-w-0">
             <CommonSearchSelect
               v-model="entityQueries[i]"
               :options="entityOptionsFor(i)"
@@ -172,7 +229,7 @@
             </div>
             <!-- Amount: plain text for receipt/invoice, editable input for event -->
             <div
-              v-if="position.position_type !== 'event'"
+              v-if="!hasAmountInput(position)"
               class="shrink-0 w-24 2xl:w-auto 2xl:order-4 h-9.5 flex items-center justify-end self-end text-sm text-base-600 whitespace-nowrap"
             >
               {{ position.receipt_id || position.invoice_id ? formatCurrency(positionEffectiveAmount(position)) : '---' }}
@@ -191,7 +248,67 @@
             </div>
           </div>
         </div>
+
+        <p
+          v-if="isConfirmation(position) && position.link && confirmationDifference(position) !== 0"
+          class="mt-2 text-xs text-warning-800"
+        >
+          {{ t('bankStatement.confirmationDifference', {
+            expected: formatCurrency(position.link.expected_amount),
+            difference: formatSigned(confirmationDifference(position)),
+          }) }}
+        </p>
+        <p
+          v-else-if="isConfirmation(position) && position.link"
+          class="mt-2 text-xs text-base-500"
+        >
+          {{ t('bankStatement.confirmationExpected', {
+            expected: formatCurrency(position.link.expected_amount),
+            date: formatDate(position.link.expected_date),
+          }) }}
+        </p>
+        <p
+          v-else-if="position.position_type === 'transfer' && position.id && position.link"
+          class="mt-2 text-xs"
+          :class="position.link.confirmed_date ? 'text-base-500' : 'text-warning-800'"
+        >
+          <template v-if="position.link.confirmed_date">
+            {{ t('bankStatement.transferConfirmed', {
+              account: position.link.account_name || '',
+              number: position.link.statement_number || '',
+              date: formatDate(position.link.confirmed_date),
+              amount: formatCurrency(position.link.confirmed_amount ?? 0),
+            }) }}
+          </template>
+          <template v-else>{{ t('bankStatement.transferUnconfirmed') }}</template>
+        </p>
       </div>
+    </section>
+
+    <section
+      v-if="!disabled && availableOpenItems.length"
+      class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 space-y-3"
+    >
+      <div>
+        <h3 class="font-semibold">{{ t('bankStatement.openItemsTitle') }}</h3>
+        <p class="text-sm text-base-500">{{ t('bankStatement.openItemsDescription') }}</p>
+      </div>
+      <ul class="divide-y divide-base-200 rounded-xl border border-base-200">
+        <li v-for="item in availableOpenItems" :key="item.key" class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+          <span class="w-24 shrink-0 text-base-500 tabular-nums">{{ formatDate(item.date) }}</span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate">{{ openItemLabel(item) }}</span>
+            <span v-if="item.notes" class="block truncate text-xs text-base-500">{{ item.notes }}</span>
+          </span>
+          <CommonStatusBadge v-if="item.overdue" tone="warning" :label="t('bankStatement.openItemOverdue')" />
+          <span class="shrink-0 tabular-nums" :class="item.expected_amount < 0 ? 'text-danger-700' : 'text-success-700'">
+            {{ formatCurrency(item.expected_amount) }}
+          </span>
+          <button type="button" class="shrink-0 font-medium text-accent-500 hover:underline cursor-pointer" @click="takeOver(item)">
+            {{ t('bankStatement.openItemTakeOver') }}
+          </button>
+        </li>
+      </ul>
     </section>
 
     <section class="-mx-6 bg-white shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg p-4 space-y-3">
@@ -248,13 +365,17 @@ import type {
   BankStatementReceiptOption,
   BankStatementInvoiceOption,
   BankStatementEventOption,
+  BankOpenItem,
 } from '~/types/bankStatement'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 
 const props = defineProps<{
   modelValue: CreateBankStatementBody
   disabled?: boolean
   saving?: boolean
   openingBalance: number
+  /** Transfers and reimbursements of the account that no statement has taken over yet */
+  openItems?: BankOpenItem[]
   hasFile?: boolean
   file?: File | null
   removeExistingFile?: boolean
@@ -285,6 +406,125 @@ const form = computed({
 })
 
 const disabled = computed(() => Boolean(props.disabled))
+const financeAccounts = useFinanceAccounts()
+
+const accountIdInput = computed({
+  get: () => form.value.account_id || null,
+  set: (value: number | null) => { form.value.account_id = Number(value) || 0 },
+})
+const openDirectionIndex = ref<string | number | null>(null)
+
+/** Active accounts plus the archived one an existing statement may still be on. */
+const statementAccountOptions = computed(() => financeAccounts.selectableAccounts(form.value.account_id))
+
+/** Any other account the statement's account can transfer to/from (an archived one only if already chosen). */
+function transferTargets(index: number) {
+  const current = form.value.positions[index]?.counter_account_id ?? null
+  return financeAccounts.selectableAccounts(current).filter(account => account.id !== form.value.account_id)
+}
+
+// The direction of a transfer is the sign of its amount; while the amount is still 0 it is kept here.
+const pendingOutgoing = reactive(new WeakMap<object, boolean>())
+
+/** Confirms a transfer entered on the other account, or a bank reimbursement — date and amount only. */
+function isConfirmation(position: CreateBankStatementPositionBody) {
+  return Boolean(position.linked_position_id) || position.position_type === 'reimbursement'
+}
+
+function hasAmountInput(position: CreateBankStatementPositionBody) {
+  return position.position_type === 'event' || position.position_type === 'transfer' || position.position_type === 'reimbursement'
+}
+
+/** Amounts typed as absolute values, the sign follows the direction (transfers, confirmations). */
+function hasDirectedAmount(position: CreateBankStatementPositionBody) {
+  return position.position_type === 'transfer' || position.position_type === 'reimbursement'
+}
+
+function isOutgoing(position: CreateBankStatementPositionBody) {
+  // A confirmation goes the way the other side / the reimbursement says.
+  if (isConfirmation(position) && position.link) return position.link.expected_amount < 0
+  if (position.position_type === 'reimbursement') return true
+  if (position.amount && position.amount !== 0) return position.amount < 0
+  return pendingOutgoing.get(position) ?? true
+}
+
+function confirmationDifference(position: CreateBankStatementPositionBody) {
+  if (!position.link) return 0
+  return Number((Number(position.amount ?? 0) - position.link.expected_amount).toFixed(2))
+}
+
+function confirmationLabel(position: CreateBankStatementPositionBody) {
+  const link = position.link
+  if (position.position_type === 'reimbursement') {
+    return t('bankStatement.confirmsReimbursement', { member: link?.member_name || '' })
+  }
+  const statement = link?.statement_number ? ` · ${t('bankStatement.statementShort', { number: link.statement_number })}` : ''
+  return t(isOutgoing(position) ? 'bankStatement.confirmsTransferTo' : 'bankStatement.confirmsTransferFrom', {
+    account: link?.account_name || financeAccounts.accountName(position.counter_account_id),
+  }) + statement
+}
+
+function formatSigned(value: number) {
+  return `${value > 0 ? '+' : ''}${formatCurrency(value)}`
+}
+
+/** Open items not yet taken over in this (unsaved) form. */
+const availableOpenItems = computed(() => {
+  const linked = new Set(form.value.positions.map(p => p.linked_position_id).filter(Boolean))
+  const reimbursements = new Set(form.value.positions.map(p => p.reimbursement_id).filter(Boolean))
+  return (props.openItems ?? []).filter(item => item.kind === 'transfer'
+    ? !linked.has(item.source_position_id)
+    : !reimbursements.has(item.reimbursement_id))
+})
+
+function openItemLabel(item: BankOpenItem) {
+  if (item.kind === 'reimbursement') return t('bankStatement.openReimbursement', { member: item.member_name || '' })
+  return t(item.expected_amount < 0 ? 'bankStatement.openTransferTo' : 'bankStatement.openTransferFrom', {
+    account: item.counter_account_name || '',
+    number: item.source_statement_number || '',
+  })
+}
+
+/** Takes an open item over with the expected date and amount — adjust both to the paper statement. */
+function takeOver(item: BankOpenItem) {
+  const position: CreateBankStatementPositionBody = {
+    position_type: item.kind,
+    position_date: item.date,
+    receipt_id: null,
+    invoice_id: null,
+    event_id: null,
+    counter_account_id: item.counter_account_id,
+    linked_position_id: item.source_position_id,
+    reimbursement_id: item.reimbursement_id,
+    amount: item.expected_amount,
+    notes: null,
+    link: {
+      expected_amount: item.expected_amount,
+      expected_date: item.date,
+      statement_id: item.source_statement_id,
+      statement_number: item.source_statement_number,
+      account_name: item.counter_account_name,
+      confirmed_date: null,
+      confirmed_amount: null,
+      member_name: item.member_name,
+    },
+  }
+  // Replace a still empty first position instead of leaving it dangling.
+  const [first] = form.value.positions
+  const firstIsEmpty = form.value.positions.length === 1 && first
+    && !first.id && !first.receipt_id && !first.invoice_id && !first.event_id && !first.counter_account_id && !first.amount
+  if (firstIsEmpty) form.value.positions.splice(0, 1, position)
+  else form.value.positions.push(position)
+}
+
+function setTransferDirection(index: number, outgoing: boolean) {
+  openDirectionIndex.value = null
+  const position = form.value.positions[index]
+  if (!position) return
+  pendingOutgoing.set(position, outgoing)
+  const absolute = Math.abs(Number(position.amount || 0))
+  position.amount = outgoing ? -absolute : absolute
+}
 const canCreateReceipt = computed(() => props.canCreateReceipt === true)
 const canCreateInvoice = computed(() => props.canCreateInvoice === true)
 const canEditReceipt = computed(() => props.canEditReceipt === true)
@@ -324,7 +564,7 @@ function positionEffectiveAmount(position: CreateBankStatementPositionBody): num
     const inv = invoices.value.find(x => x.id === position.invoice_id)
     if (inv) return Number(inv.total_amount.toFixed(2))
   }
-  if (position.position_type === 'event') return position.amount ?? 0
+  if (hasAmountInput(position)) return position.amount ?? 0
   return 0
 }
 
@@ -340,6 +580,7 @@ const closingBalance = computed(() =>
 
 const validationErrors = computed(() => {
   const errors: string[] = []
+  if (!form.value.account_id) errors.push(t('bankStatement.required.account'))
   if (!form.value.statement_number.trim()) errors.push(t('bankStatement.required.statementNumber'))
   if (!form.value.checked_by) errors.push(t('bankStatement.required.checkedBy'))
   if (!form.value.statement_date) errors.push(t('bankStatement.required.statementDate'))
@@ -349,6 +590,12 @@ const validationErrors = computed(() => {
     (p.position_type === 'invoice' && !p.invoice_id) ||
     (p.position_type === 'event' && !p.event_id)
   )) errors.push(t('bankStatement.required.eachPositionEntity'))
+  if (form.value.positions.some(p => p.position_type === 'transfer' && !p.linked_position_id && (!p.counter_account_id || p.counter_account_id === form.value.account_id))) {
+    errors.push(t('bankStatement.required.eachTransferAccount'))
+  }
+  if (form.value.positions.some(p => (p.position_type === 'transfer' || p.position_type === 'reimbursement') && !p.amount)) {
+    errors.push(t('bankStatement.required.eachTransferAmount'))
+  }
   if (form.value.positions.some(p => !p.position_date)) {
     errors.push(t('bankStatement.required.eachPositionDate'))
   }
@@ -454,6 +701,10 @@ function setPositionType(index: number, type: BankStatementPositionType) {
   position.receipt_id = null
   position.invoice_id = null
   position.event_id = null
+  position.counter_account_id = null
+  position.linked_position_id = null
+  position.reimbursement_id = null
+  position.link = null
   position.amount = 0
   entityQueries.value[index] = ''
 }
@@ -498,6 +749,9 @@ function addPosition() {
     receipt_id: null,
     invoice_id: null,
     event_id: null,
+    counter_account_id: null,
+    linked_position_id: null,
+    reimbursement_id: null,
     amount: 0,
     notes: null,
   })
@@ -514,9 +768,12 @@ function removePosition(index: number) {
 function displayAmount(index: number) {
   const position = form.value.positions[index]
   if (!position) return ''
-  if (focusedAmountIndex.value === index) return position.amount !== null && position.amount !== undefined ? String(position.amount) : ''
-  if (position.amount === null || position.amount === undefined) return ''
-  return formatCurrency(Number(position.amount))
+  const value = hasDirectedAmount(position) && position.amount !== null && position.amount !== undefined
+    ? Math.abs(position.amount)
+    : position.amount
+  if (focusedAmountIndex.value === index) return value !== null && value !== undefined ? String(value) : ''
+  if (value === null || value === undefined) return ''
+  return formatCurrency(Number(value))
 }
 
 function onAmountFocus(event: FocusEvent, index: number) {
@@ -529,7 +786,10 @@ function onAmountInput(event: Event, index: number) {
   const parsed = parseFloat(value)
   const position = form.value.positions[index]
   if (!position) return
-  position.amount = Number.isNaN(parsed) ? 0 : parsed
+  const amount = Number.isNaN(parsed) ? 0 : parsed
+  position.amount = hasDirectedAmount(position)
+    ? (isOutgoing(position) ? -Math.abs(amount) : Math.abs(amount))
+    : amount
   ;(event.target as HTMLInputElement).value = value
 }
 

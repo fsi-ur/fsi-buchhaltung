@@ -1,4 +1,4 @@
-import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, validateReimbursableReceipts } from '~/server/utils/reimbursements'
+import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, resolveReimbursementAccount, validateReimbursableReceipts } from '~/server/utils/reimbursements'
 import { parseJsonField } from '~/server/utils/api/request'
 import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
@@ -89,10 +89,13 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
       const cancelledError = await validateReimbursableReceipts(uniqueReceiptIds, conn)
       if (cancelledError) return { ok: false, error: cancelledError }
 
+      const account = await resolveReimbursementAccount(reimbursement, conn)
+      if (!account.ok) return account
+
       const reimbursementResult: any = await query(
         `INSERT INTO reimbursements
-          (paid_by, bankname, account_holder, iban, bic, advance, cash, submitted_at, checked_at, checked_by, disbursed_at, disbursed_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (paid_by, bankname, account_holder, iban, bic, advance, cash, submitted_at, checked_at, checked_by, disbursed_at, disbursed_by, paid_from_account_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           reimbursement.paid_by,
           reimbursement.bankname || null,
@@ -106,6 +109,7 @@ export default defineEventHandler(async (event): Promise<CreateReimbursementResp
           reimbursement.checked_by || null,
           reimbursement.disbursed_at || null,
           reimbursement.disbursed_by || null,
+          account.accountId,
         ],
         conn
       )

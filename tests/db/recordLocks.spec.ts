@@ -6,7 +6,7 @@ import withdrawDiscrepancy from '~/server/api/cash_counts/[id]/discrepancies.del
 import confirmDiscrepancy from '~/server/api/cash_counts/[id]/discrepancies.post'
 import { RECORD_LOCKED_ERROR, RECORD_UNLOCK_REQUIRED_ERROR } from '~/server/utils/recordLocks'
 import { resetDatabase } from '../helpers/db'
-import { createMember, resetFixtureCounter } from '../helpers/fixtures'
+import { createFinanceAccount, createMember, resetFixtureCounter } from '../helpers/fixtures'
 import { signIn } from '../helpers/auth'
 import { callHandler, multipartBody } from '../helpers/handler'
 import type { PermissionKey } from '~/config/permissions'
@@ -52,8 +52,8 @@ describe('record locks', () => {
 
   it('a saved bank statement needs bank_statements.unlock', async () => {
     const result = await query<any>(
-      `INSERT INTO bank_statements (statement_number, checked_by, statement_date) VALUES ('KA-1', ?, '2026-03-01 10:00:00')`,
-      [memberId],
+      `INSERT INTO bank_statements (account_id, statement_number, checked_by, statement_date) VALUES (?, 'KA-1', ?, '2026-03-01 10:00:00')`,
+      [await createFinanceAccount(), memberId],
     )
     const id = Number(result.insertId)
     const user = await signIn({ permissions: ['bank_statements.edit'] })

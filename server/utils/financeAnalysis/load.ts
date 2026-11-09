@@ -18,15 +18,20 @@ import {
   loadFinanceAnalysisRegisterTotal,
 } from '~/server/utils/financeAnalysis/cashCounts'
 import {
+  filterBankPositionsByAccount,
   loadFinanceAnalysisBankStatementPositions,
   summarizeBankStatementPositions,
 } from '~/server/utils/financeAnalysis/bankStatements'
+import { loadFinanceAccounts } from '~/server/utils/financeAccounts'
+import type { FinanceAnalysisAccountBalance } from '~/types/financeAnalysis'
 import { buildLiquidityRows } from '~/server/utils/financeAnalysis/liquidity'
 import { buildFinanceReconciliation } from '~/server/utils/financeAnalysis/reconciliation'
 import {
   buildCashDiscrepancyBreakdown,
+  filterCashDiscrepanciesByCostCentres,
   loadFinanceAnalysisCashDiscrepancies,
 } from '~/server/utils/financeAnalysis/cashDiscrepancies'
+import { loadFinanceAnalysisBankDiscrepancies } from '~/server/utils/financeAnalysis/bankDiscrepancies'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
 import { ReceiptStatus } from '~/types/receipt'
 
@@ -82,10 +87,11 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
     invoiceBreakdown,
     cashCounts,
     cashCountRegisterTotal,
-    bankStatementPositions,
+    allBankStatementPositions,
     openingPosition,
     closingPosition,
     ledgerResult,
+    accounts,
   ] = await Promise.all([
     loadFinanceAnalysisReceipts(context),
     loadFinanceAnalysisReceiptBreakdown(context),
@@ -97,7 +103,23 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
     computeTotalMoney(startDate, true),
     computeTotalMoney(endDate, false),
     buildCashLedger(endDate),
+    loadFinanceAccounts(),
   ])
+
+  // Only existing accounts count as a filter; the result never depends on it (event revenue below
+  // comes from all accounts), it just narrows the bank table and the bank movement card.
+  const accountFilterIds = filters.accountIds.filter(id => accounts.some(account => account.id === id))
+  const bankStatementPositions = filterBankPositionsByAccount(allBankStatementPositions, accountFilterIds)
+  const bankAccounts: FinanceAnalysisAccountBalance[] = accounts
+    .map(account => ({
+      account_id: account.id,
+      name: account.name,
+      archived: account.archived,
+      before: openingPosition.bankBalancesByAccount.get(account.id) ?? 0,
+      after: closingPosition.bankBalancesByAccount.get(account.id) ?? 0,
+    }))
+    .filter(account => !account.archived || account.before !== 0 || account.after !== 0)
+    .filter(account => !accountFilterIds.length || accountFilterIds.includes(account.account_id))
 
   const liquidityRows = buildLiquidityRows(
     ledgerResult.rows,
@@ -108,20 +130,30 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
     costCentreIds.length > 0,
   )
 
-  const cashDiscrepancies = await loadFinanceAnalysisCashDiscrepancies(
+  const registerDiscrepancies = await loadFinanceAnalysisCashDiscrepancies(
     ledgerResult.discrepancies,
     startDate,
     endDate,
     costCentreIds,
   )
+  // Bank differences count exactly like cash differences — in the list, the totals and the result.
+  const bankDiscrepancies = filterCashDiscrepanciesByCostCentres(
+    await loadFinanceAnalysisBankDiscrepancies(startDate, endDate),
+    costCentreIds,
+  )
+  const cashDiscrepancies = [...registerDiscrepancies, ...bankDiscrepancies]
+    .sort((left, right) => right.date.localeCompare(left.date) || left.key.localeCompare(right.key))
   const unconfirmedDiscrepancies = cashDiscrepancies.filter(item => item.status !== 'confirmed')
   const cashDiscrepancyTotal = cashDiscrepancies.reduce((total, item) => total + item.amount, 0)
 
   const receiptSummary = summarizeReceipts(receipts)
-  const bankSummary = summarizeBankStatementPositions(bankStatementPositions)
+  const bankSummary = summarizeBankStatementPositions(bankStatementPositions, accountFilterIds)
+  const eventBankSummary = accountFilterIds.length
+    ? summarizeBankStatementPositions(allBankStatementPositions)
+    : bankSummary
   const cashCountTotalDifference = cashCounts.reduce((total, cashCount) => total + cashCount.total_difference, 0)
   const invoiceTotal = invoices.reduce((total, invoice) => total + invoice.total_amount, 0)
-  const eventRevenueTotal = cashCountTotalDifference + bankSummary.eventRevenueTotal
+  const eventRevenueTotal = cashCountTotalDifference + eventBankSummary.eventRevenueTotal
   const netResult = roundFinanceCurrency(
     eventRevenueTotal + invoiceTotal - receiptSummary.receipt_total
     // Kassendifferenzen are real money gained or lost — part of the result, not a footnote.
@@ -159,8 +191,8 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
       cash_count_count: cashCounts.length,
       cash_count_register_total: cashCountRegisterTotal,
       cash_count_total_difference: roundFinanceCurrency(cashCountTotalDifference),
-      event_bank_revenue_total: bankSummary.eventRevenueTotal,
-      event_bank_revenue_count: bankSummary.eventRevenueCount,
+      event_bank_revenue_total: eventBankSummary.eventRevenueTotal,
+      event_bank_revenue_count: eventBankSummary.eventRevenueCount,
       bank_statement_count: bankSummary.statementCount,
       bank_position_count: bankSummary.positionCount,
       bank_inflow_total: bankSummary.inflowTotal,
@@ -172,6 +204,10 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
       money_after: closingPosition.totalMoney,
       bank_before: openingPosition.bankBalance,
       bank_after: closingPosition.bankBalance,
+      bank_enabled: accounts.some(account => !account.archived),
+      bank_visible: accounts.length > 0,
+      bank_accounts: bankAccounts,
+      account_filter_ids: accountFilterIds,
       cash_before: openingPosition.cashTotal,
       cash_after: closingPosition.cashTotal,
       cash_discrepancy_total: roundFinanceCurrency(cashDiscrepancyTotal),
@@ -189,6 +225,7 @@ export async function loadFinanceAnalysis(filters: FinanceAnalysisFilters): Prom
     cashDiscrepancies,
     cashDiscrepancyBreakdown: buildCashDiscrepancyBreakdown(cashDiscrepancies),
     bankStatementPositions,
+    bankEventPositions: allBankStatementPositions.filter(position => position.position_type === 'event'),
     invoices,
     liquidityRows,
   }

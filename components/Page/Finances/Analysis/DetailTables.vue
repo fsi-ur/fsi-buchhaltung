@@ -85,7 +85,9 @@
       :loading="loading"
       :empty-text="t('financeAnalysis.noCashDiscrepancies')"
       table-class="min-w-4xl"
-      @row-open="$emit('open', { page: 'CashCountCreate', id: $event.cash_count_id })"
+      @row-open="$event.bank
+        ? $emit('open', { page: 'BankStatementCreate', id: $event.bank.bank_statement_id })
+        : $emit('open', { page: 'CashCountCreate', id: $event.cash_count_id! })"
     >
       <template #cell-amount="{ row }">
         <span :class="row.amount > 0 ? 'text-success-700' : 'text-danger-700'">
@@ -101,6 +103,7 @@
       v-else
       v-model:search="search"
       :rows="analysis.bankStatementPositions"
+      :row-key="(row: FinanceAnalysisBankStatementPosition) => row.row_key"
       :columns="bankStatementColumns"
       :loading="loading"
       :empty-text="t('financeAnalysis.noBankStatementPositions')"
@@ -220,7 +223,8 @@ const tabs = computed(() => ([
     description: t('financeAnalysis.liquidity.subtitle'),
     count: Math.max(props.analysis.liquidityRows.length - 2, 0),
   },
-]))
+// Without any account (not even an archived one) there is no bank tab.
+].filter(tab => tab.key !== 'bankStatements' || props.analysis.summary.bank_visible || props.analysis.bankStatementPositions.length > 0)))
 
 const activeTab = computed(() => tabs.value.find(tab => tab.key === activeTabKey.value) ?? tabs.value[0]!)
 
@@ -505,6 +509,16 @@ const bankStatementColumns = computed<AdvancedTableColumn<FinanceAnalysisBankSta
     mobile: 'meta',
     mobileLabel: true,
     headerClass: 'w-32',
+  },
+  {
+    key: 'account_name',
+    globalSearchable: true,
+    label: t('financeAnalysis.bankStatements.account'),
+    getValue: row => row.account_name,
+    format: row => row.account_name || t('common.notAvailable'),
+    mobile: 'meta',
+    mobileLabel: true,
+    headerClass: 'w-36',
   },
   {
     key: 'position_type',

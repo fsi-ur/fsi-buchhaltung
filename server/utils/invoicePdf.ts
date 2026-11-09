@@ -17,7 +17,7 @@ import {
   type PdfRect,
   type PdfText,
 } from '~/server/utils/pdf'
-import type { AssociationProfileRow } from '~/types/association'
+import type { AssociationInvoiceProfile } from '~/types/association'
 import type { InvoiceTextSettings } from '~/types/appSettings'
 import type { CompanyRow } from '~/types/company'
 import type { CreateInvoiceBody } from '~/types/invoice'
@@ -52,7 +52,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 export function buildInvoicePdf(params: {
-  association: AssociationProfileRow
+  association: AssociationInvoiceProfile
   company: CompanyRow
   invoice: CreateInvoiceBody
   logo?: { mimeType: string, data: Buffer } | null

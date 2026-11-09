@@ -121,6 +121,28 @@
     </PageFinancesAnalysisFilterSection>
 
     <PageFinancesAnalysisFilterSection
+      v-if="financeAccounts.accounts.value.length > 1"
+      v-model:expanded="expanded.account"
+      icon="material-symbols:account-balance-outline-rounded"
+      :title="t('financeAnalysis.accountFilter')"
+      :hint="t('financeAnalysis.accountFilterHint')"
+      :summary="accountSummary"
+    >
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
+        <PageFinancesAnalysisToggleChip
+          v-for="account in financeAccounts.accounts.value"
+          :key="account.id"
+          :selected="filters.isAccountSelected(account.id)"
+          :title="account.name"
+          @click="filters.toggleAccount(account.id)"
+        >
+          {{ account.name }}
+        </PageFinancesAnalysisToggleChip>
+      </div>
+      <p class="mt-2 text-xs text-base-500">{{ t('financeAnalysis.accountFilterNote') }}</p>
+    </PageFinancesAnalysisFilterSection>
+
+    <PageFinancesAnalysisFilterSection
       v-model:expanded="expanded.receipt"
       icon="material-symbols:receipt-long-outline-rounded"
       :title="t('financeAnalysis.receiptStateFilters')"
@@ -250,6 +272,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { QuickSemester, useFinanceAnalysisFilters } from '~/composables/useFinanceAnalysisFilters'
 import type { CostCentreRow } from '~/types/costCentre'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 
 const props = defineProps<{
   filters: ReturnType<typeof useFinanceAnalysisFilters>
@@ -265,9 +288,18 @@ defineEmits<{
 const { t } = useI18n()
 const { formatDate } = useLocaleFormatters()
 
+const financeAccounts = useFinanceAccounts()
+
+// Empty while all accounts are in (the default) — the section then shows no summary.
+const accountSummary = computed(() => props.filters.selectedAccountIds.value
+  .map(id => financeAccounts.accountName(id))
+  .filter(Boolean)
+  .join(', '))
+
 const expanded = reactive({
   period: true,
   costCentre: false,
+  account: false,
   receipt: false,
   invoice: false,
 })

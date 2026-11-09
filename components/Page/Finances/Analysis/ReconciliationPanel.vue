@@ -1,5 +1,6 @@
 <template>
-  <details class="group rounded-xl border border-base-200 bg-white" :open="differs">
+  <!-- Collapsed by default; the summary line already says whether result and assets differ. -->
+  <details class="group rounded-xl border border-base-200 bg-white">
     <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm">
       <Icon
         name="material-symbols:info-outline-rounded"

@@ -83,6 +83,7 @@
         />
 
         <PageFinancesAnalysisStatCard
+          v-if="showBank"
           :label="t('financeAnalysis.cards.bankMovement')"
           :value="formatSignedCurrency(summary.bank_inflow_total - summary.bank_outflow_total)"
           :caption="t('financeAnalysis.cards.bankMovementCaption', {
@@ -90,6 +91,30 @@
             outflow: formatCurrency(summary.bank_outflow_total),
           })"
         />
+      </div>
+
+      <div
+        v-if="showBank && (summary.bank_accounts.length > 1 || summary.account_filter_ids.length)"
+        class="rounded-xl border border-base-200 bg-white px-4 py-3"
+      >
+        <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h4 class="text-sm font-semibold text-base-700">{{ t('financeAnalysis.accountBreakdownTitle') }}</h4>
+          <span v-if="summary.account_filter_ids.length" class="text-xs text-base-500">
+            {{ t('financeAnalysis.accountFilterActive') }}
+          </span>
+        </div>
+        <ul class="divide-y divide-base-100 text-sm">
+          <li v-for="account in summary.bank_accounts" :key="account.account_id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+            <span class="min-w-0 flex-1 truncate">
+              {{ account.name }}
+              <span v-if="account.archived" class="text-xs text-base-400">({{ t('settings.financeAccounts.archived') }})</span>
+            </span>
+            <span class="text-xs text-base-500 tabular-nums">
+              {{ formatCurrency(account.before) }} → {{ formatSignedCurrency(account.after - account.before) }}
+            </span>
+            <span class="w-28 text-right font-semibold tabular-nums">{{ formatCurrency(account.after) }}</span>
+          </li>
+        </ul>
       </div>
 
       <PageFinancesAnalysisReconciliationPanel :reconciliation="reconciliation" />
@@ -134,6 +159,9 @@ function formatSignedCurrency(value: number) {
   return `${rounded > 0 ? '+' : ''}${formatCurrency(rounded)}`
 }
 
+/** Bank figures are shown as long as any account exists — archived ones keep their history. */
+const showBank = computed(() => props.summary.bank_visible || props.summary.bank_before !== 0 || props.summary.bank_after !== 0)
+
 const balanceCards = computed(() => [
   {
     key: 'total',
@@ -141,12 +169,14 @@ const balanceCards = computed(() => [
     before: props.summary.money_before,
     after: props.summary.money_after,
   },
-  {
-    key: 'bank',
-    label: t('financeAnalysis.cards.bankBalance'),
-    before: props.summary.bank_before,
-    after: props.summary.bank_after,
-  },
+  ...(showBank.value
+    ? [{
+        key: 'bank',
+        label: t('financeAnalysis.cards.bankBalance'),
+        before: props.summary.bank_before,
+        after: props.summary.bank_after,
+      }]
+    : []),
   {
     key: 'cash',
     label: t('financeAnalysis.cards.cashBalance'),

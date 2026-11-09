@@ -27,10 +27,12 @@
       <div class="flex items-center justify-between">
         <h3 class="font-medium">{{ t('reimbursement.bankDetails') }}</h3>
         <label class="inline-flex items-center gap-2 text-sm text-base-700 cursor-pointer">
-          <input v-model="form.cash" type="checkbox" class="checkbox" :disabled="disabled">
+          <input v-model="form.cash" type="checkbox" class="checkbox" :disabled="disabled || cashOnly">
           {{ t('reimbursement.cash') }}
         </label>
       </div>
+
+      <p v-if="cashOnly && !disabled" class="text-sm text-base-500">{{ t('reimbursement.cashOnlyHint') }}</p>
 
       <div class="grid grid-cols-2 gap-4 transition-opacity" :class="form.cash ? 'opacity-50' : 'opacity-100'">
         <div>
@@ -198,6 +200,44 @@
           <label class="text-sm font-medium text-base-600">{{ t('reimbursement.disbursedAt') }}</label>
           <CommonDateInput v-model="disbursedAtDate" :disabled="disabled" :empty-value="null" />
         </div>
+
+        <div v-if="!form.cash" class="col-span-2">
+          <label class="text-sm font-medium text-base-600">{{ t('reimbursement.paidFromAccount') }}</label>
+          <PageFinancesAccountSelect
+            :model-value="form.paid_from_account_id ?? null"
+            :accounts="paidFromAccountOptions"
+            @update:model-value="form.paid_from_account_id = $event"
+            :placeholder="t('reimbursement.paidFromAccountPlaceholder')"
+            :disabled="disabled"
+          />
+        </div>
+
+        <!-- Bank payout: only the bank statement resolves it (confirmation or not, difference or not). -->
+        <div
+          v-if="!form.cash && form.disbursed_at"
+          class="col-span-2 rounded-xl border px-3 py-2 text-sm"
+          :class="!bankConfirmation
+            ? 'border-warning-200 bg-warning-50 text-warning-900'
+            : bankConfirmation.difference !== 0 ? 'border-warning-200 bg-warning-50 text-warning-900' : 'border-base-200 bg-base-50 text-base-700'"
+        >
+          <template v-if="bankConfirmation">
+            <p>
+              {{ t('reimbursement.bankConfirmed', {
+                number: bankConfirmation.statement_number,
+                account: bankConfirmation.account_name,
+                date: formatDate(bankConfirmation.date),
+                amount: formatCurrency(bankConfirmation.amount),
+              }) }}
+            </p>
+            <p v-if="bankConfirmation.difference !== 0" class="mt-1">
+              {{ t('reimbursement.bankDifference', {
+                expected: formatCurrency(bankConfirmation.expected_amount),
+                difference: `${bankConfirmation.difference > 0 ? '+' : ''}${formatCurrency(bankConfirmation.difference)}`,
+              }) }}
+            </p>
+          </template>
+          <p v-else>{{ t('reimbursement.bankUnconfirmed') }}</p>
+        </div>
       </div>
     </section>
 
@@ -223,8 +263,9 @@ import { useI18n } from '~/composables/useI18n'
 import { focusAndSelectInput, sanitizeCurrencyInput } from '~/composables/useCurrencyInput'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { Receipt, ReceiptRow } from '~/types/receipt'
-import type { CreateReimbursementBody } from '~/types/reimbursement'
+import type { CreateReimbursementBody, ReimbursementBankConfirmation } from '~/types/reimbursement'
 import type { FinanceMemberOption } from '~/types/member'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 import { buildReturnTarget, useReturnTarget } from '~/composables/useReturnTarget'
 import { usePage } from '~/composables/usePage'
 const { today: appToday } = useAppTimeZone()
@@ -244,6 +285,8 @@ const props = defineProps<{
   canEditReceipt?: boolean
   canViewReceipt?: boolean
   externalValidationErrors?: string[]
+  /** Set once a bank statement confirmed the payout */
+  bankConfirmation?: ReimbursementBankConfirmation | null
 }>()
 
 const emit = defineEmits<{
@@ -263,6 +306,17 @@ const form = computed({
 })
 
 const disabled = computed(() => Boolean(props.disabled))
+const financeAccounts = useFinanceAccounts()
+/** Without an active account only cash payouts are possible (an existing bank record stays as it is). */
+const cashOnly = computed(() => financeAccounts.loaded.value && !financeAccounts.bankEnabled.value && form.value.cash)
+const paidFromAccountOptions = computed(() => financeAccounts.selectableAccounts(form.value.paid_from_account_id))
+
+// Preselect the default account once a bank reimbursement is disbursed.
+watch(() => [form.value.cash, form.value.disbursed_at, financeAccounts.preselectedAccountId.value] as const, ([cash, disbursedAt, preselected]) => {
+  if (disabled.value || cash || !disbursedAt || form.value.paid_from_account_id) return
+  if (preselected) form.value.paid_from_account_id = preselected
+}, { immediate: true })
+
 const canCreateReceipt = computed(() => props.canCreateReceipt !== false)
 const canEditReceipt = computed(() => props.canEditReceipt === true)
 const canViewReceipt = computed(() => props.canViewReceipt === true)
@@ -291,6 +345,7 @@ const validationErrors = computed(() => {
   if (!form.value.cash) {
     if (!form.value.bankname?.trim()) errors.push(t('reimbursement.required.bankname'))
     if (!form.value.iban?.trim()) errors.push(t('reimbursement.required.iban'))
+    if (form.value.disbursed_at && !form.value.paid_from_account_id) errors.push(t('reimbursement.required.paidFromAccount'))
   }
 
   const hasCheckedBy = Boolean(form.value.checked_by)

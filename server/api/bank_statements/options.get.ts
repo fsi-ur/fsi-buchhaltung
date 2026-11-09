@@ -61,7 +61,7 @@ export default defineEventHandler(async (event): Promise<OptionsResponse> => {
     const invoices = await query(`
       SELECT i.id, i.invoice_date, i.invoice_number, c.name AS company_name,
         i.subject,
-        IFNULL(SUM(ip.unit_price * ip.quantity), 0) AS total_amount
+        IFNULL(SUM(ip.quantity * ip.unit_price * (1 + ip.tax / 100)), 0) AS total_amount
       FROM invoices i
       LEFT JOIN companies c ON c.id = i.company_id
       LEFT JOIN invoice_positions ip ON ip.invoice_id = i.id

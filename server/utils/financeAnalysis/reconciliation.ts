@@ -15,6 +15,8 @@ function bucketOf(row: FinanceLiquidityRow): MoneyBucket {
     case 'bankEvent':
     case 'cashCountRevenue':
       return 'events'
+    case 'bankDifference':
+      return 'discrepancies'
     case 'cashCountRegister':
     case 'registerCheck':
       // A register's first count is no difference — the money simply appears in the books.

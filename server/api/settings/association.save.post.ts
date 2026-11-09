@@ -68,7 +68,7 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
       const existingRows = normalizeBigInt(await query<AssociationProfileRow[]>(`
         SELECT
           id, name, short_name, street, street_number, postal_code, city, email, phone, website,
-          vat_id, iban, bic, bankname, register_number, register_court, NULL AS logo_file_id
+          vat_id, register_number, register_court, NULL AS logo_file_id
         FROM association_profiles
         ORDER BY id ASC
         LIMIT 1
@@ -108,9 +108,6 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
              phone = ?,
              website = ?,
              vat_id = ?,
-             iban = ?,
-             bic = ?,
-             bankname = ?,
              register_number = ?,
              register_court = ?
            WHERE id = ?`,
@@ -125,9 +122,6 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
             updated.phone,
             updated.website,
             updated.vat_id,
-            updated.iban,
-            updated.bic,
-            updated.bankname,
             updated.register_number,
             updated.register_court,
             existing.id,
@@ -175,8 +169,8 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
       const res = await query<{ insertId: number }>(
         `INSERT INTO association_profiles (
           singleton_key, name, short_name, street, street_number, postal_code, city, email, phone, website,
-          vat_id, iban, bic, bankname, register_number, register_court
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          vat_id, register_number, register_court
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           1,
           updated.name,
@@ -189,9 +183,6 @@ export default defineEventHandler(async (event): Promise<SaveAssociationProfileR
           updated.phone,
           updated.website,
           updated.vat_id,
-          updated.iban,
-          updated.bic,
-          updated.bankname,
           updated.register_number,
           updated.register_court,
         ],

@@ -4,20 +4,35 @@
     persist-key="bank-statements-list"
     :search-value="search"
     :search-placeholder="t('bankStatement.search')"
-    :can-create="canEdit"
+    :can-create="canEdit && financeAccounts.bankEnabled.value"
     :create-label="`+ ${t('bankStatement.new')}`"
     @update:search-value="search = $event"
     @create="createBankStatement"
   >
     <template #actions>
-      <PageAuditTableHistoryButton :tables="['bank_statements', 'bank_statement_positions']" />
+      <PageFinancesAccountSelect
+        v-if="financeAccounts.accounts.value.length > 1"
+        v-model="accountFilter"
+        :accounts="financeAccounts.accounts.value"
+        :all-label="t('bankStatement.allAccounts')"
+        :aria-label="t('bankStatement.account')"
+        wrapper-class="relative w-48"
+      />
+      <PageAuditTableHistoryButton :tables="['bank_statements', 'bank_statement_positions', 'finance_accounts']" />
     </template>
+
+    <p
+      v-if="financeAccounts.loaded.value && !financeAccounts.bankEnabled.value"
+      class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-800"
+    >
+      {{ t('bankStatement.bankDisabled') }}
+    </p>
 
     <CommonAdvancedTable
       :loading="loading"
       v-model:search="search"
       persist-key="bank-statements-list"
-      :rows="bankStatements"
+      :rows="filteredBankStatements"
       :columns="columns"
       :empty-text="t('bankStatement.none')"
       @row-open="openBankStatement($event.id)"
@@ -35,6 +50,7 @@ import { usePage } from '~/composables/usePage'
 import { buildReturnTarget, cloneReturnTarget } from '~/composables/useReturnTarget'
 import type { PageTarget } from '~/types/page'
 import type { BankStatementOverview } from '~/types/bankStatement'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 
 const props = defineProps<{
   returnTarget?: PageTarget | null
@@ -51,6 +67,12 @@ const resolvedReturnTarget = computed(() => cloneReturnTarget(props.returnTarget
 const bankStatements = ref<BankStatementOverview[]>([])
 const loading = ref(true)
 const search = ref('')
+const financeAccounts = useFinanceAccounts()
+/** null = all accounts. Opening/closing balances are always those of the statement's own account. */
+const accountFilter = ref<number | null>(null)
+const filteredBankStatements = computed(() => accountFilter.value
+  ? bankStatements.value.filter(row => row.account_id === accountFilter.value)
+  : bankStatements.value)
 
 const columns = computed<AdvancedTableColumn<BankStatementOverview>[]>(() => [
   {
@@ -61,6 +83,14 @@ const columns = computed<AdvancedTableColumn<BankStatementOverview>[]>(() => [
     getValue: row => row.statement_number,
     cellClass: 'font-medium',
     mobile: 'title',
+  },
+  {
+    key: 'account_name',
+    label: t('bankStatement.account'),
+    filterType: 'text',
+    globalSearchable: true,
+    getValue: row => row.account_name,
+    mobileLabel: true,
   },
   {
     key: 'statement_date',

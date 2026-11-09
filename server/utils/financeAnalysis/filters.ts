@@ -15,6 +15,8 @@ export interface FinanceAnalysisFilters {
   invoiceDateField: FinanceAnalysisInvoiceDateField
   costCentreId: number | null
   includeChildCostCentres: boolean
+  /** Limits the bank positions table and bank movement card to these accounts; empty = all */
+  accountIds: number[]
 }
 
 function isDateOnly(value: unknown): value is string {
@@ -78,6 +80,12 @@ export function parsePositiveInteger(value: unknown) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 }
 
+export function parseAccountIds(value: unknown) {
+  const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  const ids = raw.map(item => parsePositiveInteger(typeof item === 'number' ? item : String(item).trim()))
+  return Array.from(new Set(ids.filter((id): id is number => id !== null))).slice(0, 100)
+}
+
 export function parseBooleanFlag(value: unknown) {
   return value === true || value === 'true' || value === '1' || value === 1
 }
@@ -94,6 +102,7 @@ export function parseFinanceAnalysisFilters(input: Record<string, unknown>, toda
     invoiceDateField: parseInvoiceDateField(input.invoiceDateField),
     costCentreId: parsePositiveInteger(input.costCentreId),
     includeChildCostCentres: parseBooleanFlag(input.includeChildCostCentres),
+    accountIds: parseAccountIds(input.accountIds ?? input['accountIds[]']),
   }
 }
 

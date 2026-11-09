@@ -31,7 +31,9 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
         r.checked_at,
         r.disbursed_at,
         COUNT(DISTINCT rp.receipt_id) AS receipt_count,
-        IFNULL(SUM(pos.amount), 0) AS total_amount
+        IFNULL(SUM(pos.amount), 0) AS total_amount,
+        r.cash,
+        EXISTS (SELECT 1 FROM bank_statement_positions bsp WHERE bsp.reimbursement_id = r.id) AS bank_confirmed
       FROM reimbursements r
       LEFT JOIN members m ON m.id = r.paid_by
       LEFT JOIN reimbursement_positions rp ON rp.reimbursement_id = r.id
@@ -51,6 +53,7 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
       disbursed_at: row.disbursed_at ? String(row.disbursed_at) : null,
       receipt_count: Number(row.receipt_count),
       total_amount: Number(row.total_amount),
+      bank_confirmed: !Number((row as any).cash) && row.disbursed_at ? Boolean(Number((row as any).bank_confirmed)) : null,
     }))}
   } catch (err: any) {
     return internalError('Failed to load receipts', err)

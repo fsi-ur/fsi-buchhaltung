@@ -23,7 +23,16 @@
       @row-open="openReimbursement($event.id)"
     >
       <template #cell-status="{ row }">
-        <CommonStatusBadge :label="statusLabels[status(row)]" :tone="statusTone(status(row))" />
+        <span class="inline-flex flex-wrap items-center justify-center gap-1">
+          <CommonStatusBadge :label="statusLabels[status(row)]" :tone="statusTone(status(row))" />
+          <!-- Paid by bank, but no statement shows the money leaving yet -->
+          <CommonStatusBadge
+            v-if="row.bank_confirmed === false"
+            tone="warning"
+            :label="t('reimbursement.bankUnconfirmedShort')"
+            :title="t('reimbursement.bankUnconfirmed')"
+          />
+        </span>
       </template>
     </CommonAdvancedTable>
   </CommonPageTableCard>
@@ -126,7 +135,8 @@ const columns = computed<AdvancedTableColumn<ReimbursementOverview>[]>(() => [
     label: t('member.status'),
     filterType: 'text',
     globalSearchable: true,
-    getValue: row => statusLabels.value[status(row)],
+    getValue: row => [statusLabels.value[status(row)], row.bank_confirmed === false ? t('reimbursement.bankUnconfirmedShort') : '']
+      .filter(Boolean).join(' · '),
     headerClass: 'text-center',
     cellClass: 'text-center',
     mobileLabel: true,

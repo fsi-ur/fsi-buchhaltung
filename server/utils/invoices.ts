@@ -6,7 +6,8 @@ import { query } from '~/server/utils/db'
 import { getAttachedFile } from '~/server/utils/files'
 import type { InvoiceTextSettings } from '~/types/appSettings'
 import { InvoiceSourceType, InvoiceStatus, type CreateInvoiceBody } from '~/types/invoice'
-import type { AssociationProfileRow } from '~/types/association'
+import type { AssociationInvoiceProfile, AssociationProfileRow } from '~/types/association'
+import { formatIban, loadDefaultFinanceAccount } from '~/server/utils/financeAccounts'
 import type { CompanyRow } from '~/types/company'
 import type { FileRow } from '~/types/file'
 import { renderInvoiceTextTemplate } from '~/utils/invoiceTextTemplates'
@@ -140,22 +141,29 @@ export function calculateInvoicePositionTotals(positions: Array<{ quantity: numb
   }
 }
 
-export async function getAssociationProfileForInvoice(conn?: any): Promise<AssociationProfileRow | null> {
-  const rows = await query<Array<Omit<AssociationProfileRow, 'responsible_member_ids' | 'responsible_position_ids'>>>(
-    `SELECT
-      id, name, short_name, street, street_number, postal_code, city, email, phone, website,
-      vat_id, iban, bic, bankname, register_number, register_court
-     FROM association_profiles
-     ORDER BY id ASC
-     LIMIT 1`,
-    [],
-    conn,
-  )
+/** The profile with the default account's bank details (printed on invoices, e-mail variables). */
+export async function getAssociationProfileForInvoice(conn?: any): Promise<AssociationInvoiceProfile | null> {
+  const [rows, account] = await Promise.all([
+    query<Array<Omit<AssociationProfileRow, 'responsible_member_ids' | 'responsible_position_ids'>>>(
+      `SELECT
+        id, name, short_name, street, street_number, postal_code, city, email, phone, website,
+        vat_id, register_number, register_court
+       FROM association_profiles
+       ORDER BY id ASC
+       LIMIT 1`,
+      [],
+      conn,
+    ),
+    loadDefaultFinanceAccount(conn),
+  ])
 
   if (!rows.length) return null
 
   return {
     ...rows[0]!,
+    iban: account?.iban ? formatIban(account.iban) : null,
+    bic: account?.bic ?? null,
+    bankname: account?.bankname ?? null,
     responsible_member_ids: [],
     responsible_position_ids: [],
   }

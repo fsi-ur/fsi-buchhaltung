@@ -439,6 +439,8 @@ export interface WikiEmbedBudgetStatusData {
 
 export interface WikiEmbedCashPositionData {
   date: string
+  /** False when no account exists at all: the bank line is hidden */
+  bankEnabled: boolean
   bankBalance: number
   cashTotal: number
   totalMoney: number

@@ -2,7 +2,7 @@
   <div class="space-y-2">
     <p class="text-2xl font-semibold text-base-900">{{ formatCurrency(data.totalMoney) }}</p>
     <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-      <div>
+      <div v-if="data.bankEnabled">
         <dt class="text-xs uppercase tracking-wide text-base-400">{{ t('wiki.embeds.cashPositionBank') }}</dt>
         <dd class="text-base-800">{{ formatCurrency(data.bankBalance) }}</dd>
       </div>

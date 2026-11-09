@@ -165,6 +165,21 @@ CREATE TABLE IF NOT EXISTS companies (
   notes TEXT
 );
 
+CREATE TABLE IF NOT EXISTS finance_accounts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(127) NOT NULL,
+  account_type ENUM('bank','other') NOT NULL DEFAULT 'bank',
+  account_holder VARCHAR(255) NULL,
+  iban VARCHAR(34) NULL,
+  bic VARCHAR(11) NULL,
+  bankname VARCHAR(127) NULL,
+  identifier VARCHAR(255) NULL,
+  notes TEXT NULL,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  archived_at TIMESTAMP NULL DEFAULT NULL,
+  UNIQUE KEY uq_finance_accounts_name (name)
+);
+
 CREATE TABLE IF NOT EXISTS association_profiles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   singleton_key TINYINT UNSIGNED NOT NULL DEFAULT 1 UNIQUE,
@@ -178,9 +193,6 @@ CREATE TABLE IF NOT EXISTS association_profiles (
   phone VARCHAR(63),
   website VARCHAR(255),
   vat_id VARCHAR(63),
-  iban VARCHAR(34),
-  bic VARCHAR(11),
-  bankname VARCHAR(127),
   register_number VARCHAR(127),
   register_court VARCHAR(255)
 );
@@ -513,7 +525,9 @@ CREATE TABLE IF NOT EXISTS reimbursements (
   checked_by BIGINT UNSIGNED,
   disbursed_at DATE NULL,
   disbursed_by BIGINT UNSIGNED,
+  paid_from_account_id BIGINT UNSIGNED NULL,
   FOREIGN KEY (paid_by) REFERENCES members(id),
+  FOREIGN KEY (paid_from_account_id) REFERENCES finance_accounts(id),
   FOREIGN KEY (checked_by) REFERENCES members(id),
   FOREIGN KEY (disbursed_by) REFERENCES members(id)
 );
@@ -570,28 +584,54 @@ CREATE TABLE IF NOT EXISTS cash_count_discrepancy_bookings (
 
 CREATE TABLE IF NOT EXISTS bank_statements (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
   statement_number VARCHAR(50) NOT NULL,
   checked_by BIGINT UNSIGNED NOT NULL,
   statement_date DATETIME NOT NULL,
+  FOREIGN KEY (account_id) REFERENCES finance_accounts(id),
   FOREIGN KEY (checked_by) REFERENCES members(id)
 );
 
 CREATE TABLE IF NOT EXISTS bank_statement_positions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   bank_statement_id BIGINT UNSIGNED NOT NULL,
-  position_type ENUM('receipt','invoice','event') NOT NULL,
+  position_type ENUM('receipt','invoice','event','transfer','reimbursement') NOT NULL,
   position_date DATE NOT NULL,
   receipt_id BIGINT UNSIGNED NULL,
   invoice_id BIGINT UNSIGNED NULL,
   event_id BIGINT UNSIGNED NULL,
+  counter_account_id BIGINT UNSIGNED NULL,
+  linked_position_id BIGINT UNSIGNED NULL,
+  reimbursement_id BIGINT UNSIGNED NULL,
   amount DECIMAL(10,2) NULL,
   notes TEXT NULL,
   UNIQUE KEY uq_bsp_receipt (receipt_id),
   UNIQUE KEY uq_bsp_invoice (invoice_id),
+  UNIQUE KEY uq_bsp_linked_position (linked_position_id),
+  UNIQUE KEY uq_bsp_reimbursement (reimbursement_id),
   FOREIGN KEY (bank_statement_id) REFERENCES bank_statements(id) ON DELETE CASCADE,
+  FOREIGN KEY (counter_account_id) REFERENCES finance_accounts(id),
+  FOREIGN KEY (linked_position_id) REFERENCES bank_statement_positions(id),
+  FOREIGN KEY (reimbursement_id) REFERENCES reimbursements(id),
   FOREIGN KEY (receipt_id) REFERENCES receipts(id),
   FOREIGN KEY (invoice_id) REFERENCES invoices(id),
   FOREIGN KEY (event_id) REFERENCES events(id)
+);
+
+CREATE TABLE IF NOT EXISTS bank_discrepancy_bookings (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  bank_statement_position_id BIGINT UNSIGNED NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  sphere_id TINYINT UNSIGNED NULL,
+  cost_centre_id MEDIUMINT UNSIGNED NULL,
+  notes TEXT NULL,
+  confirmed_by BIGINT UNSIGNED NULL,
+  confirmed_at TIMESTAMP NOT NULL,
+  UNIQUE KEY uq_bank_discrepancy_booking (bank_statement_position_id),
+  FOREIGN KEY (bank_statement_position_id) REFERENCES bank_statement_positions(id) ON DELETE CASCADE,
+  FOREIGN KEY (sphere_id) REFERENCES spheres(id),
+  FOREIGN KEY (cost_centre_id) REFERENCES cost_centres(id),
+  FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS notifications (

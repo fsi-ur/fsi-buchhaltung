@@ -4,7 +4,7 @@ import updateReceipt from '~/server/api/receipts/[id].put'
 import { attachFileToEntity } from '~/server/utils/files'
 import { RECEIPT_LOCKED_ERROR } from '~/server/utils/receipts'
 import { resetDatabase } from '../helpers/db'
-import { createCostCentre, createMember, createReceipt, createSphere, resetFixtureCounter } from '../helpers/fixtures'
+import { createCostCentre, createFinanceAccount, createMember, createReceipt, createSphere, resetFixtureCounter } from '../helpers/fixtures'
 import { signIn } from '../helpers/auth'
 import { callHandler, multipartBody } from '../helpers/handler'
 
@@ -106,7 +106,8 @@ describe('locked receipts', () => {
 
     it('stays frozen while a bank statement also pays the receipt', async () => {
       const member = await createMember()
-      const statement = await query<any>(`INSERT INTO bank_statements (statement_number, checked_by, statement_date) VALUES ('1', ?, '2026-03-10')`, [member])
+      const accountId = await createFinanceAccount()
+      const statement = await query<any>(`INSERT INTO bank_statements (account_id, statement_number, checked_by, statement_date) VALUES (?, '1', ?, '2026-03-10')`, [accountId, member])
       await query(
         `INSERT INTO bank_statement_positions (bank_statement_id, position_type, position_date, receipt_id, amount) VALUES (?, 'receipt', '2026-03-10', ?, 10)`,
         [Number(statement.insertId), receiptId],

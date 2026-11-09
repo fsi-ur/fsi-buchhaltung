@@ -108,7 +108,9 @@ export function buildCashDiscrepancyItems(
 
     items.push({
       key: String(group.cash_count_id),
+      source: 'cash',
       cash_count_id: group.cash_count_id,
+      bank: null,
       event_id: group.event_id,
       event_name: group.event_name,
       date: group.date,
@@ -235,7 +237,7 @@ export async function loadFinanceAnalysisCashDiscrepancies(
   const context = await loadCashDiscrepancyResolutionContext(inPeriod)
   return filterCashDiscrepanciesByCostCentres(buildCashDiscrepancyItems(inPeriod, context), costCentreIds)
     // Newest first, like the cash count list.
-    .sort((left, right) => right.date.localeCompare(left.date) || right.cash_count_id - left.cash_count_id)
+    .sort((left, right) => right.date.localeCompare(left.date) || (right.cash_count_id ?? 0) - (left.cash_count_id ?? 0))
 }
 
 export interface CashCountDiscrepancyView {

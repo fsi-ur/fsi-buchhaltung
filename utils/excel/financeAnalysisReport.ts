@@ -21,6 +21,7 @@ import {
 } from '~/shared/financeAnalysisGrouping'
 import {
   cashDiscrepancyAssignmentLabel,
+  cashDiscrepancyRegistersLabel,
   cashDiscrepancySourceLabel,
   cashDiscrepancyStatusLabel,
 } from '~/shared/cashDiscrepancyLabels'
@@ -434,7 +435,7 @@ function buildActualOwnAmountsByCostCentreId(options: FinanceAnalysisReportOptio
     })
   })
 
-  allocateBankEventRevenue(options.analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
+  allocateBankEventRevenue(options.analysis.bankEventPositions ?? options.analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
   allocateCashDiscrepancies(options.analysis.cashDiscrepancies, add)
 
   return amounts
@@ -836,7 +837,7 @@ function buildCashDiscrepancyRows(options: FinanceAnalysisReportOptions) {
   rows.push(...analysis.cashDiscrepancies.map(item => createSpreadsheetRow([
     { value: formatDate(item.date), styleId: 'TextCell' },
     { value: cashDiscrepancySourceLabel(item, t), styleId: 'TextCell' },
-    { value: item.registers.map(register => register.register_number).join(', '), styleId: 'TextCell' },
+    { value: item.bank ? cashDiscrepancyRegistersLabel(item, t) : item.registers.map(register => register.register_number).join(', '), styleId: 'TextCell' },
     { value: cashDiscrepancyAssignmentLabel(item, t), styleId: 'TextCell' },
     currencyCell(item.expected_amount),
     currencyCell(item.measured_amount),
@@ -909,6 +910,7 @@ function buildBankStatementRows(options: FinanceAnalysisReportOptions) {
   const { t, analysis, startDate, endDate, formatDate } = options
   const headerCells: SpreadsheetCell[] = [
     { value: t('financeAnalysis.bankStatements.positionDate'), styleId: 'Header' },
+    { value: t('financeAnalysis.bankStatements.account'), styleId: 'Header' },
     { value: t('financeAnalysis.bankStatements.statementNumber'), styleId: 'Header' },
     { value: t('financeAnalysis.bankStatements.positionType'), styleId: 'Header' },
     { value: t('financeAnalysis.bankStatements.reference'), styleId: 'Header' },
@@ -936,6 +938,7 @@ function buildBankStatementRows(options: FinanceAnalysisReportOptions) {
     const signedAmount = position.direction === 'out' ? -position.amount : position.amount
     return createSpreadsheetRow([
       { value: formatDate(position.position_date), styleId: 'TextCell' },
+      { value: position.account_name || t('common.notAvailable'), styleId: 'TextCell' },
       { value: position.statement_number || t('common.notAvailable'), styleId: 'TextCell' },
       { value: t(`financeAnalysis.bankStatements.types.${position.position_type}`), styleId: 'TextCell' },
       { value: position.reference || t('common.notAvailable'), styleId: 'TextCell' },
@@ -1688,7 +1691,7 @@ function buildWorkbook(options: FinanceAnalysisReportOptions) {
     ...(options.exportSplitByMonth ? [92] : []),
     70, 98, 98, 100,
   ]
-  const bankStatementColumnWidths = [86, 84, 96, 132, 190, 96, 132, 160]
+  const bankStatementColumnWidths = [86, 120, 84, 96, 132, 190, 96, 132, 160]
   const invoiceColumnWidths = options.includeComparison
     ? [86, 132, 186, 94, 70, 70]
     : [86, 132, 186, 94, 82]

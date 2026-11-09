@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 import { currentSemesterPeriod, detectPeriodShortcut, type QuickSemester } from '~/shared/financeAnalysisPeriod'
 import type { CostCentreRow } from '~/types/costCentre'
 import { InvoiceStatus } from '~/types/invoice'
@@ -39,6 +40,8 @@ export interface PersistedFinanceAnalysisState {
   invoiceDateField?: InvoiceDateField
   selectedCostCentreId?: number | null
   includeChildCostCentres?: boolean
+  /** Accounts the user switched off; everything else (also accounts added later) is included */
+  deselectedAccountIds?: number[]
   activeDetailTab?: string
 }
 
@@ -80,6 +83,33 @@ export function useFinanceAnalysisFilters() {
   const costCentreQuery = ref('')
   const selectedCostCentre = ref<CostCentreRow | null>(null)
   const includeChildCostCentres = ref(false)
+  // Account filter: all accounts are in by default; the user switches single ones off. Storing the
+  // switched-off ones keeps accounts added later included.
+  const financeAccounts = useFinanceAccounts()
+  const deselectedAccountIds = ref<number[]>([])
+  const allAccountIds = computed(() => financeAccounts.accounts.value.map(account => account.id))
+
+  function isAccountSelected(id: number) {
+    return !deselectedAccountIds.value.includes(id)
+  }
+
+  /** Switches an account on or off; the last account left switched on cannot be switched off. */
+  function toggleAccount(id: number) {
+    if (!isAccountSelected(id)) {
+      deselectedAccountIds.value = deselectedAccountIds.value.filter(value => value !== id)
+      return
+    }
+    const remaining = allAccountIds.value.filter(accountId => accountId !== id && isAccountSelected(accountId))
+    if (!remaining.length) return
+    deselectedAccountIds.value = [...deselectedAccountIds.value, id].sort((a, b) => a - b)
+  }
+
+  /** What the server limits to: nothing (= all) unless some account is switched off. */
+  const selectedAccountIds = computed(() => {
+    const deselected = new Set(deselectedAccountIds.value)
+    if (!allAccountIds.value.some(id => deselected.has(id))) return []
+    return allAccountIds.value.filter(id => !deselected.has(id))
+  })
 
   const yearOptions = computed(() => Array.from({ length: 11 }, (_, index) => currentYear + 1 - index))
 
@@ -234,6 +264,7 @@ export function useFinanceAnalysisFilters() {
     selectedInvoiceStatuses.value = [...DEFAULT_INVOICE_STATUSES]
     invoiceDateField.value = 'invoice_date'
     clearSelectedCostCentre()
+    deselectedAccountIds.value = []
     applyDefaultPeriod()
   }
 
@@ -292,6 +323,7 @@ export function useFinanceAnalysisFilters() {
       invoiceDateField: invoiceDateField.value,
       selectedCostCentreId: selectedCostCentre.value?.id ?? null,
       includeChildCostCentres: includeChildCostCentres.value,
+      deselectedAccountIds: [...deselectedAccountIds.value],
     }
   }
 
@@ -340,6 +372,10 @@ export function useFinanceAnalysisFilters() {
     if (typeof state.includeChildCostCentres === 'boolean' && restored) {
       includeChildCostCentres.value = state.includeChildCostCentres
     }
+
+    deselectedAccountIds.value = Array.isArray(state.deselectedAccountIds)
+      ? state.deselectedAccountIds.filter(id => Number.isInteger(id) && id > 0)
+      : []
   }
 
   const requestFilters = computed(() => ({
@@ -349,6 +385,7 @@ export function useFinanceAnalysisFilters() {
     invoiceDateField: invoiceDateField.value,
     costCentreId: selectedCostCentre.value?.id ?? null,
     includeChildCostCentres: selectedCostCentre.value ? includeChildCostCentres.value : false,
+    accountIds: selectedAccountIds.value,
   }))
 
   return {
@@ -367,6 +404,10 @@ export function useFinanceAnalysisFilters() {
     costCentreQuery,
     selectedCostCentre,
     includeChildCostCentres,
+    deselectedAccountIds,
+    selectedAccountIds,
+    isAccountSelected,
+    toggleAccount,
     yearOptions,
     monthOptions,
     receiptStatusLabels,

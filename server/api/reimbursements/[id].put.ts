@@ -1,4 +1,4 @@
-import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, releaseRemovedReimbursementReceipts, validateReimbursableReceipts } from '~/server/utils/reimbursements'
+import { isDuplicateReceiptError, REIMBURSEMENT_RECEIPT_TAKEN, releaseRemovedReimbursementReceipts, resolveReimbursementAccount, validateReimbursableReceipts } from '~/server/utils/reimbursements'
 import { parseJsonField } from '~/server/utils/api/request'
 import { isCashCountLocked, isReimbursementLocked, isUnlockRequested, lockError } from '~/server/utils/recordLocks'
 import { defineEventHandler } from 'h3'
@@ -13,7 +13,7 @@ import {
   validateUploadedFile,
 } from '~/server/utils/files'
 import type { ReimbursementPositionRow, ReimbursementRow } from '~/types/reimbursement'
-import { statusFromReimbursement, validateReimbursementBody } from '~/server/utils/reimbursements'
+import { statusFromReimbursement, validateConfirmedReimbursementChange, validateReimbursementBody } from '~/server/utils/reimbursements'
 import { internalError } from '~/server/utils/api/errors'
 
 interface UpdateReimbursementSuccess {
@@ -117,6 +117,11 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
       const fileError = validateUploadedFile(multipart.file)
       if (fileError && multipart.file) return { ok: false, error: fileError }
 
+      const account = await resolveReimbursementAccount(updated, conn, existingRows[0]!)
+      if (!account.ok) return account
+      const confirmedError = await validateConfirmedReimbursementChange(reimbursementId, updated, account.accountId, conn)
+      if (confirmedError) return { ok: false, error: confirmedError }
+
       const normalizedUpdated = {
         ...updated,
         cash: toDbBoolean(updated.cash),
@@ -141,7 +146,8 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
           checked_at = ?,
           checked_by = ?,
           disbursed_at = ?,
-          disbursed_by = ?
+          disbursed_by = ?,
+          paid_from_account_id = ?
         WHERE id = ?`,
         [
           normalizedUpdated.paid_by,
@@ -156,6 +162,7 @@ export default defineEventHandler(async (event): Promise<UpdateReimbursementResp
           normalizedUpdated.checked_by,
           normalizedUpdated.disbursed_at,
           normalizedUpdated.disbursed_by,
+          account.accountId,
           reimbursementId,
         ],
         conn

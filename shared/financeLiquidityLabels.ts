@@ -10,6 +10,10 @@ export function liquidityRowLabel(row: FinanceLiquidityRow, t: LiquidityTranslat
   if (row.type === 'opening') return t('financeAnalysis.liquidity.openingBalance')
   if (row.type === 'closing') return t('financeAnalysis.liquidity.closingBalance')
   if (row.type === 'bankStatementCheckpoint') return row.label ? `${typeLabel}: ${row.label}` : typeLabel
+  if (row.type === 'bankTransfer') {
+    if (!row.label) return typeLabel
+    return t(row.delta_amount < 0 ? 'financeAnalysis.liquidity.bankTransferTo' : 'financeAnalysis.liquidity.bankTransferFrom', { account: row.label })
+  }
 
   let label = row.label
   if (row.type === 'reimbursementReceipt' && row.reference && label.startsWith(row.reference)) {
