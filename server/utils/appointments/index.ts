@@ -68,6 +68,7 @@ export function toOccurrenceOverride(row: Record<string, any>): AppointmentOccur
     location: row.location == null ? null : String(row.location),
     starts_at: row.starts_at == null ? null : String(row.starts_at),
     ends_at: row.ends_at == null ? null : String(row.ends_at),
+    website_published: row.website_published == null ? null : Boolean(Number(row.website_published)),
   }
 }
 
@@ -97,7 +98,7 @@ export async function loadOverrides(appointmentIds: number[], conn?: DbConn): Pr
   if (!appointmentIds.length) return byAppointment
 
   const rows = await query<Array<Record<string, any>>>(
-    `SELECT id, appointment_id, occurrence_date, is_cancelled, title, agenda, location, starts_at, ends_at
+    `SELECT id, appointment_id, occurrence_date, is_cancelled, title, agenda, location, starts_at, ends_at, website_published
      FROM appointment_occurrence_overrides
      WHERE appointment_id IN (${appointmentIds.map(() => '?').join(',')})`,
     appointmentIds,

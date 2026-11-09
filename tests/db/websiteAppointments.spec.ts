@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import {
   copyAppointmentWebsiteSettings,
+  isScheduledOccurrence,
   loadAppointmentWebsiteSettings,
+  loadOccurrenceWebsitePublished,
   loadPublicAppointments,
   parsePublicAppointmentsQuery,
   saveAppointmentWebsiteSettings,
+  saveOccurrenceWebsitePublished,
 } from '~/server/utils/appointmentWebsite'
 import { resetDatabase } from '../helpers/db'
 import { createUser, resetFixtureCounter } from '../helpers/fixtures'
@@ -115,6 +118,46 @@ describe('public appointments', () => {
     await createAppointment({ title: 'Nächstes Jahr', startsAt: '2027-06-01 18:00:00', endsAt: '2027-06-01 20:00:00' })
 
     expect((await load({ from: '2026-01-01' })).map(row => row.title)).toEqual(['Frühjahr', 'Nächstes Jahr'])
+  })
+
+  it('publishes a single date of an otherwise unpublished series', async () => {
+    const id = await createAppointment({ title: 'Sitzung', startsAt: '2026-10-21 19:00:00', endsAt: '2026-10-21 21:00:00', weekly: { weekday: 'WE', count: 4 }, published: false })
+    await withAuditTransaction({ id: actorId }, conn => saveOccurrenceWebsitePublished(id, '2026-11-04 19:00:00', true, conn))
+
+    expect((await load()).map(row => row.startsAtLocal)).toEqual(['2026-11-04 19:00:00'])
+    expect(await loadOccurrenceWebsitePublished(id, '2026-11-04 19:00:00')).toBe(true)
+  })
+
+  it('hides a single date of a published series and keeps its other overrides', async () => {
+    const id = await createAppointment({ title: 'Sitzung', startsAt: '2026-10-21 19:00:00', endsAt: '2026-10-21 21:00:00', weekly: { weekday: 'WE', count: 4 } })
+    await query(
+      `INSERT INTO appointment_occurrence_overrides (appointment_id, occurrence_date, location) VALUES (?, ?, 'Raum 2')`,
+      [id, '2026-10-28 19:00:00'],
+    )
+    await withAuditTransaction({ id: actorId }, conn => saveOccurrenceWebsitePublished(id, '2026-10-28 19:00:00', false, conn))
+
+    expect((await load()).map(row => row.startsAtLocal)).toEqual(['2026-10-21 19:00:00', '2026-11-04 19:00:00', '2026-11-11 19:00:00'])
+
+    // Back to "like the series": the date reappears with its moved location intact.
+    await withAuditTransaction({ id: actorId }, conn => saveOccurrenceWebsitePublished(id, '2026-10-28 19:00:00', null, conn))
+    const rows = await load()
+    expect(rows.map(row => row.startsAtLocal)).toContain('2026-10-28 19:00:00')
+    expect(rows.find(row => row.startsAtLocal === '2026-10-28 19:00:00')!.location).toBe('Raum 2')
+  })
+
+  it('ignores per-date settings for an unpublished single appointment', async () => {
+    await createAppointment({ title: 'Intern', startsAt: '2026-11-01 18:00:00', endsAt: '2026-11-01 20:00:00', published: false })
+    expect(await load()).toEqual([])
+  })
+
+  it('only accepts dates the series actually produces', async () => {
+    const id = await createAppointment({ title: 'Sitzung', startsAt: '2026-10-21 19:00:00', endsAt: '2026-10-21 21:00:00', weekly: { weekday: 'WE', count: 4 } })
+    const single = await createAppointment({ title: 'Einmalig', startsAt: '2026-10-30 18:00:00', endsAt: '2026-10-30 20:00:00' })
+
+    expect(await isScheduledOccurrence(id, '2026-10-28 19:00:00')).toBe(true)
+    expect(await isScheduledOccurrence(id, '2026-10-29 19:00:00')).toBe(false)
+    expect(await isScheduledOccurrence(id, '2026-11-18 19:00:00')).toBe(false)
+    expect(await isScheduledOccurrence(single, '2026-10-30 18:00:00')).toBe(false)
   })
 
   it('keeps the publication when a series is split', async () => {

@@ -2,7 +2,9 @@
   <section class="space-y-4">
     <header>
       <h3 class="text-sm font-semibold uppercase tracking-wide text-base-400">{{ t('calendar.website.section') }}</h3>
-      <p class="mt-0.5 text-xs text-base-400">{{ t('calendar.website.sectionHint') }}</p>
+      <p class="mt-0.5 text-xs text-base-400">
+        {{ occurrence ? t('calendar.website.occurrenceSectionHint') : t('calendar.website.sectionHint') }}
+      </p>
     </header>
 
     <p v-if="disabled" class="rounded-lg bg-base-50 px-3 py-2 text-sm text-base-600">
@@ -11,19 +13,32 @@
 
     <div class="flex items-start justify-between gap-4">
       <div class="min-w-0">
-        <p class="text-sm font-medium text-base-800">{{ t('calendar.website.published') }}</p>
-        <p class="text-xs text-base-500">{{ t('calendar.website.publishedHint') }}</p>
+        <p class="text-sm font-medium text-base-800">
+          {{ occurrence ? t('calendar.website.occurrencePublished') : t('calendar.website.published') }}
+        </p>
+        <p class="text-xs text-base-500">
+          {{ occurrence
+            ? (seriesPublished ? t('calendar.website.occurrenceHintSeriesPublished') : t('calendar.website.occurrenceHintSeriesUnpublished'))
+            : t('calendar.website.publishedHint') }}
+        </p>
       </div>
       <CommonToggleSwitch
         :model-value="modelValue.published"
-        :label="t('calendar.website.published')"
+        :label="occurrence ? t('calendar.website.occurrencePublished') : t('calendar.website.published')"
         :disabled="disabled"
         @update:model-value="emit('update:modelValue', { ...modelValue, published: $event })"
       />
     </div>
 
+    <p
+      v-if="occurrence && modelValue.published !== seriesPublished"
+      class="text-xs font-medium text-accent-700"
+    >
+      {{ modelValue.published ? t('calendar.website.occurrenceDeviatesPublished') : t('calendar.website.occurrenceDeviatesHidden') }}
+    </p>
+
     <template v-if="modelValue.published">
-      <div class="field sm:max-w-sm">
+      <div v-if="!occurrence" class="field sm:max-w-sm">
         <label>{{ t('calendar.website.visibleFrom') }}</label>
         <CommonDateInput
           :model-value="modelValue.visible_from"
@@ -59,6 +74,10 @@ defineProps<{
   /** The appointment is limited to subdivisions/invited members internally. */
   restricted: boolean
   disabled?: boolean
+  /** Editing a single date of a series: only `published` applies, `visible_from` stays the series'. */
+  occurrence?: boolean
+  /** With `occurrence`: whether the series itself is published. */
+  seriesPublished?: boolean
 }>()
 
 const emit = defineEmits<{

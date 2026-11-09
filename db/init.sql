@@ -944,6 +944,7 @@ CREATE TABLE IF NOT EXISTS appointment_occurrence_overrides (
   location VARCHAR(255) NULL,
   starts_at DATETIME NULL,
   ends_at DATETIME NULL,
+  website_published TINYINT(1) NULL,
   UNIQUE KEY unique_appointment_occurrence (appointment_id, occurrence_date),
   FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
 );

@@ -11,9 +11,11 @@ const {
   DB_CONN_LIMIT = '2',
 } = process.env
 
-const APPOINTMENT_COLUMNS = [
-  ['website_published', 'ADD COLUMN website_published TINYINT(1) NOT NULL DEFAULT 0 AFTER reminder_lead_minutes'],
-  ['website_visible_from', 'ADD COLUMN website_visible_from DATETIME NULL AFTER website_published'],
+const COLUMNS = [
+  ['appointments', 'website_published', 'ADD COLUMN website_published TINYINT(1) NOT NULL DEFAULT 0 AFTER reminder_lead_minutes'],
+  ['appointments', 'website_visible_from', 'ADD COLUMN website_visible_from DATETIME NULL AFTER website_published'],
+  // Per-date deviation from the series: NULL = like the series, 1 = publish only this date, 0 = hide it.
+  ['appointment_occurrence_overrides', 'website_published', 'ADD COLUMN website_published TINYINT(1) NULL AFTER ends_at'],
 ]
 
 // seed-admin.mjs grants every key to the admin role only when it creates that role, so an
@@ -56,10 +58,10 @@ async function migrateWebsiteAppointments() {
     const databaseName = rows[0]?.db_name?.trim()
     if (!databaseName) throw new Error('Failed to resolve current database name')
 
-    for (const [columnName, clause] of APPOINTMENT_COLUMNS) {
-      if (await columnExists(conn, databaseName, 'appointments', columnName)) continue
-      await conn.query(`ALTER TABLE appointments ${clause}`)
-      console.log(`migrate-website-appointments: added appointments.${columnName}`)
+    for (const [tableName, columnName, clause] of COLUMNS) {
+      if (await columnExists(conn, databaseName, tableName, columnName)) continue
+      await conn.query(`ALTER TABLE ${tableName} ${clause}`)
+      console.log(`migrate-website-appointments: added ${tableName}.${columnName}`)
     }
 
     const adminRows = await conn.query(`SELECT id FROM roles WHERE code = 'admin' LIMIT 1`)

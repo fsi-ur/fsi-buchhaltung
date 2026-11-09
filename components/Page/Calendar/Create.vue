@@ -71,7 +71,16 @@
             />
 
             <PageCalendarWebsiteField
-              v-if="showWebsite"
+              v-if="showWebsite && isOccurrenceEdit"
+              v-model="occurrenceWebsite"
+              class="border-t border-base-200 pt-6"
+              occurrence
+              :series-published="savedWebsite.published"
+              :restricted="Boolean(form.restricted)"
+              :disabled="!canPublish"
+            />
+            <PageCalendarWebsiteField
+              v-else-if="showWebsite"
               v-model="website"
               class="border-t border-base-200 pt-6"
               :restricted="Boolean(form.restricted)"
@@ -136,15 +145,30 @@ let headerStickyObserver: IntersectionObserver | null = null
 
 const form = ref<AppointmentFormValue>(emptyForm())
 
-// Publishing on the website belongs to the whole series, so a single-occurrence edit doesn't offer it.
 const emptyWebsite = (): AppointmentWebsiteSettings => ({ published: false, visible_from: null })
 const website = ref<AppointmentWebsiteSettings>(emptyWebsite())
 const savedWebsite = ref<AppointmentWebsiteSettings>(emptyWebsite())
 const canPublish = ref(hasPermission('calendar.publish'))
-const showWebsite = computed(() => scope.value !== 'occurrence' && (canPublish.value || savedWebsite.value.published))
-const websiteDirty = computed(() =>
-  website.value.published !== savedWebsite.value.published
-  || (website.value.visible_from || null) !== (savedWebsite.value.visible_from || null))
+
+// A single date of a series can deviate from the series: published alone, or hidden alone.
+const isOccurrenceEdit = computed(() => Boolean(appointmentId.value && scope.value === 'occurrence' && occurrenceDate.value))
+/** Only `published` is used; the toggle shows the date's effective state. */
+const occurrenceWebsite = ref<AppointmentWebsiteSettings>(emptyWebsite())
+/** The stored deviation: null = like the series. */
+const savedOccurrencePublished = ref<boolean | null>(null)
+/** What to store for the toggle's state — matching the series means no deviation. */
+const occurrencePublishedToSave = computed<boolean | null>(() =>
+  occurrenceWebsite.value.published === savedWebsite.value.published ? null : occurrenceWebsite.value.published)
+
+const showWebsite = computed(() => {
+  if (isOccurrenceEdit.value) return canPublish.value || (savedOccurrencePublished.value ?? savedWebsite.value.published)
+  return scope.value !== 'occurrence' && (canPublish.value || savedWebsite.value.published)
+})
+const websiteDirty = computed(() => {
+  if (isOccurrenceEdit.value) return occurrencePublishedToSave.value !== savedOccurrencePublished.value
+  return website.value.published !== savedWebsite.value.published
+    || (website.value.visible_from || null) !== (savedWebsite.value.visible_from || null)
+})
 
 const scopeLabel = computed(() => {
   if (!appointmentId.value) return ''
@@ -215,6 +239,8 @@ async function loadAppointment() {
     canPublish.value = hasPermission('calendar.publish')
     website.value = emptyWebsite()
     savedWebsite.value = emptyWebsite()
+    occurrenceWebsite.value = emptyWebsite()
+    savedOccurrencePublished.value = null
     return
   }
 
@@ -278,17 +304,25 @@ async function loadAppointment() {
 }
 
 async function loadWebsite(id: number) {
-  const res = await apiFetch<GetAppointmentWebsiteResponse>(`/api/appointments/${id}/website`)
-    .catch(() => ({ ok: false as const, error: '' }))
+  const res = await apiFetch<GetAppointmentWebsiteResponse>(`/api/appointments/${id}/website`, {
+    query: isOccurrenceEdit.value ? { occurrenceDate: occurrenceDate.value } : undefined,
+  }).catch(() => ({ ok: false as const, error: '' }))
   if (!res.ok) {
     canPublish.value = false
     website.value = emptyWebsite()
     savedWebsite.value = emptyWebsite()
+    occurrenceWebsite.value = emptyWebsite()
+    savedOccurrencePublished.value = null
     return
   }
   canPublish.value = resolveFlag(res.canPublish, 'calendar.publish')
   website.value = { ...res.website }
   savedWebsite.value = { ...res.website }
+  savedOccurrencePublished.value = isOccurrenceEdit.value ? res.occurrencePublished : null
+  occurrenceWebsite.value = {
+    published: savedOccurrencePublished.value ?? res.website.published,
+    visible_from: null,
+  }
 }
 
 function wallClockMs(value: string): number {
@@ -362,7 +396,9 @@ async function save() {
     if (showWebsite.value && canPublish.value && websiteDirty.value && savedId) {
       const websiteRes = await apiFetch<UpdateAppointmentWebsiteResponse>(`/api/appointments/${savedId}/website`, {
         method: 'PUT',
-        body: website.value,
+        body: isOccurrenceEdit.value
+          ? { occurrenceDate: occurrenceDate.value, published: occurrencePublishedToSave.value }
+          : website.value,
       }).catch(() => ({ ok: false as const, error: '' }))
       if (!websiteRes.ok) {
         // The appointment itself is saved by now — staying here would let a retry create it twice.

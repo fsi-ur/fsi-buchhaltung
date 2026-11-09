@@ -1,6 +1,11 @@
 import { query } from '~/server/utils/db'
 import { loadOverrides, SERIES_COLUMNS, toAppointmentSeries } from '~/server/utils/appointments'
-import { expandOccurrences, type AppointmentOccurrence } from '~/server/utils/appointments/recurrence'
+import {
+  expandOccurrences,
+  formatWallClock,
+  parseWallClock,
+  type AppointmentOccurrence,
+} from '~/server/utils/appointments/recurrence'
 import { parsePublicEventsQuery } from '~/server/utils/eventWebsite'
 import type { DbConn } from '~/server/utils/notifications/types'
 import {
@@ -55,6 +60,76 @@ export async function saveAppointmentWebsiteSettings(appointmentId: number, body
   )
 }
 
+/**
+ * A single date's deviation from the series: true = published even though the series isn't,
+ * false = hidden although the series is, null = like the series.
+ */
+export function normalizeOccurrenceWebsitePayload(value: unknown): { occurrenceDate: string, published: boolean | null } | null {
+  if (!value || typeof value !== 'object') return null
+  const input = value as Record<string, unknown>
+
+  const occurrenceDate = normalizeOccurrenceDate(input.occurrenceDate)
+  if (!occurrenceDate) return null
+
+  const raw = input.published
+  const published = raw === null ? null
+    : raw === true || raw === 1 || raw === '1' ? true
+      : raw === false || raw === 0 || raw === '0' ? false
+        : undefined
+  if (published === undefined) return null
+
+  return { occurrenceDate, published }
+}
+
+export function normalizeOccurrenceDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const parsed = parseWallClock(value)
+  return parsed ? formatWallClock(parsed) : null
+}
+
+/** Whether `occurrenceDate` is a date the series' rule actually produces (and not a single appointment). */
+export async function isScheduledOccurrence(appointmentId: number, occurrenceDate: string, conn?: DbConn): Promise<boolean> {
+  const rows = await query<Array<Record<string, any>>>(
+    `SELECT ${SERIES_COLUMNS} FROM appointments WHERE id = ? LIMIT 1`,
+    [appointmentId],
+    conn,
+  )
+  const appointment = rows[0] ? toAppointmentSeries(rows[0]) : null
+  if (!appointment?.recurrence_freq) return false
+  // Without overrides every occurrence sits at its scheduled start, so a zero-length window finds it.
+  return expandOccurrences(appointment, [], { from: occurrenceDate, to: occurrenceDate }, { includeCancelled: true })
+    .some(occurrence => occurrence.occurrenceDate === occurrenceDate)
+}
+
+export async function loadOccurrenceWebsitePublished(appointmentId: number, occurrenceDate: string, conn?: DbConn): Promise<boolean | null> {
+  const rows = await query<Array<{ website_published: number | null }>>(
+    `SELECT website_published FROM appointment_occurrence_overrides WHERE appointment_id = ? AND occurrence_date = ? LIMIT 1`,
+    [appointmentId, occurrenceDate],
+    conn,
+  )
+  const value = rows[0]?.website_published
+  return value == null ? null : Boolean(Number(value))
+}
+
+export async function saveOccurrenceWebsitePublished(appointmentId: number, occurrenceDate: string, published: boolean | null, conn: DbConn) {
+  if (published === null) {
+    // Back to "like the series" — never creates an otherwise empty override row.
+    await query(
+      `UPDATE appointment_occurrence_overrides SET website_published = NULL WHERE appointment_id = ? AND occurrence_date = ?`,
+      [appointmentId, occurrenceDate],
+      conn,
+    )
+    return
+  }
+  await query(
+    `INSERT INTO appointment_occurrence_overrides (appointment_id, occurrence_date, is_cancelled, website_published)
+     VALUES (?, ?, 0, ?)
+     ON DUPLICATE KEY UPDATE website_published = VALUES(website_published)`,
+    [appointmentId, occurrenceDate, published ? 1 : 0],
+    conn,
+  )
+}
+
 /** "This and following" splits a series into a new appointment — it stays on the website like the original. */
 export async function copyAppointmentWebsiteSettings(fromId: number, toId: number, conn: DbConn) {
   await query(
@@ -103,27 +178,45 @@ export function parsePublicAppointmentsQuery(
   return { ok: true, query: { from: endsAfter, to: `${toDay} 23:59:59`, limit, order } }
 }
 
-/** Every occurrence of a published, already visible series that overlaps the window, cancelled ones flagged. */
+/**
+ * Every published occurrence of an already visible series that overlaps the window, cancelled ones
+ * flagged. An occurrence is published when the series is, unless that one date is hidden — or when
+ * just that date is published although the series isn't.
+ */
 export async function loadPublicAppointments(filter: PublicAppointmentsQuery, now: LocalDateTime, timeZone: string): Promise<PublicAppointment[]> {
   // Coarse prefilter only; the exact overlap (including moved occurrences) is expandOccurrences' job.
   const rows = await query<Array<Record<string, any>>>(
-    `SELECT ${SERIES_COLUMNS}
-     FROM appointments
-     WHERE website_published = 1
-       AND (website_visible_from IS NULL OR website_visible_from <= ?)
-       AND starts_at <= ?
-       AND (recurrence_freq IS NOT NULL OR ends_at >= ?)`,
+    `SELECT ${SERIES_COLUMNS}, website_published
+     FROM appointments a
+     WHERE (a.website_published = 1 OR EXISTS (
+         SELECT 1 FROM appointment_occurrence_overrides o
+         WHERE o.appointment_id = a.id AND o.website_published = 1
+       ))
+       AND (a.website_visible_from IS NULL OR a.website_visible_from <= ?)
+       AND a.starts_at <= ?
+       AND (a.recurrence_freq IS NOT NULL OR a.ends_at >= ?)`,
     [now, filter.to, filter.from],
   )
   if (!rows.length) return []
 
-  const series = rows.map(toAppointmentSeries)
-  const overrides = await loadOverrides(series.map(row => row.id))
+  const series = rows.map(row => ({ appointment: toAppointmentSeries(row), published: Boolean(Number(row.website_published)) }))
+  const overrides = await loadOverrides(series.map(row => row.appointment.id))
 
   const occurrences: Array<{ series: AppointmentSeries, occurrence: AppointmentOccurrence }> = []
-  for (const appointment of series) {
-    for (const occurrence of expandInChunks(appointment, overrides.get(appointment.id) ?? [], filter)) {
-      occurrences.push({ series: appointment, occurrence })
+  for (const { appointment, published } of series) {
+    const seriesOverrides = overrides.get(appointment.id) ?? []
+    const publishedByDate = new Map<string, boolean>()
+    for (const override of seriesOverrides) {
+      const date = normalizeOccurrenceDate(override.occurrence_date)
+      if (date && override.website_published != null) publishedByDate.set(date, override.website_published)
+    }
+
+    for (const occurrence of expandInChunks(appointment, seriesOverrides, filter)) {
+      // A single appointment has no per-date setting; its series flag is all there is.
+      const isPublished = appointment.recurrence_freq
+        ? publishedByDate.get(occurrence.occurrenceDate) ?? published
+        : published
+      if (isPublished) occurrences.push({ series: appointment, occurrence })
     }
   }
 
