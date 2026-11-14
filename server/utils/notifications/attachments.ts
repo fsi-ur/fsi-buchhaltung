@@ -1,6 +1,7 @@
 import { loadAttachmentSelection, mergeAttachmentSelections, saveAttachmentSelection } from '~/server/utils/attachments'
 import type { NotificationTypeKey } from '~/config/notificationTypes'
-import type { AttachmentSelection, NotificationSettings } from '~/types/notification'
+import type { AttachmentSelection } from '~/types/attachment'
+import type { NotificationSettings } from '~/types/notification'
 import type { DbConn } from '~/server/utils/notifications/types'
 
 export const NOTIFICATION_ENTITY_TYPE = 'notification'

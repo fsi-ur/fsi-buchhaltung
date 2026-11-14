@@ -1,6 +1,4 @@
 import type { AttachmentItem, AttachmentSelection } from '~/types/attachment'
-
-export type { AttachmentItem, AttachmentSelection }
 import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationTypeKey } from '~/config/notificationTypes'
 
