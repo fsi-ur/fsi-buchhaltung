@@ -2,6 +2,7 @@ import { withLastAdminGuard } from '~/server/utils/permissions'
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { isValidPermissionKey } from '~/server/utils/permissions'
+import { isAssignableSubdivisionPermissionKey, isSubdivisionPermissionKey } from '~/config/subdivisionPermissions'
 import { syncScalarCollection } from '~/server/utils/syncScalarCollection'
 import { requirePermission } from '~/server/utils/api/guards'
 import { internalError } from '~/server/utils/api/errors'
@@ -9,6 +10,8 @@ import { internalError } from '~/server/utils/api/errors'
 interface SetPositionPermissionsBody {
   position_id: number
   permissions: string[]
+  /** Scoped keys; omitted = leave them as they are. Only subdivision-bound positions can carry them. */
+  subdivision_permissions?: string[]
 }
 
 interface SetPositionPermissionsSuccess {
@@ -30,8 +33,8 @@ export default defineEventHandler(async (event): Promise<SetPositionPermissionsR
   const positionId = Number(body.position_id)
   if (!positionId) return { ok: false, error: 'Missing position id' }
 
-  const rows = await query<{ id: number }[]>(
-    `SELECT id FROM positions WHERE id = ? LIMIT 1`,
+  const rows = await query<{ id: number, subdivision_bound: number }[]>(
+    `SELECT id, subdivision_bound FROM positions WHERE id = ? LIMIT 1`,
     [positionId]
   )
   if (!rows.length) return { ok: false, error: 'Position not found' }
@@ -39,6 +42,14 @@ export default defineEventHandler(async (event): Promise<SetPositionPermissionsR
   const newPermissions = Array.isArray(body.permissions)
     ? body.permissions.filter(isValidPermissionKey)
     : []
+
+  const scopedRequested = Array.isArray(body.subdivision_permissions)
+  const newScopedPermissions = scopedRequested
+    ? Array.from(new Set(body.subdivision_permissions!.filter(isAssignableSubdivisionPermissionKey)))
+    : []
+  if (newScopedPermissions.length && !rows[0]!.subdivision_bound) {
+    return { ok: false, error: 'Nur an eine Untergliederung gebundene Positionen können Rechte in der Untergliederung erhalten.' }
+  }
 
   try {
     const result = await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
@@ -74,6 +85,32 @@ export default defineEventHandler(async (event): Promise<SetPositionPermissionsR
           )
         },
       })
+
+      if (scopedRequested) {
+        const existingScoped = existingRows
+          .map(row => row.permission_key)
+          .filter(isSubdivisionPermissionKey)
+        await syncScalarCollection({
+          existing: existingScoped,
+          incoming: newScopedPermissions,
+          onRemove: async (perm) => {
+            await query(
+              `DELETE FROM position_permissions
+               WHERE position_id = ? AND permission_key = ?`,
+              [positionId, perm],
+              conn
+            )
+          },
+          onAdd: async (perm) => {
+            await query(
+              `INSERT INTO position_permissions (position_id, permission_key)
+               VALUES (?, ?)`,
+              [positionId, perm],
+              conn
+            )
+          },
+        })
+      }
       return { ok: true as const }
     }))
 

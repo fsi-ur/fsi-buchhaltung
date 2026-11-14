@@ -5,7 +5,7 @@ import { query, withAuditTransaction } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { toDbBoolean } from '~/server/utils/api/request'
-import { normalizePositionAssignments, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
+import { normalizePositionAssignments, POSITION_ASSIGNMENT_COLUMNS, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
 import { internalError } from '~/server/utils/api/errors'
 
 interface SavePositionSuccess {
@@ -24,6 +24,8 @@ interface MysqlError extends Error {
   code?: string
 }
 
+const POSITION_BINDING_LOCKED = 'Die Bindung an eine Untergliederung kann nur geändert werden, solange die Position keine Zuweisungen hat.'
+
 export default defineEventHandler(async (event): Promise<SavePositionResponse> => {
   const current = await requirePermission(event, 'settings.positions.manage', { touch: false })
   if (!current.ok) return current
@@ -34,6 +36,9 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
 
   if (updated.is_active === undefined || updated.is_active === null) updated.is_active = true
   const active = toDbBoolean(updated.is_active)
+  const subdivisionBound = updated.subdivision_bound === true
+  // Only a subdivision-bound position can be handed out by subdivision leaders.
+  const assignableByLeaders = subdivisionBound && updated.assignable_by_leaders === true
 
   try {
     return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
@@ -48,21 +53,38 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
         )
 
         if (!existingRows.length) return { ok: false, error: 'No matching positions in database' }
-        await query(
-          `UPDATE positions
-            SET code = ?, name = ?, description = ?
-          WHERE id = ?`,
-          [updated.code, updated.name, updated.description, positionId],
-          conn
-        )
 
         const existingAssignmentRows = await query<PositionAssignmentRow[]>(
-          `SELECT id, member_id, position_id, since, until
+          `SELECT ${POSITION_ASSIGNMENT_COLUMNS}
            FROM member_positions
            WHERE position_id = ?`,
           [positionId],
           conn,
         )
+
+        // Existing assignments either all carry a subdivision or none does, so the binding can only
+        // change while the position has no assignments at all.
+        if (Boolean(existingRows[0]!.subdivision_bound) !== subdivisionBound && existingAssignmentRows.length) {
+          return { ok: false, error: POSITION_BINDING_LOCKED }
+        }
+
+        await query(
+          `UPDATE positions
+            SET code = ?, name = ?, description = ?, subdivision_bound = ?, assignable_by_leaders = ?
+          WHERE id = ?`,
+          [updated.code, updated.name, updated.description, subdivisionBound ? 1 : 0, assignableByLeaders ? 1 : 0, positionId],
+          conn
+        )
+
+        // Scoped permissions only mean something on a subdivision-bound position.
+        if (!subdivisionBound) {
+          await query(
+            `DELETE FROM position_permissions
+             WHERE position_id = ? AND permission_key LIKE 'subdivision.%'`,
+            [positionId],
+            conn,
+          )
+        }
 
         const syncedAssignments = await syncPositionAssignments({
           scope: 'position',
@@ -79,9 +101,9 @@ export default defineEventHandler(async (event): Promise<SavePositionResponse> =
       }
 
       const res = await query(
-        `INSERT INTO positions (code, name, is_active, description)
-         VALUES (?, ?, ?, ?)`,
-        [updated.code, updated.name, active, updated.description],
+        `INSERT INTO positions (code, name, is_active, description, subdivision_bound, assignable_by_leaders)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [updated.code, updated.name, active, updated.description, subdivisionBound ? 1 : 0, assignableByLeaders ? 1 : 0],
         conn
       )
 

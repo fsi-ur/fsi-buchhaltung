@@ -23,7 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const { currentPage } = usePage()
-const { user, fetchSession, hasPermission, hasAllPermissions } = useAuth()
+const { user, fetchSession, hasPermission, hasAllPermissions, canOpenSubdivisionLeadership } = useAuth()
 const { restore: restoreViewAsSimulation } = useViewAsSimulation()
 const { refreshKey } = useAppRefresh()
 
@@ -56,6 +56,7 @@ const currentComponent = computed(() => {
   if (!user.value) return LoginPage
   if (user.value.must_change_password) return ChangePasswordRequiredPage
   if (!page.permissions.length) return page.component
+  if (page.allowSubdivisionLeaders && canOpenSubdivisionLeadership()) return page.component
   if (page.requireAllPermissions ? hasAllPermissions(page.permissions) : hasPermission(page.permissions)) {
     return page.component
   }

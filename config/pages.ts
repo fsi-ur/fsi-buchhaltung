@@ -14,7 +14,7 @@ import CashCountListPage from '~/components/Page/Finances/CashCount/List.vue'
 import CashCountCreatePage from '~/components/Page/Finances/CashCount/Create.vue'
 import BudgetListPage from '~/components/Page/Finances/Budget/List.vue'
 import BudgetCreatePage from '~/components/Page/Finances/Budget/Create.vue'
-import FinanceAnalysisPage from '~/components/Page/Finances/Analysis.vue'
+import SubdivisionLeadershipPage from '~/components/Page/SubdivisionLeadership/Page.vue'
 import EventListPage from '~/components/Page/Events/List.vue'
 import EventPlanningWorkspacePage from '~/components/Page/Events/PlanningWorkspace.vue'
 import MemberOverviewPage from '~/components/Page/Members/Overview.vue'
@@ -48,10 +48,10 @@ export const PAGES: Record<string, AppPage> = {
   CashCountCreate: { main: false, labelKey: 'pages.createCashCount', component: CashCountCreatePage, permissions: ['cash_counts.view'], preserveOnRefresh: true },
   BudgetList: { main: false, labelKey: 'pages.budgets', component: BudgetListPage, permissions: ['budgets.view'] },
   BudgetCreate: { main: false, labelKey: 'pages.createBudget', component: BudgetCreatePage, permissions: ['budgets.view'], preserveOnRefresh: true },
-  FinanceAnalysis: { main: true, labelKey: 'pages.financeAnalysis', component: FinanceAnalysisPage, icon: 'material-symbols:query-stats-rounded', permissions: ['receipts.view', 'cash_counts.view', 'invoices.view'], requireAllPermissions: true },
   Events: { main: true, labelKey: 'pages.events', component: EventListPage, icon: 'material-symbols:event-rounded', permissions: ['events.access'] },
   EventCreate: { main: false, labelKey: 'pages.createEvent', component: EventPlanningWorkspacePage, permissions: ['events.access'], preserveOnRefresh: true },
   MemberList: { main: true, labelKey: 'pages.members', component: MemberOverviewPage, icon: 'material-symbols:groups-rounded', permissions: ['members.view', 'members.approveChanges', 'members.configureSelfEditFields'] },
+  SubdivisionLeadership: { main: true, labelKey: 'pages.subdivisionLeadership', component: SubdivisionLeadershipPage, icon: 'material-symbols:supervisor-account-rounded', permissions: ['subdivisions.leadership.view'], allowSubdivisionLeaders: true },
   MemberCreate: { main: false, labelKey: 'pages.createMember', component: MemberCreatePage, permissions: ['members.view'], preserveOnRefresh: true },
   MemberSelfService: { main: true, labelKey: 'pages.myData', component: MemberSelfServicePage, icon: 'material-symbols:person-rounded', permissions: ['members.editOwnData'] },
   Settings: { main: true, labelKey: 'pages.settings', component: SettingsPage, icon: 'material-symbols:settings-rounded', permissions: ['settings.access'], preserveOnRefresh: true },

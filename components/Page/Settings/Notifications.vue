@@ -262,11 +262,25 @@
             :aria-label="t('settings.notifications.leadTimeAdd')"
             @keydown.enter.prevent="addLeadTime(typeKey)"
           >
-          <select v-model="leadDrafts[typeKey].unit" class="input w-28">
-            <option value="minutes">{{ t('settings.notifications.unitMinutes') }}</option>
-            <option value="hours">{{ t('settings.notifications.unitHours') }}</option>
-            <option value="days">{{ t('settings.notifications.unitDays') }}</option>
-          </select>
+          <MenuDropdown :id="`lead-unit-${typeKey}`" v-model="openDropdown" wrapper-class="relative w-28">
+            <template #trigger="{ styling }">
+              <button type="button" :class="[styling, 'cursor-pointer']" :aria-label="t('settings.notifications.leadTimeAdd')">
+                <span class="truncate">{{ leadUnitLabel(leadDrafts[typeKey].unit) }}</span>
+                <Icon name="material-symbols:keyboard-arrow-down-rounded" class="shrink-0 text-lg text-base-400" />
+              </button>
+            </template>
+            <template #default="{ styling }">
+              <button
+                v-for="unit in LEAD_UNITS"
+                :key="unit"
+                type="button"
+                :class="[styling, unit === leadDrafts[typeKey].unit ? 'font-medium text-link-600' : '']"
+                @click="leadDrafts[typeKey].unit = unit; openDropdown = null"
+              >
+                {{ leadUnitLabel(unit) }}
+              </button>
+            </template>
+          </MenuDropdown>
           <button
             type="button"
             class="btn-secondary inline-flex items-center gap-1"
@@ -542,6 +556,14 @@ const templateTypeKeys = NOTIFICATION_TYPES.map(type => type.key)
 const automaticTypeKeys = NOTIFICATION_TYPES.filter(type => type.key !== 'custom.message').map(type => type.key)
 
 const UNIT_MINUTES = { minutes: 1, hours: 60, days: 1440 } as const
+const LEAD_UNITS = Object.keys(UNIT_MINUTES) as Array<keyof typeof UNIT_MINUTES>
+const openDropdown = ref<string | number | null>(null)
+
+function leadUnitLabel(unit: keyof typeof UNIT_MINUTES) {
+  if (unit === 'hours') return t('settings.notifications.unitHours')
+  if (unit === 'days') return t('settings.notifications.unitDays')
+  return t('settings.notifications.unitMinutes')
+}
 
 const leadDrafts = reactive(Object.fromEntries(
   scheduledTypeKeys.map(key => [key, { value: 1, unit: 'days' as keyof typeof UNIT_MINUTES }]),

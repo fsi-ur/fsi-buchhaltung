@@ -1,6 +1,7 @@
 import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { syncScalarCollection } from '~/server/utils/syncScalarCollection'
+import { endSubdivisionPositions } from '~/server/utils/subdivisionLeadership'
 
 interface NamedRow {
   id: number
@@ -135,6 +136,8 @@ export async function syncSubdivisionAssignments(
         [subdivisionId, memberId],
         conn,
       )
+      // Subdivision-bound positions (e.g. "Leitung") require the membership — leaving ends them.
+      await endSubdivisionPositions(memberId, subdivisionId, conn)
     },
     onAdd: async (id) => {
       const { subdivisionId, memberId } = getAssignment(id)

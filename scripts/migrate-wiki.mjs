@@ -545,7 +545,7 @@ async function seedChecklists(conn, articleIds) {
           item.label,
           item.hint ?? '',
           item.targetPage ?? null,
-          item.targetPage ? JSON.stringify({ returnTarget: 'self' }) : null,
+          item.targetPage ? JSON.stringify({ returnTarget: 'self', ...(item.targetMeta ?? {}) }) : null,
           position,
         ],
       )
@@ -636,8 +636,8 @@ async function seedPageHelp(conn, articleIds) {
 
     await conn.query(
       `INSERT IGNORE INTO wiki_page_help (page_name, section_key, article_id, position)
-       VALUES (?, '', ?, ?)`,
-      [entry.page, articleId, entry.position ?? 0],
+       VALUES (?, ?, ?, ?)`,
+      [entry.page, entry.section ?? '', articleId, entry.position ?? 0],
     )
   }
 

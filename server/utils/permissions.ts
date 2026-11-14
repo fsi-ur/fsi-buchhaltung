@@ -1,4 +1,5 @@
 import { PERMISSIONS, type PermissionKey, implied } from '~/config/permissions'
+import { isSubdivisionPermissionKey, type SubdivisionPermissionKey } from '~/config/subdivisionPermissions'
 import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { appTodayLocalDate } from '~/server/utils/time'
@@ -168,6 +169,32 @@ export async function getPositionPermissionKeys(
   )
   for (const row of rows) {
     if (!isValidPermissionKey(row.permission_key)) continue
+    const positionId = Number(row.position_id)
+    const bucket = result.get(positionId) ?? []
+    bucket.push(row.permission_key)
+    result.set(positionId, bucket)
+  }
+  return result
+}
+
+/** The scoped (subdivision-only) keys attached to each of the given positions. */
+export async function getPositionSubdivisionPermissionKeys(
+  positionIds: number[],
+  conn?: mariadb.PoolConnection,
+): Promise<Map<number, SubdivisionPermissionKey[]>> {
+  const result = new Map<number, SubdivisionPermissionKey[]>()
+  const ids = Array.from(new Set(positionIds.filter(id => Number.isInteger(id) && id > 0)))
+  if (!ids.length) return result
+
+  const rows = await query<Array<{ position_id: number, permission_key: string }>>(
+    `SELECT position_id, permission_key
+     FROM position_permissions
+     WHERE position_id IN (${ids.map(() => '?').join(',')})`,
+    ids,
+    conn,
+  )
+  for (const row of rows) {
+    if (!isSubdivisionPermissionKey(row.permission_key)) continue
     const positionId = Number(row.position_id)
     const bucket = result.get(positionId) ?? []
     bucket.push(row.permission_key)

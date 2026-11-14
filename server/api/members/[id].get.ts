@@ -37,7 +37,7 @@ export default defineEventHandler(async (event): Promise<GetMemberResponse> => {
   if (!row) return { ok: false, error: 'Member not found' }
 
   const positions = await query<MemberPositionAssignment[]>(
-    `SELECT id, position_id, since, until
+    `SELECT id, position_id, since, until, subdivision_id
      FROM member_positions
      WHERE member_id = ?
      ORDER BY since DESC`,
@@ -80,6 +80,7 @@ export default defineEventHandler(async (event): Promise<GetMemberResponse> => {
         position_id: Number(position.position_id),
         since: String(position.since),
         until: position.until ? String(position.until) : null,
+        subdivision_id: position.subdivision_id ? Number(position.subdivision_id) : null,
       })),
       subdivisions: subdivisions.map(subdivision => ({
         id: Number(subdivision.id),

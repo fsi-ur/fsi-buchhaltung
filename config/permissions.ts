@@ -33,6 +33,8 @@ export type PermissionKey =
   | 'spheres.view'
   | 'cost_centres.view'
   | 'subdivisions.view'
+  | 'subdivisions.leadership.view'
+  | 'subdivisions.leadership.edit'
   | 'settings.access'
   | 'settings.spheres.manage'
   | 'settings.association.manage'
@@ -108,6 +110,8 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'spheres.view', labelKey: 'permissions.items.spheresView', categoryKey: 'permissions.categories.settings' },
   { key: 'cost_centres.view', labelKey: 'permissions.items.costCentresView', categoryKey: 'permissions.categories.settings' },
   { key: 'subdivisions.view', labelKey: 'permissions.items.subdivisionsView', categoryKey: 'permissions.categories.settings' },
+  { key: 'subdivisions.leadership.view', labelKey: 'permissions.items.subdivisionsLeadershipView', categoryKey: 'permissions.categories.members' },
+  { key: 'subdivisions.leadership.edit', labelKey: 'permissions.items.subdivisionsLeadershipEdit', categoryKey: 'permissions.categories.members' },
   { key: 'settings.access', labelKey: 'permissions.items.settingsAccess', categoryKey: 'permissions.categories.settings' },
   { key: 'settings.association.manage', labelKey: 'permissions.items.settingsAssociationManage', categoryKey: 'permissions.categories.settings' },
   { key: 'settings.spheres.manage', labelKey: 'permissions.items.settingsSpheresManage', categoryKey: 'permissions.categories.settings' },
@@ -168,6 +172,7 @@ export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'settings.spheres.manage': ['spheres.view', 'settings.access'],
   'settings.cost_centres.manage': ['cost_centres.view', 'spheres.view', 'settings.access'],
   'settings.subdivisions.manage': ['subdivisions.view', 'settings.access'],
+  'subdivisions.leadership.edit': ['subdivisions.leadership.view'],
   'settings.positions.manage': ['positions.view', 'settings.access'],
   'settings.viewAs': ['settings.access'],
   'settings.app.access': ['settings.access'],

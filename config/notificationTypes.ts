@@ -21,6 +21,12 @@ export type NotificationTypeKey =
   // members
   | 'member.welcome_active'
   | 'member.welcome_passive'
+  // subdivisions (changes made by subdivision leaders)
+  | 'subdivision.member_added'
+  | 'subdivision.member_removed'
+  | 'subdivision.position_assigned'
+  | 'subdivision.position_ended'
+  | 'subdivision.leader_change'
   // admin-composed
   | 'custom.message'
 
@@ -264,6 +270,53 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     userConfigurable: false,
     audience: 'explicit',
     variables: ['member_name', 'first_name', 'member_email', 'joined_at', 'subject_name', 'association_name'],
+  },
+  {
+    key: 'subdivision.member_added',
+    categoryKey: 'notifications.categories.subdivisions',
+    labelKey: 'notifications.types.subdivision.member_added.label',
+    descriptionKey: 'notifications.types.subdivision.member_added.description',
+    userConfigurable: true,
+    audience: 'explicit',
+    variables: ['member_name', 'first_name', 'subdivision_name', 'actor_name'],
+  },
+  {
+    key: 'subdivision.member_removed',
+    categoryKey: 'notifications.categories.subdivisions',
+    labelKey: 'notifications.types.subdivision.member_removed.label',
+    descriptionKey: 'notifications.types.subdivision.member_removed.description',
+    userConfigurable: true,
+    audience: 'explicit',
+    variables: ['member_name', 'first_name', 'subdivision_name', 'actor_name'],
+  },
+  {
+    key: 'subdivision.position_assigned',
+    categoryKey: 'notifications.categories.subdivisions',
+    labelKey: 'notifications.types.subdivision.position_assigned.label',
+    descriptionKey: 'notifications.types.subdivision.position_assigned.description',
+    userConfigurable: true,
+    audience: 'explicit',
+    variables: ['member_name', 'first_name', 'subdivision_name', 'actor_name', 'position_name', 'position_since', 'position_until'],
+  },
+  {
+    key: 'subdivision.position_ended',
+    categoryKey: 'notifications.categories.subdivisions',
+    labelKey: 'notifications.types.subdivision.position_ended.label',
+    descriptionKey: 'notifications.types.subdivision.position_ended.description',
+    userConfigurable: true,
+    audience: 'explicit',
+    variables: ['member_name', 'first_name', 'subdivision_name', 'actor_name', 'position_name'],
+  },
+  {
+    // Goes to everyone holding settings.subdivisions.manage — the people otherwise responsible for
+    // subdivision membership — whenever a leader changes something on the leadership page.
+    key: 'subdivision.leader_change',
+    categoryKey: 'notifications.categories.subdivisions',
+    labelKey: 'notifications.types.subdivision.leader_change.label',
+    descriptionKey: 'notifications.types.subdivision.leader_change.description',
+    userConfigurable: true,
+    audience: 'organizers',
+    variables: ['subdivision_name', 'actor_name', 'affected_member', 'leader_action', 'position_name'],
   },
   {
     key: 'custom.message',

@@ -2,7 +2,10 @@ import { MAX_POSITION_ASSIGNMENTS } from '~/server/utils/api/limits'
 import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { getMemberLabels } from '~/server/utils/subdivisions'
-import { getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
+import { getPositionPermissionKeys, getPositionSubdivisionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
+import { ensureSubdivisionMembership } from '~/server/utils/subdivisionLeadership'
+import { appTodayLocalDate } from '~/server/utils/time'
+import { subdivisionPermissionsBeyond } from '~/shared/subdivisionAccess'
 import type { PermissionKey } from '~/config/permissions'
 
 interface NamedRow {
@@ -13,6 +16,7 @@ interface NamedRow {
 interface PositionStateInfoRow {
   id: number
   is_active: number
+  subdivision_bound: number
 }
 
 export interface PositionAssignmentRow {
@@ -21,6 +25,7 @@ export interface PositionAssignmentRow {
   position_id: number
   since: string
   until: string | null
+  subdivision_id: number | null
 }
 
 export interface PositionAssignmentInput {
@@ -29,7 +34,12 @@ export interface PositionAssignmentInput {
   position_id: number
   since: string
   until: string | null
+  /** The subdivision a subdivision-bound position is held in; null for every other position. */
+  subdivision_id: number | null
 }
+
+/** Columns every caller selects before handing existing rows to `syncPositionAssignments`. */
+export const POSITION_ASSIGNMENT_COLUMNS = 'id, member_id, position_id, since, until, subdivision_id'
 
 interface SyncPositionAssignmentsOptions {
   scope: 'member' | 'position'
@@ -61,6 +71,7 @@ export function normalizePositionAssignments(
     const since = String(source.since || '').trim()
     const untilValue = source.until
     const until = untilValue ? String(untilValue).trim() : null
+    const subdivisionId = Number(source.subdivision_id)
 
     if (!memberId || !positionId || !since) continue
 
@@ -70,6 +81,7 @@ export function normalizePositionAssignments(
       position_id: positionId,
       since,
       until: until || null,
+      subdivision_id: Number.isInteger(subdivisionId) && subdivisionId > 0 ? subdivisionId : null,
     })
   }
 
@@ -85,10 +97,13 @@ function assignmentChanged(existing: PositionAssignmentRow, incoming: PositionAs
     || Number(existing.position_id) !== Number(incoming.position_id)
     || !sameDay(existing.since, incoming.since)
     || !sameDay(existing.until, incoming.until)
+    || Number(existing.subdivision_id ?? 0) !== Number(incoming.subdivision_id ?? 0)
 }
 
 export const POSITION_ASSIGN_FORBIDDEN = 'Du hast keine Berechtigung, Positionen zuzuweisen oder zu ändern.'
 export const POSITION_ASSIGN_EXCEEDS_OWN = 'Diese Position gewährt Rechte, die du selbst nicht hast. Nur wer Berechtigungen verwalten darf, kann sie zuweisen.'
+export const POSITION_SUBDIVISION_REQUIRED = 'Für diese Position muss eine Untergliederung ausgewählt werden.'
+export const POSITION_SUBDIVISION_INACTIVE = 'Inaktive Untergliederungen können keine neuen Positionen erhalten.'
 
 /**
  * Position assignments grant the position's permissions to the member's linked account, so any
@@ -125,6 +140,13 @@ export async function authorizePositionAssignmentChanges(options: {
   const permissionsByPosition = await getPositionPermissionKeys(Array.from(grantedPositionIds), options.conn)
   for (const keys of permissionsByPosition.values()) {
     if (permissionsBeyond(keys, options.actorPermissions).length) return POSITION_ASSIGN_EXCEEDS_OWN
+  }
+
+  // Scoped (subdivision-only) permissions are rights too: each must be covered by the global
+  // permissions that allow the same in every subdivision (`coveredBy` in config/subdivisionPermissions.ts).
+  const scopedByPosition = await getPositionSubdivisionPermissionKeys(Array.from(grantedPositionIds), options.conn)
+  for (const keys of scopedByPosition.values()) {
+    if (subdivisionPermissionsBeyond(keys, options.actorPermissions).length) return POSITION_ASSIGN_EXCEEDS_OWN
   }
   return null
 }
@@ -167,7 +189,8 @@ function validatePositionAssignmentRanges(
       return `${label}: end date cannot be before start date`
     }
 
-    const key = `${assignment.member_id}:${assignment.position_id}`
+    // The same subdivision-bound position may be held in several subdivisions at once.
+    const key = `${assignment.member_id}:${assignment.position_id}:${assignment.subdivision_id ?? 0}`
     const bucket = groupedAssignments.get(key) ?? []
     bucket.push(assignment)
     groupedAssignments.set(key, bucket)
@@ -264,7 +287,7 @@ export async function syncPositionAssignments({
   const retainedIds = new Set<number>()
   const positionStateRows = positionIds.length
     ? await query<PositionStateInfoRow[]>(
-        `SELECT id, is_active
+        `SELECT id, is_active, subdivision_bound
          FROM positions
          WHERE id IN (${positionIds.map(() => '?').join(',')})`,
         positionIds,
@@ -288,17 +311,31 @@ export async function syncPositionAssignments({
     return { ok: false as const, error: `${positionLabel}: inactive positions cannot receive new assignments` }
   }
 
+  const subdivisionError = await validateAssignmentSubdivisions({
+    incomingAssignments,
+    existingById,
+    boundPositionIds: new Set(
+      positionStateRows
+        .filter(row => Boolean(row.subdivision_bound))
+        .map(row => Number(row.id)),
+    ),
+    positionLabels,
+    conn,
+  })
+  if (subdivisionError) return { ok: false as const, error: subdivisionError }
+
   for (const incoming of incomingAssignments) {
     if (!incoming.id || !existingById.has(incoming.id)) continue
 
     const existing = existingById.get(incoming.id)!
     retainedIds.add(existing.id)
+    if (!assignmentChanged(existing, incoming)) continue
 
     await query(
       `UPDATE member_positions
-       SET member_id = ?, position_id = ?, since = ?, until = ?
+       SET member_id = ?, position_id = ?, since = ?, until = ?, subdivision_id = ?
        WHERE id = ?`,
-      [incoming.member_id, incoming.position_id, incoming.since, incoming.until || null, existing.id],
+      [incoming.member_id, incoming.position_id, incoming.since, incoming.until || null, incoming.subdivision_id, existing.id],
       conn,
     )
   }
@@ -318,12 +355,75 @@ export async function syncPositionAssignments({
     if (incoming.id && existingById.has(incoming.id)) continue
 
     await query(
-      `INSERT INTO member_positions (member_id, position_id, since, until)
-       VALUES (?, ?, ?, ?)`,
-      [incoming.member_id, incoming.position_id, incoming.since, incoming.until || null],
+      `INSERT INTO member_positions (member_id, position_id, since, until, subdivision_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      [incoming.member_id, incoming.position_id, incoming.since, incoming.until || null, incoming.subdivision_id],
       conn,
     )
   }
 
-  return { ok: true as const }
+  // Holding a subdivision-bound position implies membership: running and upcoming assignments
+  // add the member to the subdivision (past ones are history and leave membership alone).
+  const today = await appTodayLocalDate(conn)
+  const addedMemberships: Array<{ memberId: number, subdivisionId: number }> = []
+  for (const incoming of incomingAssignments) {
+    if (!incoming.subdivision_id) continue
+    if (incoming.until && incoming.until < today) continue
+    if (await ensureSubdivisionMembership(incoming.member_id, incoming.subdivision_id, conn)) {
+      addedMemberships.push({ memberId: incoming.member_id, subdivisionId: incoming.subdivision_id })
+    }
+  }
+
+  return { ok: true as const, addedMemberships }
+}
+
+/** Subdivisions a set of assignments requires the member to belong to (running and upcoming ones). */
+export function requiredSubdivisionIds(assignments: PositionAssignmentInput[], today: string): number[] {
+  return Array.from(new Set(
+    assignments
+      .filter(assignment => assignment.subdivision_id && (!assignment.until || assignment.until >= today))
+      .map(assignment => Number(assignment.subdivision_id)),
+  ))
+}
+
+/**
+ * Subdivision-bound positions need a subdivision on every assignment, all others none. A subdivision
+ * that is new on an assignment must exist and be active; an unchanged one may since have been
+ * deactivated (the assignment is history, not a new grant).
+ */
+async function validateAssignmentSubdivisions(options: {
+  incomingAssignments: PositionAssignmentInput[]
+  existingById: Map<number, PositionAssignmentRow>
+  boundPositionIds: Set<number>
+  positionLabels: Map<number, string>
+  conn: mariadb.PoolConnection
+}): Promise<string | null> {
+  const newSubdivisionIds = new Set<number>()
+
+  for (const incoming of options.incomingAssignments) {
+    const bound = options.boundPositionIds.has(Number(incoming.position_id))
+    if (!bound) {
+      incoming.subdivision_id = null
+      continue
+    }
+    if (!incoming.subdivision_id) {
+      const label = options.positionLabels.get(Number(incoming.position_id)) ?? `#${incoming.position_id}`
+      return `${label}: ${POSITION_SUBDIVISION_REQUIRED}`
+    }
+    const existing = incoming.id ? options.existingById.get(incoming.id) : undefined
+    if (!existing || Number(existing.subdivision_id ?? 0) !== Number(incoming.subdivision_id)) {
+      newSubdivisionIds.add(Number(incoming.subdivision_id))
+    }
+  }
+
+  if (!newSubdivisionIds.size) return null
+  const ids = Array.from(newSubdivisionIds)
+  const rows = await query<Array<{ id: number, is_active: number }>>(
+    `SELECT id, is_active FROM subdivisions WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ids,
+    options.conn,
+  )
+  if (rows.length !== ids.length) return 'One or more selected subdivisions do not exist'
+  if (rows.some(row => !row.is_active)) return POSITION_SUBDIVISION_INACTIVE
+  return null
 }

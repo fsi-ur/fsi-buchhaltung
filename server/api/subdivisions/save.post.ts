@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
+import { withLastAdminGuard } from '~/server/utils/permissions'
 import { toDbBoolean } from '~/server/utils/api/request'
 import { getMemberLabels, normalizeRelationIds, syncSubdivisionAssignments } from '~/server/utils/subdivisions'
 import type { SaveSubdivisionBody } from '~/types/subdivision'
@@ -53,7 +54,8 @@ export default defineEventHandler(async (event): Promise<SaveSubdivisionResponse
   const active = toDbBoolean(updated.is_active)
 
   try {
-    return await withAuditTransaction(current.user, async (conn) => {
+    // Removing a member ends their subdivision-bound positions, which may carry permissions.
+    return await withAuditTransaction(current.user, withLastAdminGuard(async (conn) => {
       const memberLabels = await getMemberLabels(updated.member_ids ?? [], conn)
       if (memberLabels.size !== (updated.member_ids?.length ?? 0)) {
         return { ok: false, error: 'One or more selected members do not exist' }
@@ -130,7 +132,7 @@ export default defineEventHandler(async (event): Promise<SaveSubdivisionResponse
       })
 
       return { ok: true, id: subdivisionId }
-    })
+    }))
   } catch (err: unknown) {
     const error = err as MysqlError
     return internalError('An error occured while saving the subdivision', err)

@@ -19,7 +19,7 @@
       </div>
     </template>
 
-    <PageAuditScopedHistory v-if="open" :tables="props.tables" :parent-id="props.parentId" />
+    <PageAuditScopedHistory v-if="open" :tables="props.tables" :parent-id="props.parentId" :endpoint="props.endpoint" />
   </CommonModal>
 </template>
 
@@ -39,16 +39,25 @@ const props = withDefaults(defineProps<{
    * history button, so the open dialog says which section it is showing.
    */
   context?: string
+  /** Alternative history endpoint (same response shape as /api/audit/scoped). */
+  endpoint?: string
+  /**
+   * Show the button without `audit.view` — only together with an `endpoint` that does its own
+   * authorization (e.g. scoped subdivision permissions).
+   */
+  visible?: boolean
 }>(), {
   label: undefined,
   context: undefined,
+  endpoint: undefined,
+  visible: false,
 })
 
 const { t } = useI18n()
 const { hasPermission } = useAuth()
 const open = ref(false)
 
-const canView = hasPermission('audit.view')
+const canView = computed(() => (props.visible && Boolean(props.endpoint)) || hasPermission('audit.view'))
 
 const modalTitle = computed(() => (props.context ? `${t('audit.title')} – ${props.context}` : props.label || t('audit.title')))
 </script>

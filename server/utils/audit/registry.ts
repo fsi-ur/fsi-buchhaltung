@@ -204,7 +204,7 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     domain: 'members',
     viewPermissions: ['members.view'],
     parent: { table: 'members', foreignKey: 'member_id' },
-    references: { member_id: MEMBER_REF, position_id: POSITION_REF },
+    references: { member_id: MEMBER_REF, position_id: POSITION_REF, subdivision_id: SUBDIVISION_REF },
   },
   member_pending_field_changes: {
     table: 'member_pending_field_changes',

@@ -1,6 +1,7 @@
 import { query } from '~/server/utils/db'
 import { hashPassword } from '~/server/utils/auth'
 import type { PermissionKey } from '~/config/permissions'
+import type { SubdivisionPermissionKey } from '~/config/subdivisionPermissions'
 
 let counter = 0
 function unique(prefix: string) {
@@ -87,18 +88,35 @@ export async function createPosition(options: {
   name?: string
   isActive?: boolean
   permissions?: PermissionKey[]
+  /** Held within one subdivision (positions.subdivision_bound). */
+  subdivisionBound?: boolean
+  assignableByLeaders?: boolean
+  /** Scoped keys, effective only inside the assignment's subdivision. */
+  subdivisionPermissions?: SubdivisionPermissionKey[]
 } = {}) {
   const code = options.code ?? unique('pos')
   const id = await insert(
-    `INSERT INTO positions (code, name, is_active) VALUES (?, ?, ?)`,
-    [code, options.name ?? code, options.isActive === false ? 0 : 1],
+    `INSERT INTO positions (code, name, is_active, subdivision_bound, assignable_by_leaders) VALUES (?, ?, ?, ?, ?)`,
+    [code, options.name ?? code, options.isActive === false ? 0 : 1, options.subdivisionBound ? 1 : 0, options.assignableByLeaders ? 1 : 0],
   )
 
-  for (const permission of options.permissions ?? []) {
+  for (const permission of [...(options.permissions ?? []), ...(options.subdivisionPermissions ?? [])]) {
     await query('INSERT IGNORE INTO position_permissions (position_id, permission_key) VALUES (?, ?)', [id, permission])
   }
 
   return id
+}
+
+export async function createSubdivision(options: { code?: string, name?: string, isActive?: boolean } = {}) {
+  const code = options.code ?? unique('sub')
+  return insert(
+    'INSERT INTO subdivisions (code, name, is_active) VALUES (?, ?, ?)',
+    [code, options.name ?? code, options.isActive === false ? 0 : 1],
+  )
+}
+
+export async function addSubdivisionMember(subdivisionId: number, memberId: number) {
+  await query('INSERT INTO subdivision_members (subdivision_id, member_id) VALUES (?, ?)', [subdivisionId, memberId])
 }
 
 export async function createSubject(name = unique('subject')) {
@@ -135,10 +153,11 @@ export async function createMember(options: {
 export async function assignPosition(memberId: number, positionId: number, options: {
   since?: string
   until?: string | null
+  subdivisionId?: number | null
 } = {}) {
   return insert(
-    'INSERT INTO member_positions (member_id, position_id, since, until) VALUES (?, ?, ?, ?)',
-    [memberId, positionId, options.since ?? '2024-01-01', options.until ?? null],
+    'INSERT INTO member_positions (member_id, position_id, since, until, subdivision_id) VALUES (?, ?, ?, ?, ?)',
+    [memberId, positionId, options.since ?? '2024-01-01', options.until ?? null, options.subdivisionId ?? null],
   )
 }
 

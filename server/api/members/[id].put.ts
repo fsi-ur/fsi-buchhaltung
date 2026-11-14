@@ -5,7 +5,8 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import { ensureSubjectId, validateMemberPayload, applyMemberStatusActions } from '~/server/utils/members'
 import { getSubdivisionLabels, normalizeRelationIds, syncSubdivisionAssignments, validateSubdivisionSelection } from '~/server/utils/subdivisions'
-import { normalizePositionAssignments, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
+import { normalizePositionAssignments, POSITION_ASSIGNMENT_COLUMNS, requiredSubdivisionIds, syncPositionAssignments, type PositionAssignmentRow } from '~/server/utils/positions'
+import { appTodayLocalDate } from '~/server/utils/time'
 import { clearPendingChangeForField } from '~/server/utils/memberSelfEdit'
 import { retargetPendingMemberWelcome } from '~/server/utils/memberWelcome'
 import { SELF_EDIT_ELIGIBLE_FIELDS } from '~/config/memberSelfEdit'
@@ -124,7 +125,7 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
       // An omitted list means "leave the assignments alone", never "remove them all".
       if (body.positions !== undefined) {
         const existingPositionRows = await query<PositionAssignmentRow[]>(
-          `SELECT id, member_id, position_id, since, until
+          `SELECT ${POSITION_ASSIGNMENT_COLUMNS}
            FROM member_positions
            WHERE member_id = ?`,
           [memberId],
@@ -153,9 +154,15 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
         )
 
         const existingSubdivisionIds = existingSubdivisionRows.map(row => Number(row.subdivision_id))
-        const allSubdivisionIds = Array.from(new Set([...existingSubdivisionIds, ...subdivisionIds]))
+        // Running subdivision-bound positions keep their subdivision: removing it here would end
+        // the very assignments this save just made.
+        const keptForPositions = body.positions !== undefined
+          ? requiredSubdivisionIds(positionAssignments ?? [], await appTodayLocalDate(conn))
+          : []
+        const nextSubdivisionIds = Array.from(new Set([...subdivisionIds, ...keptForPositions]))
+        const allSubdivisionIds = Array.from(new Set([...existingSubdivisionIds, ...nextSubdivisionIds]))
         const subdivisionValidationError = await validateSubdivisionSelection(
-          subdivisionIds,
+          nextSubdivisionIds,
           existingSubdivisionIds,
           conn,
         )
@@ -170,7 +177,7 @@ export default defineEventHandler(async (event): Promise<UpdateMemberResponse> =
 
         await syncSubdivisionAssignments({
           existingIds: existingSubdivisionIds,
-          nextIds: subdivisionIds,
+          nextIds: nextSubdivisionIds,
           getAssignment: (subdivisionId) => ({
             subdivisionId,
             memberId,

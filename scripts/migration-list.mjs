@@ -23,4 +23,6 @@ export const MIGRATION_SCRIPTS = [
   'migrate-cash-discrepancy-bookings.mjs',
   'migrate-security-hardening.mjs',
   'migrate-finance-accounts.mjs',
+  'migrate-subdivision-leadership.mjs',
+  'migrate-finance-analysis-tab.mjs',
 ]

@@ -114,9 +114,11 @@ export default defineEventHandler(async (event): Promise<CreateMemberResponse> =
           return { ok: false, error: 'One or more selected subdivisions do not exist' }
         }
 
+        // A subdivision-bound position already added its subdivision (syncPositionAssignments).
+        const autoAddedIds = syncedPositions.addedMemberships.map(entry => entry.subdivisionId)
         await syncSubdivisionAssignments({
-          existingIds: [],
-          nextIds: subdivisionIds,
+          existingIds: autoAddedIds,
+          nextIds: Array.from(new Set([...subdivisionIds, ...autoAddedIds])),
           getAssignment: (subdivisionId) => ({
             subdivisionId,
             memberId,

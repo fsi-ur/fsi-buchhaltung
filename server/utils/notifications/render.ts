@@ -57,6 +57,8 @@ const DATETIME_VARIABLES = new Set([
   'event_start', 'event_end',
   'task_deadline',
   'appointment_start', 'appointment_end',
+  // Dates only; formatLocalDateTime falls back to the plain date format.
+  'position_since', 'position_until',
 ])
 
 function formatPayload(payload: Record<string, any>, locale: 'de' | 'en'): Record<string, string | number> {
@@ -73,6 +75,10 @@ function formatPayload(payload: Record<string, any>, locale: 'de' | 'en'): Recor
       formatted[key] = formatShiftList(locale, value as ShiftListEntry[])
     } else if (key === 'task_list' && Array.isArray(value)) {
       formatted[key] = formatTaskList(locale, value as TaskListEntry[])
+    } else if (key === 'leader_action') {
+      // Stored as a code (see server/utils/subdivisionLeadership.ts) so the wording follows the
+      // recipient's locale.
+      formatted[key] = translate(locale, `notifications.subdivisionActions.${String(value)}`)
     } else if (key === 'lead_minutes') {
       // Stored as raw minutes (see reminders.ts) so "{lead_text}" can be translated here, once the
       // recipient's locale is known, instead of being baked into a fixed language at sweep time.

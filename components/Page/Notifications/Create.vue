@@ -158,18 +158,33 @@
 
           <div class="space-y-2 border-t border-base-100 pt-3">
             <div class="field">
-              <label for="notification-shift-plan">{{ t('notifications.compose.shiftPlan') }}</label>
-              <select
-                id="notification-shift-plan"
-                v-model="shiftPlanEventId"
-                class="input"
-                :disabled="saving"
-              >
-                <option :value="null">{{ t('notifications.compose.shiftPlanNone') }}</option>
-                <option v-for="eventOption in shiftPlanEventOptions" :key="eventOption.id" :value="eventOption.id">
-                  {{ eventOption.label }}
-                </option>
-              </select>
+              <label>{{ t('notifications.compose.shiftPlan') }}</label>
+              <MenuDropdown id="notification-shift-plan" v-model="openDropdown" :disabled="saving">
+                <template #trigger="{ styling }">
+                  <button type="button" :class="[styling, saving ? '' : 'cursor-pointer']" :disabled="saving" :aria-label="t('notifications.compose.shiftPlan')">
+                    <span class="truncate">{{ selectedShiftPlanLabel }}</span>
+                    <Icon v-if="!saving" name="material-symbols:keyboard-arrow-down-rounded" class="shrink-0 text-lg text-base-400" />
+                  </button>
+                </template>
+                <template #default="{ styling }">
+                  <button
+                    type="button"
+                    :class="[styling, shiftPlanEventId === null ? 'font-medium text-link-600' : '']"
+                    @click="shiftPlanEventId = null; openDropdown = null"
+                  >
+                    {{ t('notifications.compose.shiftPlanNone') }}
+                  </button>
+                  <button
+                    v-for="eventOption in shiftPlanEventOptions"
+                    :key="eventOption.id"
+                    type="button"
+                    :class="[styling, eventOption.id === shiftPlanEventId ? 'font-medium text-link-600' : '']"
+                    @click="shiftPlanEventId = eventOption.id; openDropdown = null"
+                  >
+                    <span class="truncate">{{ eventOption.label }}</span>
+                  </button>
+                </template>
+              </MenuDropdown>
               <p class="mt-1 text-xs text-base-400">{{ t('notifications.compose.shiftPlanHelp') }}</p>
             </div>
             <label v-if="shiftPlanEventId" class="flex cursor-pointer items-center gap-2 text-sm text-base-700">
@@ -368,6 +383,7 @@ const form = reactive({
 })
 
 const shiftPlanEventId = ref<number | null>(null)
+const openDropdown = ref<string | number | null>(null)
 const shiftPlanDescriptions = ref(false)
 
 const shiftPlanEventOptions = computed(() => (options.value?.shiftPlanEvents || []).map(eventOption => ({
@@ -375,6 +391,8 @@ const shiftPlanEventOptions = computed(() => (options.value?.shiftPlanEvents || 
   label: `${eventOption.name} · ${formatDate(eventOption.startsAt)}`,
 })))
 
+const selectedShiftPlanLabel = computed(() => shiftPlanEventOptions.value.find(option => option.id === shiftPlanEventId.value)?.label
+  ?? t('notifications.compose.shiftPlanNone'))
 const shiftPlan = computed<CustomNotificationDraft['shiftPlan']>(() => shiftPlanEventId.value
   ? { eventId: shiftPlanEventId.value, includeDescriptions: shiftPlanDescriptions.value }
   : null)

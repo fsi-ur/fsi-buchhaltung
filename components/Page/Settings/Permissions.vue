@@ -123,6 +123,25 @@
       @update:model-value="permissionModal = null"
     >
       <div
+        v-if="permissionModal.type === 'position' && permissionModal.subdivisionBound"
+        class="border border-accent-200 bg-accent-50/40 rounded-lg p-4"
+      >
+        <h4 class="font-semibold">{{ t('settings.permissions.subdivisionScopeTitle') }}</h4>
+        <p class="mb-2 text-sm text-base-600">{{ t('settings.permissions.subdivisionScopeHelp') }}</p>
+        <div class="grid md:grid-cols-2 gap-2">
+          <label v-for="perm in subdivisionPermissions" :key="perm.key" class="inline-flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              v-model="permissionModal.scopedSelected"
+              type="checkbox"
+              class="checkbox"
+              :value="perm.key"
+            />
+            <span>{{ t(perm.labelKey) }}</span>
+          </label>
+        </div>
+      </div>
+
+      <div
         v-for="group in permissionGroups"
         :key="group.categoryKey"
         class="border rounded-lg p-4"
@@ -207,6 +226,7 @@ import { useAuth } from '~/composables/useAuth'
 import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import type { PermissionDefinition } from '~/config/permissions'
+import type { SubdivisionPermissionDefinition } from '~/config/subdivisionPermissions'
 import SettingsViewAs from './ViewAs.vue'
 
 interface RoleRow {
@@ -224,7 +244,9 @@ interface PositionRow {
   code: string
   name: string
   is_active: boolean
+  subdivision_bound: boolean
   permissions: string[]
+  subdivision_permissions: string[]
 }
 
 interface UserRow {
@@ -243,6 +265,7 @@ const canManagePermissions = computed(() => hasPermission('permissions.manage'))
 const canUseViewAs = computed(() => hasPermission('settings.viewAs'))
 
 const permissions = ref<PermissionDefinition[]>([])
+const subdivisionPermissions = ref<SubdivisionPermissionDefinition[]>([])
 const roles = ref<RoleRow[]>([])
 const positions = ref<PositionRow[]>([])
 const users = ref<UserRow[]>([])
@@ -268,6 +291,9 @@ const permissionModal = ref<null | {
   roleId?: number
   positionId?: number
   selected: string[]
+  /** Subdivision-bound positions only: permissions that hold inside the assignment's subdivision. */
+  subdivisionBound?: boolean
+  scopedSelected: string[]
 }>(null)
 
 const userModal = ref<null | {
@@ -416,6 +442,7 @@ async function loadDefinitions() {
   const res = await apiFetch<ApiResponse<'/api/permissions/definitions'>>('/api/permissions/definitions')
   if (res.ok) {
     permissions.value = res.permissions
+    subdivisionPermissions.value = res.subdivision_permissions
   } else console.log(res.error)
 }
 
@@ -502,6 +529,7 @@ function openRolePermissions(role: RoleRow) {
     title: `${role.name} (${role.code})`,
     roleId: role.id,
     selected: [...role.permissions],
+    scopedSelected: [],
   }
 }
 
@@ -511,6 +539,8 @@ function openPositionPermissions(position: PositionRow) {
     title: `${position.name} (${position.code})`,
     positionId: position.id,
     selected: [...position.permissions],
+    subdivisionBound: position.subdivision_bound,
+    scopedSelected: [...position.subdivision_permissions],
   }
 }
 
@@ -524,7 +554,11 @@ async function savePermissionModal() {
 
   const body = modal.type === 'role'
     ? { ...payload, role_id: modal.roleId }
-    : { ...payload, position_id: modal.positionId }
+    : {
+        ...payload,
+        position_id: modal.positionId,
+        ...(modal.subdivisionBound ? { subdivision_permissions: modal.scopedSelected } : {}),
+      }
 
   try {
     savingPermissions.value = true

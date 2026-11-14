@@ -255,11 +255,14 @@
             @change="toggleRow(row, index)"
           >
         </label>
-        <button
-          type="button"
+        <!-- A list without a detail view renders plain rows: nothing about them suggests a click. -->
+        <component
+          :is="openable ? 'button' : 'div'"
+          :type="openable ? 'button' : undefined"
           class="flex min-w-0 flex-1 items-center gap-3 bg-white px-3 py-2.5 text-left transition not-disabled:cursor-pointer not-disabled:hover:bg-base-50 disabled:cursor-default"
-          :disabled="!canOpen(row)"
-          @click="$emit('row-open', row)"
+          :class="openable ? '' : 'cursor-default! hover:bg-white!'"
+          :disabled="openable ? !canOpen(row) : undefined"
+          @click="openable && $emit('row-open', row)"
         >
           <div class="min-w-0 flex-1">
             <slot name="mobile-row" :row="row">
@@ -293,14 +296,15 @@
           </div>
           <!-- A lock instead of the chevron: the row is legible, just not openable. -->
           <Icon
+            v-if="openable"
             :name="canOpen(row) ? 'material-symbols:chevron-right-rounded' : 'material-symbols:lock-outline'"
             class="shrink-0 text-xl"
             :class="canOpen(row) ? 'text-base-400' : 'text-base-300'"
           />
-        </button>
+        </component>
 
         <MenuDropdown
-          v-if="showActions && $slots.actions"
+          v-if="showActions && $slots.actions && rowShowsActions(row)"
           v-model="actionMenuKey"
           :id="rowKeyOf(row, index)"
           wrapper-class="relative flex shrink-0 self-stretch"
@@ -507,6 +511,13 @@ const props = withDefaults(defineProps<{
   showActions?: boolean
   /** Gate for opening a row (disables the action button and the mobile row). */
   canOpenRow?: (row: T) => boolean
+  /**
+   * false = the rows have no detail view at all: no hover, chevron or lock, and no row-open event.
+   * (`canOpenRow` is for lists where *some* rows are locked.)
+   */
+  openable?: boolean
+  /** Rows for which the `actions` slot renders nothing — they get no (empty) action menu in the compact view. */
+  rowHasActions?: (row: T) => boolean
   tableClass?: string
   /** Unique, stable key to persist sort/filter/search state across page navigation. Omit to keep state local to this mount. */
   persistKey?: string
@@ -516,6 +527,7 @@ const props = withDefaults(defineProps<{
   loading: false,
   emptyIcon: 'material-symbols:inbox-rounded',
   showActions: true,
+  openable: true,
   tableClass: 'min-w-5xl',
 })
 
@@ -661,7 +673,12 @@ watch(() => props.rows, (rows) => {
 })
 
 function canOpen(row: T): boolean {
+  if (!props.openable) return false
   return props.canOpenRow ? props.canOpenRow(row) : true
+}
+
+function rowShowsActions(row: T): boolean {
+  return props.rowHasActions ? props.rowHasActions(row) : true
 }
 
 function cellText(column: AdvancedTableColumn<T>, row: T): string {

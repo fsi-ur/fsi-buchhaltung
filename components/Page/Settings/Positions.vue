@@ -37,6 +37,30 @@
     </template>
 
     <template #modal-fields-after-description="{ editingItem }">
+      <div class="space-y-2 rounded-lg border border-base-200 p-4">
+        <label class="inline-flex items-center gap-2 text-sm text-base-700 cursor-pointer">
+          <input
+            v-model="positionBody(editingItem).subdivision_bound"
+            type="checkbox"
+            class="checkbox"
+            :disabled="positionBody(editingItem)._binding_locked"
+            @change="onBindingChanged(editingItem)"
+          >
+          {{ t('settings.positions.subdivisionBound') }}
+        </label>
+        <p class="text-sm text-base-500">
+          {{ positionBody(editingItem)._binding_locked ? t('settings.positions.subdivisionBoundLocked') : t('settings.positions.subdivisionBoundHelp') }}
+        </p>
+
+        <template v-if="positionBody(editingItem).subdivision_bound">
+          <label class="inline-flex items-center gap-2 text-sm text-base-700 cursor-pointer">
+            <input v-model="positionBody(editingItem).assignable_by_leaders" type="checkbox" class="checkbox">
+            {{ t('settings.positions.assignableByLeaders') }}
+          </label>
+          <p class="text-sm text-base-500">{{ t('settings.positions.assignableByLeadersHelp') }}</p>
+        </template>
+      </div>
+
       <div
         v-if="positionBody(editingItem).is_active === false"
         class="rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
@@ -106,6 +130,39 @@
                     {{ t('actions.remove') }}
                   </button>
                 </div>
+
+                <label
+                  v-if="positionBody(editingItem).subdivision_bound"
+                  class="flex items-center gap-2 text-sm text-base-700"
+                >
+                  <span class="shrink-0">{{ t('settings.positions.subdivision') }}</span>
+                  <MenuDropdown
+                    :id="`assignment-subdivision-${assignmentRowKey(assignment, index)}`"
+                    v-model="openDropdown"
+                    :disabled="!canAssignPositions"
+                    wrapper-class="relative w-full min-w-0"
+                  >
+                    <template #trigger="{ styling }">
+                      <button type="button" :class="[styling, canAssignPositions ? 'cursor-pointer' : '']" :disabled="!canAssignPositions">
+                        <span class="truncate" :class="assignment.subdivision_id ? '' : 'text-base-400'">
+                          {{ subdivisionName(assignment) || t('settings.positions.subdivisionPlaceholder') }}
+                        </span>
+                        <Icon v-if="canAssignPositions" name="material-symbols:keyboard-arrow-down-rounded" class="shrink-0 text-lg text-base-400" />
+                      </button>
+                    </template>
+                    <template #default="{ styling }">
+                      <button
+                        v-for="subdivision in subdivisionOptionsFor(assignment)"
+                        :key="subdivision.id"
+                        type="button"
+                        :class="[styling, subdivision.id === assignment.subdivision_id ? 'font-medium text-link-600' : '']"
+                        @click="assignment.subdivision_id = subdivision.id; openDropdown = null"
+                      >
+                        {{ subdivision.name }}
+                      </button>
+                    </template>
+                  </MenuDropdown>
+                </label>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <label class="flex items-center gap-2 text-sm text-base-700">
@@ -228,15 +285,21 @@ import type {
   SavePositionAssignmentBody,
   SavePositionBody,
 } from '~/types/position'
+import type { SubdivisionOption } from '~/types/subdivision'
 const { today: appToday } = useAppTimeZone()
 
 interface EditablePositionAssignment extends SavePositionAssignmentBody {
   member_query: string
   full_name?: string
+  subdivision_name?: string | null
 }
 
 interface EditablePosition extends SavePositionBody {
   assignments: EditablePositionAssignment[]
+  subdivision_bound: boolean
+  assignable_by_leaders: boolean
+  /** The saved position has assignments, so its subdivision binding can no longer change. */
+  _binding_locked: boolean
 }
 
 type AssignmentState = 'current' | 'upcoming' | 'past' | 'draft'
@@ -257,6 +320,8 @@ const hasAccess = computed(() => hasPermission('settings.positions.manage'))
 const canAssignPositions = computed(() => hasPermission('positions.assign'))
 const entityManagerRef = ref<{ loadItems: () => Promise<void> } | null>(null)
 const memberOptions = ref<PositionMemberOption[]>([])
+const subdivisionOptions = ref<SubdivisionOption[]>([])
+const openDropdown = ref<string | number | null>(null)
 const memberQuery = ref('')
 const assignmentListRef = ref<HTMLElement | null>(null)
 const hasAssignmentScrollbar = ref(false)
@@ -339,6 +404,8 @@ function createAssignment(assignment?: Partial<PositionMemberAssignment>): Edita
     until: assignment?.until ?? null,
     member_query: assignment?.full_name ?? '',
     full_name: assignment?.full_name,
+    subdivision_id: assignment?.subdivision_id ?? null,
+    subdivision_name: assignment?.subdivision_name ?? null,
   }
 }
 
@@ -348,8 +415,28 @@ function createItem(): EditablePosition {
     code: '',
     name: '',
     description: '',
+    subdivision_bound: false,
+    assignable_by_leaders: false,
+    _binding_locked: false,
     assignments: [],
   }
+}
+
+/** Active subdivisions, plus the one already on the assignment even if it has been deactivated. */
+function subdivisionOptionsFor(assignment: EditablePositionAssignment) {
+  return subdivisionOptions.value.filter(subdivision => subdivision.is_active || subdivision.id === assignment.subdivision_id)
+}
+
+function subdivisionName(assignment: EditablePositionAssignment) {
+  if (!assignment.subdivision_id) return ''
+  return subdivisionOptions.value.find(option => option.id === assignment.subdivision_id)?.name ?? assignment.subdivision_name ?? ''
+}
+
+function onBindingChanged(editingItem: SaveSettingsEntityBody) {
+  const position = positionBody(editingItem)
+  if (position.subdivision_bound) return
+  position.assignable_by_leaders = false
+  position.assignments.forEach((assignment) => { assignment.subdivision_id = null })
 }
 
 function mapEditItem(item: SettingsEntityRow): EditablePosition {
@@ -361,6 +448,9 @@ function mapEditItem(item: SettingsEntityRow): EditablePosition {
     name: position.name,
     description: position.description,
     is_active: position.is_active,
+    subdivision_bound: position.subdivision_bound,
+    assignable_by_leaders: position.assignable_by_leaders,
+    _binding_locked: (position.assignments ?? []).length > 0,
     assignments: (position.assignments ?? [])
       .slice()
       .sort(compareAssignmentsMeaningfully)
@@ -417,7 +507,11 @@ function compareAssignmentsMeaningfully(left: AssignmentLike, right: AssignmentL
 
 function assignmentLabel(assignment: EditablePositionAssignment) {
   const member = memberOptionsById.value.get(assignment.member_id)
-  return member?.full_name || assignment.full_name || assignment.member_query || t('common.notAvailable')
+  const name = member?.full_name || assignment.full_name || assignment.member_query || t('common.notAvailable')
+  const subdivision = assignment.subdivision_id
+    ? (subdivisionOptions.value.find(option => option.id === assignment.subdivision_id)?.name ?? assignment.subdivision_name)
+    : null
+  return subdivision ? `${name} (${subdivision})` : name
 }
 
 function isCurrentAssignment(assignment: AssignmentLike) {
@@ -596,6 +690,15 @@ async function confirmDeactivate() {
   await entityManagerRef.value?.loadItems()
 }
 
+async function loadSubdivisionOptions() {
+  try {
+    const res = await apiFetch<ApiResponse<'/api/subdivisions/options'>>('/api/subdivisions/options')
+    if (res.ok) subdivisionOptions.value = res.subdivisions
+  } catch (error) {
+    console.error(error)
+  }
+}
+
 async function loadMemberOptions() {
   try {
     const res = await apiFetch<{ ok: boolean, members?: PositionMemberOption[], error?: string }>('/api/positions/member-options')
@@ -674,12 +777,12 @@ watch(assignmentListRef, async (element) => {
 
 onMounted(async () => {
   if (!hasAccess.value) return
-  await loadMemberOptions()
+  await Promise.all([loadMemberOptions(), loadSubdivisionOptions()])
 })
 
 useAppRefresh().onRefresh(async () => {
   if (!hasAccess.value) return
-  await Promise.all([loadMemberOptions(), entityManagerRef.value?.loadItems()])
+  await Promise.all([loadMemberOptions(), loadSubdivisionOptions(), entityManagerRef.value?.loadItems()])
 })
 
 onBeforeUnmount(() => {

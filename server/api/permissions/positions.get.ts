@@ -2,12 +2,14 @@ import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { isValidPermissionKey } from '~/server/utils/permissions'
+import { isSubdivisionPermissionKey } from '~/config/subdivisionPermissions'
 
 interface PositionRow {
   id: number
   code: string
   name: string
   is_active: number
+  subdivision_bound: number
 }
 
 interface PositionPermissionRow {
@@ -22,7 +24,10 @@ interface GetPositionsSuccess {
     code: string
     name: string
     is_active: boolean
+    subdivision_bound: boolean
     permissions: string[]
+    /** Scoped keys, effective only inside the subdivision of each assignment. */
+    subdivision_permissions: string[]
   }>
 }
 
@@ -38,7 +43,7 @@ export default defineEventHandler(async (event): Promise<GetPositionsResponse> =
   if (!current.ok) return current
 
   const positions = await query<PositionRow[]>(
-    `SELECT id, code, name, is_active
+    `SELECT id, code, name, is_active, subdivision_bound
      FROM positions
      ORDER BY code ASC`
   )
@@ -49,11 +54,15 @@ export default defineEventHandler(async (event): Promise<GetPositionsResponse> =
   )
 
   const permissionsByPosition = new Map<number, string[]>()
+  const scopedByPosition = new Map<number, string[]>()
   for (const pp of positionPermissions) {
-    if (!isValidPermissionKey(pp.permission_key)) continue
     const id = Number(pp.position_id)
-    if (!permissionsByPosition.has(id)) permissionsByPosition.set(id, [])
-    permissionsByPosition.get(id)!.push(pp.permission_key)
+    const target = isValidPermissionKey(pp.permission_key)
+      ? permissionsByPosition
+      : isSubdivisionPermissionKey(pp.permission_key) ? scopedByPosition : null
+    if (!target) continue
+    if (!target.has(id)) target.set(id, [])
+    target.get(id)!.push(pp.permission_key)
   }
 
   return {
@@ -63,7 +72,9 @@ export default defineEventHandler(async (event): Promise<GetPositionsResponse> =
       code: position.code,
       name: position.name,
       is_active: position.is_active === 1,
-      permissions: permissionsByPosition.get(Number(position.id)) ?? []
+      subdivision_bound: Boolean(position.subdivision_bound),
+      permissions: permissionsByPosition.get(Number(position.id)) ?? [],
+      subdivision_permissions: scopedByPosition.get(Number(position.id)) ?? [],
     }))
   }
 })

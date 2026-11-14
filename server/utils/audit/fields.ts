@@ -10,7 +10,7 @@ const MONEY_COLUMNS = new Set([
 const BOOLEAN_COLUMNS = new Set([
   'is_active', 'is_default', 'is_done', 'is_kleinunternehmer', 'is_archived', 'is_published',
   'is_default_role', 'honorary', 'cash', 'requires_review', 'include_descendants', 'enabled',
-  'must_change_password', 'active',
+  'must_change_password', 'active', 'subdivision_bound', 'assignable_by_leaders',
 ])
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -81,6 +81,8 @@ const TABLE_SPECIFIC_FIELD_KEYS: Record<string, Set<string>> = {
   events: new Set(['name', 'starts_at', 'ends_at', 'location', 'expected_guests']),
   users: new Set(['username', 'is_active', 'must_change_password']),
   roles: new Set(['code', 'name', 'is_active', 'is_default']),
+  positions: new Set(['subdivision_bound', 'assignable_by_leaders']),
+  member_positions: new Set(['subdivision_id']),
 }
 
 const COMMON_FIELD_KEYS = new Set([

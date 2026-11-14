@@ -24,7 +24,7 @@ interface GetSubdivisionOptionsError {
 type GetSubdivisionOptionsResponse = GetSubdivisionOptionsSuccess | GetSubdivisionOptionsError
 
 export default defineEventHandler(async (event): Promise<GetSubdivisionOptionsResponse> => {
-  const current = await requirePermission(event, 'settings.subdivisions.manage')
+  const current = await requirePermission(event, ['settings.subdivisions.manage', 'subdivisions.view', 'positions.assign', 'settings.positions.manage'])
   if (!current.ok) return current
 
   const rows = normalizeBigInt(await query<SubdivisionOptionRow[]>(`

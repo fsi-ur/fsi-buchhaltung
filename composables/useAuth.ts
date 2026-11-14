@@ -2,6 +2,8 @@ import type { SessionResponse } from '~/server/utils/sessionGuard'
 import type { LoginResponse } from '~/server/api/auth/login.post'
 import type { User } from '~/types/user'
 import type { PermissionKey } from '~/config/permissions'
+import type { SubdivisionPermissionKey, SubdivisionPermissionMap } from '~/config/subdivisionPermissions'
+import { canOpenLeadershipPage, resolveSubdivisionAccess } from '~/shared/subdivisionAccess'
 
 export const useAuth = () => {
   const user = useState<User | null>('auth_user', () => null)
@@ -78,6 +80,21 @@ export const useAuth = () => {
     return permissions.every(p => granted.includes(p))
   }
 
+  function effectiveSubdivisionPermissions(): SubdivisionPermissionMap {
+    if (!user.value || isSimulating()) return {}
+    return user.value.subdivision_permissions ?? {}
+  }
+
+  function hasSubdivisionPermission(key: SubdivisionPermissionKey, subdivisionId: number) {
+    if (!user.value) return false
+    return resolveSubdivisionAccess(effectivePermissions(), effectiveSubdivisionPermissions(), subdivisionId).permissions.includes(key)
+  }
+
+  function canOpenSubdivisionLeadership() {
+    if (!user.value) return false
+    return canOpenLeadershipPage(effectivePermissions(), effectiveSubdivisionPermissions())
+  }
+
   function isSimulating() {
     const { simulation } = useViewAsSimulation()
     return !!simulation.value
@@ -87,5 +104,5 @@ export const useAuth = () => {
     return isSimulating() ? hasPermission(permissions) : realFlag
   }
 
-  return { user, fetchSession, login, logout, redirectToLogin, hasPermission, hasAllPermissions, isSimulating, resolveFlag }
+  return { user, fetchSession, login, logout, redirectToLogin, hasPermission, hasAllPermissions, hasSubdivisionPermission, canOpenSubdivisionLeadership, isSimulating, resolveFlag }
 }

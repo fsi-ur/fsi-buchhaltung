@@ -1,109 +1,105 @@
 <template>
-  <Page :headline1="t('financeAnalysis.title')" @open-menu="$emit('openMenu')">
-    <template #cards>
-      <PageFinancesAnalysisFilterPanel
-        :filters="filters"
-        :has-cost-centre-access="hasCostCentreAccess"
-        :loading="isLoading"
-        :has-unapplied-changes="hasUnappliedChanges"
-        @run="loadAnalysis"
+  <PageFinancesAnalysisFilterPanel
+    :filters="filters"
+    :has-cost-centre-access="hasCostCentreAccess"
+    :loading="isLoading"
+    :has-unapplied-changes="hasUnappliedChanges"
+    @run="loadAnalysis"
+  />
+
+  <section class="-mx-6 -mb-6 col-span-12 space-y-6 self-start bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg md:p-6 lg:col-span-8 lg:mb-0 xl:col-span-9">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div class="min-w-0 space-y-1">
+        <h2 class="text-lg font-semibold">{{ t('financeAnalysis.analysisTitle') }}</h2>
+        <p class="text-sm text-base-500">{{ activePeriodLabel }}</p>
+        <p v-if="appliedCostCentreLabel" class="text-xs text-base-500">{{ appliedCostCentreLabel }}</p>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <div class="flex h-11 items-center gap-3 rounded-xl border border-base-200 px-4">
+          <label class="text-sm font-medium text-base-900" for="comparison-toggle">
+            {{ t('financeAnalysis.compareWithPreviousYear') }}
+          </label>
+          <CommonToggleSwitch
+            id="comparison-toggle"
+            v-model="filters.compareWithPreviousYear.value"
+            :label="t('financeAnalysis.compareWithPreviousYear')"
+            @update:model-value="loadAnalysis"
+          />
+        </div>
+
+        <button
+          type="button"
+          class="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-accent-500 px-4 text-sm font-medium text-white transition hover:bg-accent-600"
+          :class="!canExportAnalysis ? 'cursor-not-allowed opacity-70 hover:bg-accent-500' : ''"
+          :disabled="!canExportAnalysis"
+          @click="isExportDialogOpen = true"
+        >
+          <Icon
+            :name="exportState.isExporting.value ? 'material-symbols:hourglass-top-rounded' : 'material-symbols:download-rounded'"
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
+          <span>{{ exportState.isExporting.value ? t('financeAnalysis.exportingReport') : t('financeAnalysis.exportReport') }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div v-if="errorMessage" class="rounded-xl bg-danger-50 px-4 py-3 text-sm text-danger-700">
+      {{ errorMessage }}
+    </div>
+
+    <div v-else-if="isLoading && !analysis" class="space-y-4">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        <div v-for="n in 5" :key="n" class="h-28 animate-pulse rounded-xl bg-base-100" />
+      </div>
+      <div class="h-64 animate-pulse rounded-xl bg-base-100" />
+    </div>
+
+    <template v-else-if="analysis">
+      <div
+        v-if="isLoading"
+        class="flex items-center gap-2 rounded-xl bg-base-50 px-4 py-2 text-sm text-base-600"
+        aria-live="polite"
+      >
+        <Icon name="material-symbols:progress-activity" class="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+        {{ t('financeAnalysis.loading') }}
+      </div>
+
+      <PageFinancesAnalysisSummaryCards
+        :summary="analysis.summary"
+        :reconciliation="analysis.reconciliation"
+        :receipt-status-labels="filters.receiptStatusLabels.value"
+        @show-discrepancies="showDiscrepancies"
       />
 
-      <section class="-mx-6 -mb-6 col-span-12 space-y-6 self-start bg-white p-4 shadow-sm sm:mx-0 sm:rounded-xl sm:shadow-lg md:p-6 lg:col-span-8 lg:mb-0 xl:col-span-9">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div class="min-w-0 space-y-1">
-            <h2 class="text-lg font-semibold">{{ t('financeAnalysis.analysisTitle') }}</h2>
-            <p class="text-sm text-base-500">{{ activePeriodLabel }}</p>
-            <p v-if="appliedCostCentreLabel" class="text-xs text-base-500">{{ appliedCostCentreLabel }}</p>
-          </div>
+      <PageFinancesAnalysisComparisonPanel
+        v-if="filters.compareWithPreviousYear.value && comparisonAnalysis"
+        :summary="analysis.summary"
+        :comparison="comparisonAnalysis.summary"
+      />
 
-          <div class="flex flex-wrap items-center justify-end gap-3">
-            <div class="flex h-11 items-center gap-3 rounded-xl border border-base-200 px-4">
-              <label class="text-sm font-medium text-base-900" for="comparison-toggle">
-                {{ t('financeAnalysis.compareWithPreviousYear') }}
-              </label>
-              <CommonToggleSwitch
-                id="comparison-toggle"
-                v-model="filters.compareWithPreviousYear.value"
-                :label="t('financeAnalysis.compareWithPreviousYear')"
-                @update:model-value="loadAnalysis"
-              />
-            </div>
-
-            <button
-              type="button"
-              class="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-accent-500 px-4 text-sm font-medium text-white transition hover:bg-accent-600"
-              :class="!canExportAnalysis ? 'cursor-not-allowed opacity-70 hover:bg-accent-500' : ''"
-              :disabled="!canExportAnalysis"
-              @click="isExportDialogOpen = true"
-            >
-              <Icon
-                :name="exportState.isExporting.value ? 'material-symbols:hourglass-top-rounded' : 'material-symbols:download-rounded'"
-                class="h-5 w-5"
-                aria-hidden="true"
-              />
-              <span>{{ exportState.isExporting.value ? t('financeAnalysis.exportingReport') : t('financeAnalysis.exportReport') }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div v-if="errorMessage" class="rounded-xl bg-danger-50 px-4 py-3 text-sm text-danger-700">
-          {{ errorMessage }}
-        </div>
-
-        <div v-else-if="isLoading && !analysis" class="space-y-4">
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-            <div v-for="n in 5" :key="n" class="h-28 animate-pulse rounded-xl bg-base-100" />
-          </div>
-          <div class="h-64 animate-pulse rounded-xl bg-base-100" />
-        </div>
-
-        <template v-else-if="analysis">
-          <div
-            v-if="isLoading"
-            class="flex items-center gap-2 rounded-xl bg-base-50 px-4 py-2 text-sm text-base-600"
-            aria-live="polite"
-          >
-            <Icon name="material-symbols:progress-activity" class="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-            {{ t('financeAnalysis.loading') }}
-          </div>
-
-          <PageFinancesAnalysisSummaryCards
-            :summary="analysis.summary"
-            :reconciliation="analysis.reconciliation"
-            :receipt-status-labels="filters.receiptStatusLabels.value"
-            @show-discrepancies="showDiscrepancies"
-          />
-
-          <PageFinancesAnalysisComparisonPanel
-            v-if="filters.compareWithPreviousYear.value && comparisonAnalysis"
-            :summary="analysis.summary"
-            :comparison="comparisonAnalysis.summary"
-          />
-
-          <PageFinancesAnalysisDetailTables
-            ref="detailTablesRef"
-            class="scroll-mt-4"
-            v-model:tab="activeDetailTab"
-            :analysis="analysis"
-            :loading="isLoading"
-            :receipt-date-field="filters.receiptDateField.value"
-            :invoice-date-field="filters.invoiceDateField.value"
-            :receipt-date-field-label="filters.selectedReceiptDateFieldLabel.value"
-            :invoice-date-field-label="filters.selectedInvoiceDateFieldLabel.value"
-            :receipt-status-labels="filters.receiptStatusLabels.value"
-            :invoice-status-labels="filters.invoiceStatusLabels.value"
-            :can-view-bank-statements="canViewBankStatements"
-            :cost-centre-scope="appliedCostCentreScope"
-            :cost-centre-scope-label="appliedCostCentreScopeLabel"
-            @open="openRecord"
-          />
-        </template>
-      </section>
-
-      <PageFinancesAnalysisExportDialog v-model="isExportDialogOpen" :export-state="exportState" />
+      <PageFinancesAnalysisDetailTables
+        ref="detailTablesRef"
+        class="scroll-mt-4"
+        v-model:tab="activeDetailTab"
+        :analysis="analysis"
+        :loading="isLoading"
+        :receipt-date-field="filters.receiptDateField.value"
+        :invoice-date-field="filters.invoiceDateField.value"
+        :receipt-date-field-label="filters.selectedReceiptDateFieldLabel.value"
+        :invoice-date-field-label="filters.selectedInvoiceDateFieldLabel.value"
+        :receipt-status-labels="filters.receiptStatusLabels.value"
+        :invoice-status-labels="filters.invoiceStatusLabels.value"
+        :can-view-bank-statements="canViewBankStatements"
+        :cost-centre-scope="appliedCostCentreScope"
+        :cost-centre-scope-label="appliedCostCentreScopeLabel"
+        @open="openRecord"
+      />
     </template>
-  </Page>
+  </section>
+
+  <PageFinancesAnalysisExportDialog v-model="isExportDialogOpen" :export-state="exportState" />
 </template>
 
 <script setup lang="ts">
@@ -126,8 +122,8 @@ import type { DetailTabKey } from '~/components/Page/Finances/Analysis/DetailTab
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
 import type { DocumentExportCostCentreScope } from '~/shared/documentExport'
 
-defineEmits<{
-  (e: 'openMenu'): void
+defineProps<{
+  returnTarget?: unknown
 }>()
 
 type FinanceAnalysisResponse =
@@ -297,7 +293,8 @@ function openRecord({ page, id }: { page: string, id: number }) {
 
   setPage(page, {
     [metaKey]: id,
-    returnTarget: buildReturnTarget('FinanceAnalysis', {
+    returnTarget: buildReturnTarget('Finances', {
+      tab: 'analysis',
       analysisState: { ...filters.toPersistedState(), activeDetailTab: activeDetailTab.value },
     }),
     forceReadonly: true,

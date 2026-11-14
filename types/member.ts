@@ -80,6 +80,7 @@ export interface MemberPositionAssignment {
   position_id: number
   since: string
   until: string | null
+  subdivision_id?: number | null
 }
 
 export interface MemberStatusActionAccountChange {

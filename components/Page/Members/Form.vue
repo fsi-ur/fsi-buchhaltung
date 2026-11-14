@@ -228,6 +228,39 @@
           ✕
         </button>
 
+        <label v-if="isBoundPosition(assignment)" class="flex items-center gap-2 text-sm text-base-700 md:col-span-3">
+          <span class="shrink-0">{{ t('member.positionSubdivision') }}</span>
+          <MenuDropdown
+            :id="`position-subdivision-${positionRowKey(assignment)}`"
+            v-model="openStatus"
+            :disabled="positionsDisabled"
+            wrapper-class="relative w-full min-w-0"
+          >
+            <template #trigger="{ styling }">
+              <button type="button" :class="[styling, positionsDisabled ? '' : 'cursor-pointer']" :disabled="positionsDisabled">
+                <span class="truncate" :class="assignment.subdivision_id ? '' : 'text-base-400'">
+                  {{ positionSubdivisionLabel(assignment) || t('member.positionSubdivisionPlaceholder') }}
+                </span>
+                <Icon v-if="!positionsDisabled" name="material-symbols:keyboard-arrow-down-rounded" class="shrink-0 text-lg text-base-400" />
+              </button>
+            </template>
+            <template #default="{ styling }">
+              <button
+                v-for="subdivision in positionSubdivisionOptions(assignment)"
+                :key="subdivision.id"
+                type="button"
+                :class="[styling, subdivision.id === assignment.subdivision_id ? 'font-medium text-link-600' : '']"
+                @click="selectPositionSubdivision(assignment, subdivision.id); openStatus = null"
+              >
+                {{ formatSubdivisionLabel(subdivision) }}
+              </button>
+              <p v-if="!positionSubdivisionOptions(assignment).length" class="px-3 py-2 text-sm text-base-500">
+                {{ t('member.noSubdivisions') }}
+              </p>
+            </template>
+          </MenuDropdown>
+        </label>
+
         <p
           v-if="isAssignedPositionInactive(i)"
           class="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 md:col-span-3"
@@ -445,7 +478,8 @@ const subdivisionOptions = computed<SearchSelectOption<number>[]>(() => {
       searchText: `${subdivision.code} ${subdivision.name} ${subdivision.is_active ? '' : t('common.inactive')}`.trim(),
     }))
 })
-const openStatus = ref<number | null>(null)
+// Which MenuDropdown in this form is open (status picker, position subdivision pickers).
+const openStatus = ref<string | number | null>(null)
 
 const validationErrors = computed(() => {
   const errors: string[] = []
@@ -480,17 +514,23 @@ const validationErrors = computed(() => {
     if (position.since && position.until && position.until < position.since) {
       errors.push(t('member.required.positionInvalidRange', { index: index + 1 }))
     }
+
+    if (isBoundPosition(position) && !position.subdivision_id) {
+      errors.push(t('member.required.positionSubdivision', { index: index + 1 }))
+    }
   })
 
-  const groupedPositions = new Map<number, Array<{ since: string, until: string | null }>>()
+  // A subdivision-bound position may be held in several subdivisions at the same time.
+  const groupedPositions = new Map<string, { positionId: number, assignments: Array<{ since: string, until: string | null }> }>()
   for (const position of form.value.positions) {
     if (!position.position_id || !position.since) continue
-    const bucket = groupedPositions.get(position.position_id) ?? []
-    bucket.push({ since: position.since, until: position.until || null })
-    groupedPositions.set(position.position_id, bucket)
+    const key = `${position.position_id}:${isBoundPosition(position) ? (position.subdivision_id ?? 0) : 0}`
+    const bucket = groupedPositions.get(key) ?? { positionId: position.position_id, assignments: [] }
+    bucket.assignments.push({ since: position.since, until: position.until || null })
+    groupedPositions.set(key, bucket)
   }
 
-  for (const [positionId, assignments] of groupedPositions.entries()) {
+  for (const { positionId, assignments } of groupedPositions.values()) {
     const sortedAssignments = assignments
       .slice()
       .sort((left, right) => {
@@ -528,7 +568,8 @@ async function loadSupportData() {
   await Promise.all([
     loadSubjects(),
     loadPositions(),
-    canManageSubdivisions.value ? loadSubdivisions() : Promise.resolve(),
+    // Position assigners need the list to pick the subdivision of a subdivision-bound position.
+    canManageSubdivisions.value || canAssignPositions.value ? loadSubdivisions() : Promise.resolve(),
   ])
 }
 
@@ -667,7 +708,34 @@ function selectPosition(index: number, position: PositionRow) {
   const assignment = form.value.positions[index]
   if (!assignment) return
   assignment.position_id = position.id
+  if (!position.subdivision_bound) assignment.subdivision_id = null
   positionQueries.value[positionRowKey(assignment)] = formatPositionLabel(position)
+}
+
+function isBoundPosition(assignment: MemberPositionAssignment) {
+  return Boolean(positionsById.value.get(Number(assignment.position_id))?.subdivision_bound)
+}
+
+/** Active subdivisions, plus the one already on the assignment even if it has been deactivated. */
+function positionSubdivisionOptions(assignment: MemberPositionAssignment) {
+  const options = subdivisions.value.filter(subdivision => subdivision.is_active || subdivision.id === assignment.subdivision_id)
+  const current = assignment.subdivision_id ? subdivisionsById.value.get(assignment.subdivision_id) : undefined
+  if (current && !options.some(option => option.id === current.id)) options.push(current)
+  return options
+}
+
+function positionSubdivisionLabel(assignment: MemberPositionAssignment) {
+  const subdivision = assignment.subdivision_id ? subdivisionsById.value.get(assignment.subdivision_id) : undefined
+  return subdivision ? formatSubdivisionLabel(subdivision) : ''
+}
+
+function selectPositionSubdivision(assignment: MemberPositionAssignment, subdivisionId: number) {
+  if (!Number.isInteger(subdivisionId) || subdivisionId <= 0) return
+  assignment.subdivision_id = subdivisionId
+  // Holding the position implies membership — the server adds it anyway; show it right away.
+  if (canManageSubdivisions.value && !(form.value.subdivision_ids ?? []).includes(subdivisionId)) {
+    form.value.subdivision_ids = [...(form.value.subdivision_ids ?? []), subdivisionId]
+  }
 }
 
 function selectPositionFromOption(index: number, value: unknown) {

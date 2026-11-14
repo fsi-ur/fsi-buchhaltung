@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS positions (
   code VARCHAR(32) NOT NULL UNIQUE,
   name VARCHAR(127) NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  description TEXT
+  description TEXT,
+  subdivision_bound TINYINT(1) NOT NULL DEFAULT 0,
+  assignable_by_leaders TINYINT(1) NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS position_permissions (
@@ -144,6 +146,7 @@ CREATE TABLE IF NOT EXISTS member_positions (
   position_id BIGINT UNSIGNED NOT NULL,
   since DATE NOT NULL,
   until DATE,
+  subdivision_id MEDIUMINT UNSIGNED NULL,
   FOREIGN KEY (member_id) REFERENCES members(id),
   FOREIGN KEY (position_id) REFERENCES positions(id)
 );

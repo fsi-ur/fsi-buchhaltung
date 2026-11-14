@@ -649,13 +649,30 @@ async function resolveViaIds(via: { table: string, column: string }, parentId: n
  * Tables the user may not view are skipped rather than rejected — the caller lists what the section
  * touches, the registry decides what is visible.
  */
-export async function getScopedAuditGroups(user: User, tables: string[], parentId: number) {
+export async function getScopedAuditGroups(
+  user: User,
+  tables: string[],
+  parentId: number,
+  options: {
+    /**
+     * Tables the caller has already authorized by other means (e.g. a subdivision leader's scoped
+     * `subdivision.history.view`), bypassing the registry's permission check for exactly these.
+     * They must still be registered — an unregistered table stays invisible.
+     */
+    preauthorizedTables?: readonly string[]
+  } = {},
+) {
+  const preauthorized = new Set(options.preauthorizedTables ?? [])
+  const canView = (table: string) => preauthorized.has(table)
+    ? Boolean(getAuditTableDefinition(table))
+    : canViewAuditTable(user, table)
+
   const specs = tables
     .map(parseScopedTableSpec)
     .filter((spec): spec is ScopedTableSpec => spec !== null
-      && canViewAuditTable(user, spec.table)
+      && canView(spec.table)
       // Resolving the hop reads the intermediate table, so it needs to be visible as well.
-      && (!spec.via || canViewAuditTable(user, spec.via.table)))
+      && (!spec.via || canView(spec.via.table)))
 
   if (!specs.length) return { ok: true as const, groups: [] as AuditGroup[] }
 

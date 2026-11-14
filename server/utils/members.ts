@@ -209,7 +209,7 @@ async function closeMemberPositionsAfterLeftDate(
   removed_positions: MemberStatusActionPositionRemoval[]
 }> {
   const positionsToRemove = await query<PositionAssignmentRow[]>(
-    `SELECT id, member_id, position_id, since, until
+    `SELECT id, member_id, position_id, since, until, subdivision_id
      FROM member_positions
      WHERE member_id = ?
        AND since > ?`,
@@ -218,7 +218,7 @@ async function closeMemberPositionsAfterLeftDate(
   )
 
   const positionsToTruncate = await query<PositionAssignmentRow[]>(
-    `SELECT id, member_id, position_id, since, until
+    `SELECT id, member_id, position_id, since, until, subdivision_id
      FROM member_positions
      WHERE member_id = ?
        AND since <= ?

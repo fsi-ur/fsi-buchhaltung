@@ -61,6 +61,8 @@ const ALL_PERMISSION_KEYS = [
   'spheres.view',
   'cost_centres.view',
   'subdivisions.view',
+  'subdivisions.leadership.view',
+  'subdivisions.leadership.edit',
   'settings.access',
   'settings.association.manage',
   'settings.spheres.manage',

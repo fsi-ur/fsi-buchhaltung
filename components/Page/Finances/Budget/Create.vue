@@ -83,11 +83,25 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div class="field">
                 <label>{{ t('budget.year') }}</label>
-                <select v-model="form.year" class="input" :disabled="!canEdit">
-                  <option v-for="year in yearOptions" :key="year" :value="String(year)">
-                    {{ year }}
-                  </option>
-                </select>
+                <MenuDropdown id="budget-year" v-model="openDropdown" :disabled="!canEdit">
+                  <template #trigger="{ styling }">
+                    <button type="button" :class="[styling, canEdit ? 'cursor-pointer' : '']" :disabled="!canEdit">
+                      <span class="truncate">{{ form.year }}</span>
+                      <Icon v-if="canEdit" name="material-symbols:keyboard-arrow-down-rounded" class="shrink-0 text-lg text-base-400" />
+                    </button>
+                  </template>
+                  <template #default="{ styling }">
+                    <button
+                      v-for="year in yearOptions"
+                      :key="year"
+                      type="button"
+                      :class="[styling, String(year) === String(form.year) ? 'font-medium text-link-600' : '']"
+                      @click="form.year = String(year); openDropdown = null"
+                    >
+                      {{ year }}
+                    </button>
+                  </template>
+                </MenuDropdown>
               </div>
 
               <div class="field">
@@ -352,6 +366,7 @@ const isHeaderStuck = ref(false)
 let headerStickyObserver: IntersectionObserver | null = null
 
 const currentYear = Number(appToday().slice(0, 4))
+const openDropdown = ref<string | number | null>(null)
 const yearOptions = computed(() => Array.from({ length: 11 }, (_, index) => currentYear + 1 - index))
 const openLineNotes = ref<Record<number, boolean>>({})
 

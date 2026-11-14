@@ -4,8 +4,9 @@ import { query } from '~/server/utils/db'
 import { assignDefaultRoleToUser } from '~/server/utils/roles'
 import { passwordPolicyError } from '~/config/validation'
 import type { PermissionKey } from '~/config/permissions'
-import { getEffectivePermissions, getPositionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
+import { getEffectivePermissions, getPositionPermissionKeys, getPositionSubdivisionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
 import { appTodayLocalDate } from '~/server/utils/time'
+import { subdivisionPermissionsBeyond } from '~/shared/subdivisionAccess'
 
 export interface CreateUserAccountInput {
   username: string
@@ -143,6 +144,11 @@ export async function checkMemberPositionsWithinCaller(
   const permissionsByPosition = await getPositionPermissionKeys(positionIds, conn)
   for (const keys of permissionsByPosition.values()) {
     if (permissionsBeyond(keys, actorPermissions).length) return ACCOUNT_LINK_EXCEEDS_OWN
+  }
+  // Subdivision-only permissions count as rights as well (see authorizePositionAssignmentChanges).
+  const scopedByPosition = await getPositionSubdivisionPermissionKeys(positionIds, conn)
+  for (const keys of scopedByPosition.values()) {
+    if (subdivisionPermissionsBeyond(keys, actorPermissions).length) return ACCOUNT_LINK_EXCEEDS_OWN
   }
   return null
 }

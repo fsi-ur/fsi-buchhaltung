@@ -31,6 +31,11 @@ const TYPE_ICONS: Record<NotificationTypeKey, string> = {
   'appointment.reminder': 'material-symbols:alarm-rounded',
   'member.welcome_active': 'material-symbols:waving-hand-rounded',
   'member.welcome_passive': 'material-symbols:waving-hand-outline',
+  'subdivision.member_added': 'material-symbols:group-add-rounded',
+  'subdivision.member_removed': 'material-symbols:group-remove-rounded',
+  'subdivision.position_assigned': 'material-symbols:badge-rounded',
+  'subdivision.position_ended': 'material-symbols:badge-outline',
+  'subdivision.leader_change': 'material-symbols:manage-accounts-rounded',
   'custom.message': 'material-symbols:campaign-rounded',
 }
 
@@ -41,6 +46,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'notifications.categories.events': 'bg-accent-100 text-accent-700',
   'notifications.categories.appointments': 'bg-secondary-100 text-secondary-700',
   'notifications.categories.members': 'bg-success-100 text-success-700',
+  'notifications.categories.subdivisions': 'bg-success-100 text-success-700',
   'notifications.categories.custom': 'bg-base-200 text-base-700',
 }
 

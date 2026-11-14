@@ -4,7 +4,15 @@ import { PAGES } from '~/config/pages'
 
 export type AppPage = MainPage | SubPage
 
-interface MainPage {
+interface PageAccess {
+  /**
+   * Also open to subdivision leaders (anyone holding a scoped permission in some subdivision),
+   * in addition to the global `permissions`.
+   */
+  allowSubdivisionLeaders?: boolean
+}
+
+interface MainPage extends PageAccess {
   main: true
   labelKey: string
   component: Component
@@ -15,7 +23,7 @@ interface MainPage {
   preserveOnRefresh?: boolean
 }
 
-interface SubPage {
+interface SubPage extends PageAccess {
   main: false
   labelKey: string
   component: Component

@@ -13,6 +13,14 @@
     </button>
 
     <span
+      v-else-if="!definition"
+      class="inline-flex items-center gap-1.5 rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800"
+    >
+      <Icon name="material-symbols:link-off-rounded" class="text-base" aria-hidden="true" />
+      {{ t('wiki.toolLink.unknownPage', { page }) }}
+    </span>
+
+    <span
       v-else
       class="inline-flex items-center gap-1.5 rounded-lg bg-base-100 px-3 py-2 text-sm text-base-500"
     >

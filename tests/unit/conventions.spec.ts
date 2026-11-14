@@ -142,9 +142,55 @@ describe('pages', () => {
   })
 })
 
+describe('components', () => {
+  // Native <select> renders the OS picker, which looks different on every platform and cannot show
+  // inactive/hint styling; MenuDropdown (components/Menu/Dropdown.vue) is the app's dropdown.
+  it('uses MenuDropdown instead of a native <select>', () => {
+    const offenders = ['components', 'layouts']
+      .flatMap(sourceFiles)
+      .filter(file => file.endsWith('.vue') && /<select[\s>]/.test(read(file)))
+    expect(offenders, 'replace <select> with MenuDropdown').toEqual([])
+  })
+})
+
 describe('i18n', () => {
   const deKeys = collectKeys(messages.de)
   const enKeys = collectKeys(messages.en)
+
+  /*
+   * A key counts as used when it appears as a quoted string anywhere in the source (t('…') calls,
+   * `labelKey: '…'` in the config registries, server translate() calls, …), or when it lies under
+   * the static prefix of a template literal such as `notifications.types.${type}.subject`. So a key
+   * built at runtime must be built from such a template literal (or listed in full somewhere) to
+   * count. Concatenation like 'a.' + b would be invisible here, so don't build keys that way.
+   */
+  it('has no unused keys', () => {
+    const source = ['components', 'composables', 'layouts', 'utils', 'server', 'shared', 'config', 'types', 'plugins', 'scripts']
+      .flatMap(sourceFiles)
+      .concat(['app.vue'])
+      .filter(file => file !== 'shared/i18n.ts')
+      .map(read)
+      .join('\n')
+
+    const literals = new Set(Array.from(source.matchAll(/['"`]([a-zA-Z0-9_.]+)['"`]/g), match => match[1]!))
+    const dynamicPrefixes = Array.from(source.matchAll(/`([a-zA-Z0-9_.]+\.)\$\{/g), match => match[1]!)
+
+    const unused = deKeys.filter(key => !literals.has(key) && !dynamicPrefixes.some(prefix => key.startsWith(prefix)))
+    expect(unused, 'i18n keys no code refers to: delete them (de and en)').toEqual([])
+  })
+
+  // Only literal keys can be checked statically; computed ones (`t(perm.labelKey)`) are covered
+  // by the registries that define them.
+  it('resolves every literal t(\'…\') key used in the UI', () => {
+    const known = new Set(deKeys)
+    const missing = new Set<string>()
+    for (const file of ['components', 'composables', 'layouts', 'utils'].flatMap(sourceFiles)) {
+      for (const match of read(file).matchAll(/\bt\('([a-zA-Z0-9_.]+)'/g)) {
+        if (!known.has(match[1]!)) missing.add(`${match[1]} (${file})`)
+      }
+    }
+    expect([...missing], 'unknown i18n keys').toEqual([])
+  })
 
   it('translates every German key into English', () => {
     const missing = deKeys.filter(key => !new Set(enKeys).has(key))

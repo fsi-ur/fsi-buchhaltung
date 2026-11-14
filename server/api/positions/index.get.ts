@@ -20,11 +20,19 @@ export default defineEventHandler(async (event): Promise<GetPositionsResponse> =
   const current = await requirePermission(event, 'positions.view')
   if (!current.ok) return current
 
-  const rows = await query(`
-    SELECT id, code, name, is_active, description
+  type RawPositionRow = Omit<PositionRow, 'subdivision_bound' | 'assignable_by_leaders'> & { subdivision_bound: number, assignable_by_leaders: number }
+  const rows: RawPositionRow[] = normalizeBigInt(await query<RawPositionRow[]>(`
+    SELECT id, code, name, is_active, description, subdivision_bound, assignable_by_leaders
     FROM positions
     ORDER BY code ASC
-  `) as PositionRow[]
+  `))
 
-  return { ok: true, positions: normalizeBigInt(rows) as PositionRow[] }
+  return {
+    ok: true,
+    positions: rows.map(row => ({
+      ...row,
+      subdivision_bound: Boolean(row.subdivision_bound),
+      assignable_by_leaders: Boolean(row.assignable_by_leaders),
+    })),
+  }
 })
