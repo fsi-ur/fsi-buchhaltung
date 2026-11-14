@@ -22,6 +22,7 @@ const FILTERS = {
   invoiceDateField: 'invoice_date' as const,
   costCentreId: null,
   includeChildCostCentres: false,
+  accountIds: [] as number[],
 }
 
 describe('cash discrepancies (Kassendifferenzen)', () => {

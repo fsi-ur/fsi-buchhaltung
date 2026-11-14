@@ -1,6 +1,7 @@
 import { query } from '~/server/utils/db'
 import { hasPermission } from '~/server/utils/api/guards'
 import { computeTotalMoney } from '~/server/utils/cashPosition'
+import { hasAnyFinanceAccount } from '~/server/utils/financeAccounts'
 import { loadCurrentMemberIdForUser } from '~/server/utils/eventShifts'
 import { getAllPendingChanges } from '~/server/utils/memberSelfEdit'
 import { WIKI_EMBEDS_BY_KEY, type WikiEmbedDefinition } from '~/config/wikiEmbeds'
@@ -165,10 +166,12 @@ async function resolveBudgetStatus(args: EmbedArgs): Promise<WikiEmbedBudgetStat
 
 async function resolveCashPosition(): Promise<WikiEmbedCashPositionData> {
   const date = await appTodayLocalDate()
-  const position = await computeTotalMoney(date)
+  const [position, bankVisible] = await Promise.all([computeTotalMoney(date), hasAnyFinanceAccount()])
 
   return {
     date,
+    // Archived accounts keep their history: the line stays while any account exists.
+    bankEnabled: bankVisible || round(position.bankBalance) !== 0,
     bankBalance: round(position.bankBalance),
     cashTotal: round(position.cashTotal),
     totalMoney: round(position.totalMoney),

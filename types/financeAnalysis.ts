@@ -94,9 +94,26 @@ export interface FinanceAnalysisCashDiscrepancyRegister {
  * payment taken from two registers (booked against one of them) from turning into a surplus here
  * and a shortfall there — money only moved between registers.
  */
+/** A bank difference: a transfer or reimbursement confirmed with another amount than expected. */
+export interface FinanceAnalysisBankDiscrepancyInfo {
+  bank_statement_id: number
+  bank_statement_position_id: number
+  statement_number: string
+  account_name: string
+  kind: 'transfer' | 'reimbursement'
+  /** transfer: the other account; reimbursement: the member paid */
+  counterparty: string
+  reimbursement_id: number | null
+}
+
 export interface FinanceAnalysisCashDiscrepancyItem {
   key: string
-  cash_count_id: number
+  /** cash: a count found another amount than the books; bank: a confirmation differs from what was expected */
+  source: 'cash' | 'bank'
+  /** cash only */
+  cash_count_id: number | null
+  /** bank only */
+  bank: FinanceAnalysisBankDiscrepancyInfo | null
   event_id: number | null
   event_name: string
   date: string
@@ -127,11 +144,19 @@ export interface FinanceAnalysisCashDiscrepancyBreakdownItem {
   total_amount: number
 }
 
-export type FinanceAnalysisBankPositionType = 'receipt' | 'invoice' | 'event'
+export type FinanceAnalysisBankPositionType = 'receipt' | 'invoice' | 'event' | 'transfer' | 'reimbursement'
 
 export interface FinanceAnalysisBankStatementPosition {
+  /** Unique per row: a transfer shows up once per side (`<position id>` and `<position id>-counter`). */
+  row_key: string
   id: number
   bank_statement_id: number
+  /** The account this row moves (for the counter side of a transfer: the receiving/sending account) */
+  account_id: number
+  account_name: string
+  /** transfer only: the other account */
+  counter_account_id: number | null
+  counter_account_name: string | null
   statement_number: string
   statement_date: string
   checked_by_name: string
@@ -168,6 +193,8 @@ export type FinanceLiquidityRowType =
   | 'bankReceipt'
   | 'bankInvoice'
   | 'bankEvent'
+  | 'bankTransfer'
+  | 'bankDifference'
   | 'bankStatementCheckpoint'
   | 'cashCountRegister'
   | 'cashCountRevenue'
@@ -182,6 +209,8 @@ export interface FinanceLiquidityRow {
   label: string
   reference: string | null
   register_number: number | null
+  /** Bank rows: the account the row moves (checkpoint: the statement's account) */
+  account_name: string | null
   delta_amount: number
   bank_balance: number
   cash_balance: number
@@ -191,6 +220,14 @@ export interface FinanceLiquidityRow {
   discrepancy_amount: number | null
   has_discrepancy: boolean
   note: string | null
+}
+
+export interface FinanceAnalysisAccountBalance {
+  account_id: number
+  name: string
+  archived: boolean
+  before: number
+  after: number
 }
 
 export interface FinanceAnalysisSummary {
@@ -226,6 +263,14 @@ export interface FinanceAnalysisSummary {
   bank_before: number
   /** Bank account balance at the end of the period */
   bank_after: number
+  /** False when no active account exists: nothing new can be booked on a bank account */
+  bank_enabled: boolean
+  /** True when any account exists (archived included): bank cards, filter and sections are shown */
+  bank_visible: boolean
+  /** Per-account split of bank_before/bank_after (every account with a balance or still active) */
+  bank_accounts: FinanceAnalysisAccountBalance[]
+  /** The analysis is limited to these accounts (bank positions table and bank movement card) */
+  account_filter_ids: number[]
   /** Cash pool total at the start of the period */
   cash_before: number
   /** Cash pool total at the end of the period */
@@ -268,7 +313,10 @@ export interface FinanceAnalysisData {
   cashCountBreakdown: FinanceAnalysisCashCountBreakdownItem[]
   cashDiscrepancies: FinanceAnalysisCashDiscrepancyItem[]
   cashDiscrepancyBreakdown: FinanceAnalysisCashDiscrepancyBreakdownItem[]
+  /** Bank positions in the period, limited to the account filter */
   bankStatementPositions: FinanceAnalysisBankStatementPosition[]
+  /** Event positions of all accounts — the result (and its cost centre split) ignores the account filter */
+  bankEventPositions: FinanceAnalysisBankStatementPosition[]
   invoices: FinanceAnalysisInvoiceItem[]
   liquidityRows: FinanceLiquidityRow[]
 }

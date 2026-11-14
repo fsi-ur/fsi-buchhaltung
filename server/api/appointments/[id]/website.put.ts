@@ -3,9 +3,12 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import { withAuditTransaction } from '~/server/utils/db'
 import {
+  isScheduledOccurrence,
   loadAppointmentWebsiteSettings,
   normalizeAppointmentWebsitePayload,
+  normalizeOccurrenceWebsitePayload,
   saveAppointmentWebsiteSettings,
+  saveOccurrenceWebsitePublished,
 } from '~/server/utils/appointmentWebsite'
 import { isAppointmentVisible, resolveAppointmentViewer } from '~/server/utils/appointments/visibility'
 import { internalError } from '~/server/utils/api/errors'
@@ -21,7 +24,11 @@ interface UpdateAppointmentWebsiteError {
 
 export type UpdateAppointmentWebsiteResponse = UpdateAppointmentWebsiteSuccess | UpdateAppointmentWebsiteError
 
-/** Publishing is a property of the whole series — there is no per-occurrence variant. */
+/**
+ * Body `{ published, visible_from }` sets the whole series. Body `{ occurrenceDate, published }`
+ * lets one date of a recurring series deviate — `true` publishes only that date, `false` hides it,
+ * `null` makes it follow the series again.
+ */
 export default defineEventHandler(async (event): Promise<UpdateAppointmentWebsiteResponse> => {
   const current = await requirePermission(event, 'calendar.publish')
   if (!current.ok) return current
@@ -29,8 +36,11 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentWebsit
   const appointmentId = getNumericRouteParam(event)
   if (!appointmentId) return { ok: false, error: 'Ungültige Termin-ID.' }
 
-  const body = normalizeAppointmentWebsitePayload(await readBody(event))
-  if (!body) return { ok: false, error: 'Ungültige Website-Einstellungen.' }
+  const raw = await readBody(event)
+  const forOccurrence = Boolean(raw && typeof raw === 'object' && 'occurrenceDate' in raw && raw.occurrenceDate != null)
+  const seriesBody = forOccurrence ? null : normalizeAppointmentWebsitePayload(raw)
+  const occurrenceBody = forOccurrence ? normalizeOccurrenceWebsitePayload(raw) : null
+  if (!seriesBody && !occurrenceBody) return { ok: false, error: 'Ungültige Website-Einstellungen.' }
 
   try {
     return await withAuditTransaction(current.user, async (conn) => {
@@ -39,7 +49,15 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentWebsit
         return { ok: false as const, error: 'Der Termin wurde nicht gefunden.' }
       }
 
-      await saveAppointmentWebsiteSettings(appointmentId, body, conn)
+      if (occurrenceBody) {
+        if (!await isScheduledOccurrence(appointmentId, occurrenceBody.occurrenceDate, conn)) {
+          return { ok: false as const, error: 'Dieser Termin gehört nicht zur Serie.' }
+        }
+        await saveOccurrenceWebsitePublished(appointmentId, occurrenceBody.occurrenceDate, occurrenceBody.published, conn)
+        return { ok: true as const }
+      }
+
+      await saveAppointmentWebsiteSettings(appointmentId, seriesBody!, conn)
       return { ok: true as const }
     })
   } catch (err: any) {

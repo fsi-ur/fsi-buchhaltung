@@ -42,9 +42,14 @@ function cashCount(overrides: Partial<FinanceAnalysisCashCountItem> = {}): Finan
 }
 
 function bankPosition(overrides: Partial<FinanceAnalysisBankStatementPosition> = {}): FinanceAnalysisBankStatementPosition {
+  const id = overrides.id ?? 1
   return {
     id: 1,
     bank_statement_id: 7,
+    account_id: 1,
+    account_name: 'Girokonto',
+    counter_account_id: null,
+    counter_account_name: null,
     statement_number: 'KA-1',
     statement_date: '2026-05-10 00:00:00',
     checked_by_name: 'E F',
@@ -60,6 +65,7 @@ function bankPosition(overrides: Partial<FinanceAnalysisBankStatementPosition> =
     cost_centres: [split()],
     notes: null,
     ...overrides,
+    row_key: overrides.row_key ?? String(id),
   }
 }
 
@@ -191,6 +197,38 @@ describe('summarizeBankStatementPositions', () => {
 
     expect(summary.eventRevenueTotal).toBe(170)
     expect(summary.eventRevenueCount).toBe(2)
+  })
+
+  // A 100 € transfer Giro (1) -> Sparkonto (2), entered on Giro statement 7: one row per side.
+  const transferRows = () => [
+    bankPosition({ id: 5, row_key: '5', bank_statement_id: 7, position_type: 'transfer', amount: 100, direction: 'out', account_id: 1, counter_account_id: 2, event_id: null, cost_centres: [] }),
+    bankPosition({ id: 5, row_key: '5-counter', bank_statement_id: 7, position_type: 'transfer', amount: 100, direction: 'in', account_id: 2, counter_account_id: 1, event_id: null, cost_centres: [] }),
+  ]
+
+  it('leaves transfers between accounts in view out of inflow and outflow', () => {
+    const summary = summarizeBankStatementPositions(transferRows())
+
+    expect(summary.inflowTotal).toBe(0)
+    expect(summary.outflowTotal).toBe(0)
+    expect(summary.positionCount).toBe(1)
+    expect(summary.statementCount).toBe(1)
+    expect(summary.eventRevenueTotal).toBe(0)
+  })
+
+  it('counts a transfer leaving the selected accounts as outflow', () => {
+    const giroOnly = transferRows().filter(row => row.account_id === 1)
+    const summary = summarizeBankStatementPositions(giroOnly, [1])
+
+    expect(summary.outflowTotal).toBe(100)
+    expect(summary.inflowTotal).toBe(0)
+  })
+
+  it('does not count the other account\'s statement for the receiving side', () => {
+    const savingsOnly = transferRows().filter(row => row.account_id === 2)
+    const summary = summarizeBankStatementPositions(savingsOnly, [2])
+
+    expect(summary.inflowTotal).toBe(100)
+    expect(summary.statementCount).toBe(0)
   })
 })
 

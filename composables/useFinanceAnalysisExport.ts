@@ -46,6 +46,7 @@ export interface FinanceAnalysisExportContext {
   costCentres: () => CostCentreRow[]
   selectedCostCentre: () => CostCentreRow | null
   includeChildCostCentres: () => boolean
+  accountIds: () => number[]
 }
 
 function addOneDay(dateString: string) {
@@ -206,6 +207,7 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
           invoiceDateField: context.invoiceDateField(),
           costCentreId: context.selectedCostCentre()?.id ?? null,
           includeChildCostCentres: context.selectedCostCentre() ? context.includeChildCostCentres() : false,
+          accountIds: context.accountIds(),
           includeComparison: context.includeComparison(),
           annualClosing: exportIncludesAnnualClosing.value,
           compareToBudget: exportIncludesBudgetComparison.value,

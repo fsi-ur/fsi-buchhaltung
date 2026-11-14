@@ -15,6 +15,7 @@ export interface FinanceAnalysisPdfExportPayload {
   invoiceDateField: FinanceAnalysisInvoiceDateField
   costCentreId: number | null
   includeChildCostCentres: boolean
+  accountIds: number[]
   includeComparison: boolean
   annualClosing: boolean
   compareToBudget: boolean

@@ -69,6 +69,8 @@ export interface AppointmentOccurrenceOverride {
   location: string | null
   starts_at: string | null
   ends_at: string | null
+  /** This date's deviation from the series' website setting; null = like the series. */
+  website_published: boolean | null
 }
 
 export interface AppointmentResponseRow {
@@ -137,10 +139,13 @@ export interface CalendarEntry {
   eventTab: string | null
 }
 
-/** Whether a series appears on the public website (GET /api/public/appointments). Applies to every occurrence. */
+/**
+ * Whether a series appears on the public website (GET /api/public/appointments). Applies to every
+ * occurrence unless a single date deviates (see AppointmentOccurrenceOverride.website_published).
+ */
 export interface AppointmentWebsiteSettings {
   published: boolean
-  /** Wall clock in the app time zone; null = visible as soon as published. */
+  /** Wall clock in the app time zone; null = visible as soon as published. Also gates single published dates. */
   visible_from: string | null
 }
 

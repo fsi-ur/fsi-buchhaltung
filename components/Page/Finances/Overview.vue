@@ -30,6 +30,7 @@ import ReimbursementListPanel from './Reimbursement/ListPanel.vue'
 import CashCountListPanel from './CashCount/ListPanel.vue'
 import BudgetListPanel from './Budget/ListPanel.vue'
 import BankStatementListPanel from './BankStatement/ListPanel.vue'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 
 type FinancesTab = 'receipts' | 'invoices' | 'reimbursements' | 'cashCounts' | 'budgets' | 'bankStatements'
 
@@ -40,6 +41,7 @@ defineEmits<{
 const { t } = useI18n()
 const { hasPermission } = useAuth()
 const { pageMeta, setPage } = usePage()
+const financeAccounts = useFinanceAccounts()
 
 const currentTab = useState<FinancesTab>('finances-overview-current-tab', () => 'receipts')
 
@@ -49,7 +51,8 @@ const tabs = computed(() => {
     { key: 'invoices', label: t('pages.invoices'), show: hasPermission('invoices.view') },
     { key: 'cashCounts', label: t('pages.cashCounts'), show: hasPermission('cash_counts.view') },
     { key: 'reimbursements', label: t('pages.reimbursements'), show: hasPermission('reimbursements.view') },
-    { key: 'bankStatements', label: t('pages.bankStatements'), show: hasPermission('bank_statements.view') },
+    // Hidden only when there never was an account; with archived ones the old statements stay viewable.
+    { key: 'bankStatements', label: t('pages.bankStatements'), show: hasPermission('bank_statements.view') && !(financeAccounts.loaded.value && !financeAccounts.bankVisible.value) },
     { key: 'budgets', label: t('pages.budgets'), show: hasPermission('budgets.view') },
   ] as const
 

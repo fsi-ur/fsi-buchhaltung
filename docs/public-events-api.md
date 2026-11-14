@@ -79,7 +79,10 @@ window longer than **10 years** (3660 days) is rejected with `400`. A `from` in 
 adds past dates without cutting off the coming year. `limit` (default 100) applies as usual.
 
 One entry per **occurrence**; a weekly meeting appears once per week. Publishing applies to the whole
-series and has an optional "Sichtbar ab" moment like events.
+series and has an optional "Sichtbar ab" moment like events. A single date of a series can deviate
+(editor → „Nur dieser Termin“): it can be published on its own while the rest of the series stays
+internal, or hidden while the rest is published. Only the published dates are returned; the series'
+"Sichtbar ab" applies to them too.
 
 ```json
 {

@@ -152,6 +152,22 @@ export async function createCostCentre(options: { code?: string, name?: string }
   return insert('INSERT INTO cost_centres (code, name) VALUES (?, ?)', [code, options.name ?? code])
 }
 
+/** An own account (bank by default, with a valid IBAN); bank statements need one. */
+export async function createFinanceAccount(options: {
+  name?: string
+  type?: 'bank' | 'other'
+  iban?: string | null
+  isDefault?: boolean
+  archived?: boolean
+} = {}) {
+  const type = options.type ?? 'bank'
+  const iban = options.iban !== undefined ? options.iban : (type === 'bank' ? 'DE89370400440532013000' : null)
+  return insert(
+    `INSERT INTO finance_accounts (name, account_type, iban, is_default, archived_at) VALUES (?, ?, ?, ?, ${options.archived ? 'CURRENT_TIMESTAMP' : 'NULL'})`,
+    [options.name ?? unique('Konto'), type, iban, options.isDefault ? 1 : 0],
+  )
+}
+
 export async function createCompany(options: { name?: string } = {}) {
   return insert('INSERT INTO companies (name) VALUES (?)', [options.name ?? unique('Firma')])
 }

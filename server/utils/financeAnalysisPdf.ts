@@ -100,6 +100,8 @@ const LIQUIDITY_TYPE_LABELS: Record<FinanceLiquidityRow['type'], string> = {
   bankReceipt: 'Bankabbuchung (Beleg)',
   bankInvoice: 'Bankeingang (Rechnung)',
   bankEvent: 'Kontoauszug (Veranstaltung)',
+  bankTransfer: 'Umbuchung',
+  bankDifference: 'Kontodifferenz',
   bankStatementCheckpoint: 'Kontoauszug geprüft',
   cashCountRegister: 'Kassenzählung',
   cashCountRevenue: 'Kasseneinnahmen',
@@ -358,7 +360,7 @@ function buildActualOwnAmountsByCostCentreId(analysis: FinanceAnalysisData) {
     })
   })
 
-  allocateBankEventRevenue(analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
+  allocateBankEventRevenue(analysis.bankEventPositions ?? analysis.bankStatementPositions, (costCentreId, income) => add(costCentreId, 0, income))
   allocateCashDiscrepancies(analysis.cashDiscrepancies, add)
 
   return amounts
@@ -519,6 +521,8 @@ const BANK_POSITION_TYPE_LABELS: Record<FinanceAnalysisBankStatementPosition['po
   receipt: 'Beleg',
   invoice: 'Rechnung',
   event: 'Veranstaltung',
+  transfer: 'Umbuchung',
+  reimbursement: 'Erstattung',
 }
 
 interface BankStatementOverviewAggregate {
@@ -604,6 +608,9 @@ function liquidityRowLabel(row: FinanceLiquidityRow) {
 
   if (row.type === 'opening' || row.type === 'closing') return typeLabel
   if (row.type === 'bankStatementCheckpoint') return row.label ? `${typeLabel}: ${row.label}` : typeLabel
+  if (row.type === 'bankTransfer') {
+    return row.label ? `${typeLabel} ${row.delta_amount < 0 ? 'an' : 'von'} ${row.label}` : typeLabel
+  }
 
   // Reimbursement labels start with the receipt number, which the export already shows as reference.
   let label = row.label
@@ -1659,7 +1666,9 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
         cells: [
           formatDate(item.date),
           {
-            text: `${item.event_id ? item.event_name : 'Kassenbestandsprüfung'} (${item.registers.length === 1 ? 'Kasse' : 'Kassen'} ${item.registers.map(register => register.register_number).join(', ')})`,
+            text: item.bank
+              ? `Kontodifferenz: ${item.bank.kind === 'transfer' ? `Umbuchung ${item.bank.counterparty}` : `Erstattung an ${item.bank.counterparty}`} (${item.bank.account_name}, Auszug ${item.bank.statement_number})`
+              : `${item.event_id ? item.event_name : 'Kassenbestandsprüfung'} (${item.registers.length === 1 ? 'Kasse' : 'Kassen'} ${item.registers.map(register => register.register_number).join(', ')})`,
             // Several registers are netted — show what the net amount is made of.
             subLines: [
               CASH_DISCREPANCY_STATUS_LABELS[item.status],
@@ -1688,16 +1697,18 @@ export function buildFinanceAnalysisPdf(options: FinanceAnalysisPdfOptions) {
       toc: toc('Detaillisten'),
       metaLine: `${positions.length} Positionen aus ${analysis.summary.bank_statement_count} Kontoauszügen`,
       columns: [
-        { label: 'Datum', width: 62 },
-        { label: 'Auszug', width: 60 },
-        { label: 'Art', width: 70 },
-        { label: 'Referenz', width: 90 },
-        { label: 'Beteiligte', width: 128 },
-        { label: 'Betrag', width: 90, align: 'right' },
+        { label: 'Datum', width: 58 },
+        { label: 'Konto', width: 70 },
+        { label: 'Auszug', width: 48 },
+        { label: 'Art', width: 62 },
+        { label: 'Referenz', width: 76 },
+        { label: 'Beteiligte', width: 102 },
+        { label: 'Betrag', width: 84, align: 'right' },
       ],
       rows: positions.map(position => ({
         cells: [
           formatDate(position.position_date),
+          position.account_name || '-',
           position.statement_number || '-',
           BANK_POSITION_TYPE_LABELS[position.position_type],
           position.reference || '-',

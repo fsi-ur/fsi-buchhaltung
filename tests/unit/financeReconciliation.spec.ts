@@ -13,6 +13,7 @@ function row(type: FinanceLiquidityRow['type'], date: string, totalBalance: numb
     label: '',
     reference: null,
     register_number: null,
+    account_name: null,
     delta_amount: 0,
     bank_balance: totalBalance,
     cash_balance: 0,

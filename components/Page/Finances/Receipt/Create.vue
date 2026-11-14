@@ -4,7 +4,7 @@
     :can-view-files="canViewFiles"
     :model-value="file"
     :existing-file="existingFile"
-    :can-edit="canEdit && !statusLockedFromAssociation"
+    :can-edit="canEdit && !fieldsLocked"
     @open-menu="$emit('openMenu')"
     @update:model-value="file = $event"
     @remove-existing="onRemoveFile"
@@ -14,7 +14,7 @@
     </div>
 
     <p
-      v-if="statusLockedFromAssociation && canEdit"
+      v-if="fieldsLocked && canEdit"
       class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900"
     >
       {{ t('receipt.lockedHint') }}
@@ -23,7 +23,7 @@
     <ReceiptForm
       v-model="form"
       :has-file="!!file || (!!existingFile && !removeExistingFile)"
-      :disabled="!canEdit || statusLockedFromAssociation"
+      :disabled="!canEdit || fieldsLocked"
       :status-disabled="statusLocked"
       :can-edit-company="canEditCompany"
       :external-validation-errors="externalValidationErrors"
@@ -80,6 +80,7 @@ const file = ref<File | null>(null)
 const existingFile = ref<{ id: number, url: string, name: string, mime_type: string, size: number } | null>(null)
 const removeExistingFile = ref(false)
 const statusLockedFromAssociation = ref(false)
+const fieldsLocked = ref(false)
 const reimbursementId = ref<number | null>(null)
 const bankStatementId = ref<number | null>(null)
 const isSaving = ref(false)
@@ -103,6 +104,17 @@ const reimbursementDraftContext = computed<Partial<CreateReimbursementBody> | nu
 })
 
 const statusLockedByDraft = computed(() => reimbursementDraftContext.value !== null)
+
+/**
+ * Opened from a reimbursement: the server lifts the booking freeze (SEC-16) for receipts of that
+ * reimbursement when the user may edit it — a booked one only after it was unlocked (SEC-22).
+ */
+const viaReimbursementContext = computed(() => {
+  if (returnTarget.value.page !== 'ReimbursementCreate') return null
+  const reimbursementId = Number(returnTarget.value.meta?.reimbursementId || 0)
+  if (!reimbursementId) return null
+  return { reimbursementId, unlock: returnTarget.value.meta?.recordUnlocked === true }
+})
 const statusLocked = computed(() => statusLockedFromAssociation.value || statusLockedByDraft.value)
 const fromBankStatement = computed(() => returnTarget.value.page === 'BankStatementCreate')
 const hasReceiptFile = computed(() => Boolean(file.value) || (!!existingFile.value && !removeExistingFile.value))
@@ -128,7 +140,11 @@ onMounted(async () => {
 
   isEditMode.value = true
 
-  const res = await apiFetch<GetReceiptResponse>(`/api/receipts/${receiptId.value}`, { method: 'GET' })
+  const via = viaReimbursementContext.value
+  const res = await apiFetch<GetReceiptResponse>(`/api/receipts/${receiptId.value}`, {
+    method: 'GET',
+    query: via ? { viaReimbursement: via.reimbursementId, unlock: via.unlock ? 'true' : undefined } : undefined,
+  })
 
   if (!res.ok) {
     isEditMode.value = false
@@ -144,6 +160,7 @@ onMounted(async () => {
     positions: res.receipt.positions,
   }
   statusLockedFromAssociation.value = Boolean(res.statusLocked)
+  fieldsLocked.value = Boolean(res.fieldsLocked)
   reimbursementId.value = res.reimbursementId
   bankStatementId.value = res.bankStatementId
 
@@ -217,6 +234,11 @@ async function submit() {
     let createdReceiptId: number | null = null
     if (isEditMode.value) {
       body.append('removeExistingFile', String(removeExistingFile.value))
+      const via = viaReimbursementContext.value
+      if (via) {
+        body.append('viaReimbursement', String(via.reimbursementId))
+        if (via.unlock) body.append('unlock', 'true')
+      }
       const updateRes = await apiFetch<{ ok: boolean, error?: string }>(`/api/receipts/${receiptId.value}`, {
         method: 'PUT',
         body,

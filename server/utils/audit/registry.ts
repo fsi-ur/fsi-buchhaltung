@@ -47,6 +47,7 @@ const ASSOCIATION_DOCUMENT_REF: AuditReferenceDefinition = { table: 'association
 const WIKI_ARTICLE_REF: AuditReferenceDefinition = { table: 'wiki_articles', labelColumns: ['title'] }
 const WIKI_SPACE_REF: AuditReferenceDefinition = { table: 'wiki_spaces', labelColumns: ['title'] }
 const ASSOCIATION_PROFILE_REF: AuditReferenceDefinition = { table: 'association_profiles', labelColumns: ['name'] }
+const FINANCE_ACCOUNT_REF: AuditReferenceDefinition = { table: 'finance_accounts', labelColumns: ['name'] }
 
 export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
   // --- finances ---------------------------------------------------------
@@ -89,7 +90,7 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     labelKey: 'audit.entities.reimbursement',
     domain: 'finances',
     viewPermissions: ['reimbursements.view'],
-    references: { paid_by: MEMBER_REF, checked_by: MEMBER_REF, disbursed_by: MEMBER_REF },
+    references: { paid_by: MEMBER_REF, checked_by: MEMBER_REF, disbursed_by: MEMBER_REF, paid_from_account_id: FINANCE_ACCOUNT_REF },
     describe: state => state.account_holder || null,
     openPage: { page: 'ReimbursementCreate', metaKey: 'reimbursementId' },
   },
@@ -145,7 +146,7 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     labelKey: 'audit.entities.bankStatement',
     domain: 'finances',
     viewPermissions: ['bank_statements.view'],
-    references: { checked_by: MEMBER_REF },
+    references: { checked_by: MEMBER_REF, account_id: FINANCE_ACCOUNT_REF },
     describe: state => state.statement_number ? `#${state.statement_number}` : null,
     openPage: { page: 'BankStatementCreate', metaKey: 'bankStatementId' },
   },
@@ -155,7 +156,28 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     domain: 'finances',
     viewPermissions: ['bank_statements.view'],
     parent: { table: 'bank_statements', foreignKey: 'bank_statement_id' },
-    references: { receipt_id: RECEIPT_REF, invoice_id: INVOICE_REF, event_id: EVENT_REF },
+    references: {
+      receipt_id: RECEIPT_REF,
+      invoice_id: INVOICE_REF,
+      event_id: EVENT_REF,
+      counter_account_id: FINANCE_ACCOUNT_REF,
+      reimbursement_id: { table: 'reimbursements', labelColumns: ['account_holder'] },
+    },
+  },
+  bank_discrepancy_bookings: {
+    table: 'bank_discrepancy_bookings',
+    labelKey: 'audit.entities.bankDiscrepancyBooking',
+    domain: 'finances',
+    viewPermissions: ['bank_statements.view'],
+    parent: { table: 'bank_statement_positions', foreignKey: 'bank_statement_position_id' },
+    references: { sphere_id: SPHERE_REF, cost_centre_id: COST_CENTRE_REF, confirmed_by: USER_REF },
+  },
+  finance_accounts: {
+    table: 'finance_accounts',
+    labelKey: 'audit.entities.financeAccount',
+    domain: 'finances',
+    viewPermissions: ['settings.association.manage', 'bank_statements.view'],
+    describe: state => state.name ?? null,
   },
   companies: {
     table: 'companies',

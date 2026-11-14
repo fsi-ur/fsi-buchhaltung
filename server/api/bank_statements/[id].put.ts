@@ -11,6 +11,8 @@ import {
   validateUploadedFile,
 } from '~/server/utils/files'
 import {
+  BANK_POSITION_COLUMNS,
+  bankPositionValues,
   normalizeBankStatementBody,
   validateBankStatementBody,
   validateBankStatementRelations,
@@ -77,8 +79,8 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
       if (relationError) return { ok: false, error: relationError }
 
       await query(
-        `UPDATE bank_statements SET statement_number = ?, checked_by = ?, statement_date = ? WHERE id = ?`,
-        [body.statement_number, body.checked_by, body.statement_date, id],
+        `UPDATE bank_statements SET account_id = ?, statement_number = ?, checked_by = ?, statement_date = ? WHERE id = ?`,
+        [body.account_id, body.statement_number, body.checked_by, body.statement_date, id],
         conn,
       )
 
@@ -110,18 +112,9 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
 
         await query(
           `UPDATE bank_statement_positions
-           SET position_type = ?, position_date = ?, receipt_id = ?, invoice_id = ?, event_id = ?, amount = ?, notes = ?
+           SET ${BANK_POSITION_COLUMNS.map(column => `${column} = ?`).join(', ')}
            WHERE id = ?`,
-          [
-            position.position_type,
-            position.position_date,
-            position.receipt_id,
-            position.invoice_id,
-            position.event_id,
-            position.amount,
-            position.notes,
-            position.id,
-          ],
+          [...bankPositionValues(position), position.id],
           conn,
         )
       }
@@ -131,18 +124,9 @@ export default defineEventHandler(async (event): Promise<UpdateBankStatementResp
 
         await query(
           `INSERT INTO bank_statement_positions
-            (bank_statement_id, position_type, position_date, receipt_id, invoice_id, event_id, amount, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            position.position_type,
-            position.position_date,
-            position.receipt_id,
-            position.invoice_id,
-            position.event_id,
-            position.amount,
-            position.notes,
-          ],
+            (bank_statement_id, ${BANK_POSITION_COLUMNS.join(', ')})
+           VALUES (?, ${BANK_POSITION_COLUMNS.map(() => '?').join(', ')})`,
+          [id, ...bankPositionValues(position)],
           conn,
         )
       }

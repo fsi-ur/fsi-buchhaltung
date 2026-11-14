@@ -11,6 +11,8 @@ interface ReceiptAssignment {
 interface GetAssignmentsSuccess {
   ok: true
   assignments: ReceiptAssignment[]
+  /** Receipts in a bank statement stay frozen even when opened from their reimbursement (SEC-16). */
+  bankStatementReceiptIds: number[]
 }
 
 interface GetAssignmentsError {
@@ -31,13 +33,17 @@ export default defineEventHandler(async (event): Promise<GetAssignmentsResponse>
       FROM reimbursement_positions
       `
     )
+    const bankStatementRows: Array<{ receipt_id: number }> = await query(
+      `SELECT DISTINCT receipt_id FROM bank_statement_positions WHERE receipt_id IS NOT NULL`
+    )
 
     return {
       ok: true,
       assignments: rows.map(row => ({
         receipt_id: Number(row.receipt_id),
         reimbursement_id: Number(row.reimbursement_id),
-      }))
+      })),
+      bankStatementReceiptIds: bankStatementRows.map(row => Number(row.receipt_id)),
     }
   } catch (err: any) {
     return internalError('Failed to load reimbursement receipt assignments', err)

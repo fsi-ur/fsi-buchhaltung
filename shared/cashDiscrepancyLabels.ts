@@ -28,6 +28,8 @@ export function cashDiscrepancyStatusLabel(item: FinanceAnalysisCashDiscrepancyI
 }
 
 export function cashDiscrepancyRegistersLabel(item: FinanceAnalysisCashDiscrepancyItem, t: Translate) {
+  // A bank difference: the account and the statement that confirmed it.
+  if (item.bank) return t('cashCount.discrepancies.bankStatementRef', { account: item.bank.account_name, number: item.bank.statement_number })
   const numbers = item.registers.map(register => register.register_number).join(', ')
   return item.registers.length === 1
     ? t('cashCount.discrepancies.register', { number: numbers })
@@ -36,5 +38,11 @@ export function cashDiscrepancyRegistersLabel(item: FinanceAnalysisCashDiscrepan
 
 /** Register checks have no event — name them for what they are. */
 export function cashDiscrepancySourceLabel(item: FinanceAnalysisCashDiscrepancyItem, t: Translate) {
+  if (item.bank) {
+    return t(
+      item.bank.kind === 'transfer' ? 'cashCount.discrepancies.bankTransfer' : 'cashCount.discrepancies.bankReimbursement',
+      { counterparty: item.bank.counterparty },
+    )
+  }
   return item.event_id ? item.event_name : t('cashCount.registerCheck')
 }

@@ -28,6 +28,7 @@
       :disabled="!canEdit"
       :saving="isSaving"
       :opening-balance="openingBalance"
+      :open-items="openItems"
       :can-create-receipt="canCreateReceipt"
       :can-create-invoice="canCreateInvoice"
       :can-edit-receipt="canEditReceipt"
@@ -36,6 +37,15 @@
       :can-view-invoice="canViewInvoice"
       @submit="submit"
       @cancel="cancel"
+    />
+
+    <!-- Differences of confirmed transfers/reimbursements, as saved (like cash differences of a count) -->
+    <BankStatementDiscrepancyPanel
+      v-if="isEditMode && bankStatementId"
+      class="mt-6"
+      :bank-statement-id="bankStatementId"
+      :can-edit="!pageMeta?.forceReadonly && hasPermission('bank_statements.edit') && financeAccounts.bankEnabled.value"
+      :unlock="recordLocked && unlocked"
     />
   </PageFinancesEditorLayout>
 </template>
@@ -47,8 +57,11 @@ import { useReturnTarget } from '~/composables/useReturnTarget'
 import { usePage } from '~/composables/usePage'
 import { useAuth } from '~/composables/useAuth'
 import BankStatementForm from './Form.vue'
-import type { CreateBankStatementBody } from '~/types/bankStatement'
+import BankStatementDiscrepancyPanel from './DiscrepancyPanel.vue'
+import type { BankOpenItem, CreateBankStatementBody, CreateBankStatementPositionBody } from '~/types/bankStatement'
 import type { GetBankStatementResponse } from '~/server/api/bank_statements/[id].get'
+import type { BalancePreviewResponse } from '~/server/api/bank_statements/balance-preview.get'
+import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
 const { nowLocal } = useAppTimeZone()
 
 defineEmits<{
@@ -65,7 +78,9 @@ const { goToReturnTarget } = useReturnTarget('BankStatementList')
 const recordLocked = ref(false)
 const unlocked = ref(false)
 const lockedForUser = computed(() => recordLocked.value && !(unlocked.value && hasPermission('bank_statements.unlock')))
-const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('bank_statements.edit') && !lockedForUser.value)
+// Without an active account bank records can only be viewed (the server refuses changes as well).
+const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('bank_statements.edit') && !lockedForUser.value
+  && !(financeAccounts.loaded.value && !financeAccounts.bankEnabled.value))
 const canViewFiles = computed(() => hasPermission(['files.view', 'bank_statements.view']) && (canEdit.value || existingFile.value !== null))
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
 const canCreateInvoice = computed(() => hasPermission('invoices.edit'))
@@ -81,29 +96,82 @@ const existingFile = ref<{ id: number, url: string, name: string, mime_type: str
 const removeExistingFile = ref(false)
 const isSaving = ref(false)
 const openingBalance = ref(0)
+const openItems = ref<BankOpenItem[]>([])
+const financeAccounts = useFinanceAccounts()
 
 const form = ref<CreateBankStatementBody>({
+  account_id: 0,
   statement_number: '',
   checked_by: 0,
   statement_date: nowLocal().slice(0, 16),
-  positions: [{ position_type: 'receipt', position_date: '', receipt_id: null, invoice_id: null, event_id: null, amount: 0, notes: null }],
+  positions: [{ position_type: 'receipt', position_date: '', receipt_id: null, invoice_id: null, event_id: null, counter_account_id: null, amount: 0, notes: null }],
 })
+
+function mapPosition(p: Partial<CreateBankStatementPositionBody>): CreateBankStatementPositionBody {
+  return {
+    id: p.id,
+    position_type: p.position_type ?? 'receipt',
+    position_date: p.position_date || '',
+    receipt_id: p.receipt_id ?? null,
+    invoice_id: p.invoice_id ?? null,
+    event_id: p.event_id ?? null,
+    counter_account_id: p.counter_account_id ?? null,
+    linked_position_id: p.linked_position_id ?? null,
+    reimbursement_id: p.reimbursement_id ?? null,
+    amount: Number(p.amount || 0),
+    notes: p.notes ?? null,
+    link: p.link ?? null,
+  }
+}
+
+/**
+ * Opening balance and open items depend on the account and date — recomputed by the server
+ * whenever either changes, for new and edited statements alike.
+ */
+let previewSeq = 0
+async function refreshBalancePreview() {
+  const seq = ++previewSeq
+  if (!form.value.account_id || !form.value.statement_date) {
+    openingBalance.value = 0
+    openItems.value = []
+    return
+  }
+  try {
+    const res = await apiFetch<BalancePreviewResponse>('/api/bank_statements/balance-preview', {
+      method: 'GET',
+      query: {
+        accountId: form.value.account_id,
+        statementDate: form.value.statement_date,
+        ...(bankStatementId.value ? { statementId: bankStatementId.value } : {}),
+      },
+    })
+    if (seq !== previewSeq || !res.ok) return
+    openingBalance.value = res.opening_balance
+    openItems.value = res.open_items
+  } catch {
+    // Keep the last preview.
+  }
+}
+
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+watch(() => [form.value.account_id, form.value.statement_date], () => {
+  if (previewTimer) clearTimeout(previewTimer)
+  previewTimer = setTimeout(refreshBalancePreview, 250)
+})
+
+async function preselectAccount() {
+  if (form.value.account_id) return
+  await financeAccounts.ensureLoaded()
+  if (!form.value.account_id) form.value.account_id = financeAccounts.preselectedAccountId.value ?? 0
+}
 
 function applyDraft(draft: Partial<CreateBankStatementBody>) {
   form.value = {
+    account_id: Number(draft.account_id || 0),
     statement_number: draft.statement_number || '',
     checked_by: Number(draft.checked_by || 0),
     statement_date: draft.statement_date || nowLocal().slice(0, 16),
-    positions: Array.isArray(draft.positions) ? draft.positions.map(p => ({
-      id: p.id,
-      position_type: p.position_type,
-      position_date: p.position_date || '',
-      receipt_id: p.receipt_id ?? null,
-      invoice_id: p.invoice_id ?? null,
-      event_id: p.event_id ?? null,
-      amount: Number(p.amount || 0),
-      notes: p.notes ?? null,
-    })) : [],
+    positions: Array.isArray(draft.positions) ? draft.positions.map(mapPosition) : [],
   }
 }
 
@@ -138,7 +206,6 @@ onMounted(async () => {
       if (res.ok) {
         recordLocked.value = Boolean(res.locked)
         unlocked.value = pageMeta.value?.recordUnlocked === true
-        openingBalance.value = res.bankStatement.opening_balance
         if (res.file && !removeExistingFile.value) {
           existingFile.value = {
             id: res.file.id,
@@ -150,9 +217,9 @@ onMounted(async () => {
         }
       }
     } else {
-      const balanceRes = await apiFetch<ApiResponse<'/api/bank_statements/current-balance'>>('/api/bank_statements/current-balance', { method: 'GET' })
-      if (balanceRes.ok) openingBalance.value = balanceRes.balance
+      await preselectAccount()
     }
+    await refreshBalancePreview()
 
     const positionIndex = Number(pageMeta.value?.bankStatementPositionIndex ?? -1)
     const newReceiptId = pageMeta.value?.newReceiptId ? Number(pageMeta.value.newReceiptId) : null
@@ -195,19 +262,11 @@ onMounted(async () => {
 
     recordLocked.value = Boolean(res.locked)
     form.value = {
+      account_id: res.bankStatement.account_id,
       statement_number: res.bankStatement.statement_number,
       checked_by: res.bankStatement.checked_by,
       statement_date: res.bankStatement.statement_date,
-      positions: res.positions.map(p => ({
-        id: p.id,
-        position_type: p.position_type,
-        position_date: p.position_date,
-        receipt_id: p.receipt_id,
-        invoice_id: p.invoice_id,
-        event_id: p.event_id,
-        amount: p.amount,
-        notes: p.notes,
-      })),
+      positions: res.positions.map(mapPosition),
     }
 
     openingBalance.value = res.bankStatement.opening_balance
@@ -222,8 +281,8 @@ onMounted(async () => {
       }
     }
   } else {
-    const balanceRes = await apiFetch<ApiResponse<'/api/bank_statements/current-balance'>>('/api/bank_statements/current-balance', { method: 'GET' })
-    if (balanceRes.ok) openingBalance.value = balanceRes.balance
+    await preselectAccount()
+    await refreshBalancePreview()
   }
 })
 

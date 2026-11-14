@@ -102,25 +102,7 @@
       </div>
     </CommonCard>
 
-    <CommonCard :title="t('settings.association.bankingTitle')">
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div class="field">
-          <label>{{ t('reimbursement.iban') }}</label>
-          <input v-model="form.iban" class="input" />
-        </div>
-
-        <div class="field">
-          <label>{{ t('reimbursement.bic') }}</label>
-          <input v-model="form.bic" class="input" />
-        </div>
-      </div>
-
-      <div class="field">
-        <label>{{ t('reimbursement.bankname') }}</label>
-        <input v-model="form.bankname" class="input" />
-      </div>
-    </CommonCard>
+    <PageSettingsFinanceAccounts />
 
     <CommonCard :title="t('settings.association.responsibleTitle')">
       <div class="field">
@@ -249,9 +231,6 @@ const form = reactive<SaveAssociationProfileBody>({
   phone: null,
   website: null,
   vat_id: null,
-  iban: null,
-  bic: null,
-  bankname: null,
   register_number: null,
   register_court: null,
   responsible_member_ids: [],
@@ -386,9 +365,6 @@ function applyProfile(profile: AssociationProfileRow | null) {
     phone: profile?.phone ?? null,
     website: profile?.website ?? null,
     vat_id: profile?.vat_id ?? null,
-    iban: profile?.iban ?? null,
-    bic: profile?.bic ?? null,
-    bankname: profile?.bankname ?? null,
     register_number: profile?.register_number ?? null,
     register_court: profile?.register_court ?? null,
     responsible_member_ids: profile?.responsible_member_ids ?? [],
@@ -481,9 +457,6 @@ async function save() {
       phone: normalizeOptionalString(form.phone),
       website: normalizeOptionalString(form.website),
       vat_id: normalizeOptionalString(form.vat_id),
-      iban: normalizeOptionalString(form.iban),
-      bic: normalizeOptionalString(form.bic),
-      bankname: normalizeOptionalString(form.bankname),
       register_number: normalizeOptionalString(form.register_number),
       register_court: normalizeOptionalString(form.register_court),
     } satisfies SaveAssociationProfileBody))

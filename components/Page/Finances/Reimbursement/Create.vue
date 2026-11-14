@@ -30,6 +30,7 @@
       :can-edit-receipt="canEditReceipt"
       :can-view-receipt="canViewReceipt"
       :external-validation-errors="externalValidationErrors"
+      :bank-confirmation="bankConfirmation"
       :saving="isSaving"
       @submit="submit"
       @cancel="cancel"
@@ -43,7 +44,7 @@ import { useToast } from '~/composables/useToast'
 import { useReturnTarget } from '~/composables/useReturnTarget'
 import ReimbursementForm from './Form.vue'
 import { usePage } from '~/composables/usePage'
-import type { CreateReimbursementBody } from '~/types/reimbursement'
+import type { CreateReimbursementBody, ReimbursementBankConfirmation } from '~/types/reimbursement'
 import type { GetReimbursementResponse } from '~/server/api/reimbursements/[id].get'
 import { useAuth } from '~/composables/useAuth'
 import type { ReceiptRow } from '~/types/receipt'
@@ -64,7 +65,8 @@ const unlocked = ref(false)
 const lockedForUser = computed(() => recordLocked.value && !(unlocked.value && hasPermission('reimbursements.unlock')))
 const canEdit = computed(() => !pageMeta.value?.forceReadonly && hasPermission('reimbursements.edit') && !lockedForUser.value)
 const canCreateReceipt = computed(() => hasPermission('receipts.edit'))
-const canEditReceipt = computed(() => !pageMeta.value?.forceReadonly && hasPermission('receipts.edit'))
+// Linked receipts are only editable from here while the reimbursement itself is editable (SEC-16).
+const canEditReceipt = computed(() => canEdit.value && hasPermission('receipts.edit'))
 const canViewReceipt = computed(() => hasPermission('receipts.view'))
 const canViewFiles = computed(() => hasPermission(['files.view', 'reimbursements.view']) && (canEdit.value || existingFile.value !== null))
 
@@ -75,6 +77,9 @@ const existingFile = ref<{ id: number, url: string, name: string, mime_type: str
 const removeExistingFile = ref(false)
 const receipts = ref<ReceiptRow[]>([])
 const isSaving = ref(false)
+
+/** Set once a bank statement confirmed the payout — shown read-only in the form. */
+const bankConfirmation = ref<ReimbursementBankConfirmation | null>(null)
 
 const form = ref<CreateReimbursementBody>({
   paid_by: 0,
@@ -89,6 +94,7 @@ const form = ref<CreateReimbursementBody>({
   checked_by: null,
   disbursed_at: null,
   disbursed_by: null,
+  paid_from_account_id: null,
   positions: [],
 })
 
@@ -141,6 +147,7 @@ function applyDraft(draft: Partial<CreateReimbursementBody>) {
     checked_by: draft.checked_by ?? null,
     disbursed_at: draft.disbursed_at ?? null,
     disbursed_by: draft.disbursed_by ?? null,
+    paid_from_account_id: draft.paid_from_account_id ?? null,
     positions: Array.isArray(draft.positions) ? draft.positions.map(position => ({
       receipt_id: Number(position.receipt_id || position.receipt?.id || 0),
       receipt: position.receipt,
@@ -165,6 +172,7 @@ onMounted(async () => {
       if (res.ok) {
         recordLocked.value = Boolean(res.locked)
         unlocked.value = pageMeta.value?.recordUnlocked === true
+        bankConfirmation.value = res.reimbursement.bank_confirmation ?? null
       }
       if (res.ok && res.file && !removeExistingFile.value) {
         existingFile.value = {
@@ -196,8 +204,10 @@ onMounted(async () => {
   }
 
   recordLocked.value = Boolean(res.locked)
+  bankConfirmation.value = res.reimbursement.bank_confirmation ?? null
+  const { bank_confirmation: _confirmation, ...reimbursement } = res.reimbursement
   form.value = {
-    ...res.reimbursement,
+    ...reimbursement,
     positions: res.reimbursement.positions.map(position => ({
       receipt_id: position.receipt.id,
       receipt: position.receipt,

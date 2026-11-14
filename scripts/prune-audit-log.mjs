@@ -18,6 +18,7 @@ const FINANCE_TABLES = [
   'cash_counts', 'cash_count_positions',
   'budgets', 'budget_cost_centre_lines',
   'bank_statements', 'bank_statement_positions',
+  'finance_accounts', 'bank_discrepancy_bookings',
 ]
 
 const BATCH_SIZE = 5000

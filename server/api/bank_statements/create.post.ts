@@ -5,6 +5,8 @@ import { requirePermission } from '~/server/utils/api/guards'
 import { readMultipart } from '~/server/utils/api/request'
 import { storeAndAttachUploadedFile, validateUploadedFile } from '~/server/utils/files'
 import {
+  BANK_POSITION_COLUMNS,
+  bankPositionValues,
   normalizeBankStatementBody,
   validateBankStatementBody,
   validateBankStatementRelations,
@@ -52,8 +54,8 @@ export default defineEventHandler(async (event): Promise<CreateBankStatementResp
       if (relationError) return { ok: false, error: relationError }
 
       const result: any = await query(
-        `INSERT INTO bank_statements (statement_number, checked_by, statement_date) VALUES (?, ?, ?)`,
-        [body.statement_number, body.checked_by, body.statement_date],
+        `INSERT INTO bank_statements (account_id, statement_number, checked_by, statement_date) VALUES (?, ?, ?, ?)`,
+        [body.account_id, body.statement_number, body.checked_by, body.statement_date],
         conn,
       )
 
@@ -62,18 +64,9 @@ export default defineEventHandler(async (event): Promise<CreateBankStatementResp
       for (const position of body.positions) {
         await query(
           `INSERT INTO bank_statement_positions
-            (bank_statement_id, position_type, position_date, receipt_id, invoice_id, event_id, amount, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            bankStatementId,
-            position.position_type,
-            position.position_date,
-            position.receipt_id,
-            position.invoice_id,
-            position.event_id,
-            position.amount,
-            position.notes,
-          ],
+            (bank_statement_id, ${BANK_POSITION_COLUMNS.join(', ')})
+           VALUES (?, ${BANK_POSITION_COLUMNS.map(() => '?').join(', ')})`,
+          [bankStatementId, ...bankPositionValues(position)],
           conn,
         )
       }

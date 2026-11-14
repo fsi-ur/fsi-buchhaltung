@@ -14,6 +14,10 @@
 
           <p class="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs text-base-500">
             <span class="tabular-nums">{{ formatDate(row.date) }}</span>
+            <template v-if="row.account_name">
+              <span class="text-base-300">·</span>
+              <span class="min-w-0 truncate">{{ row.account_name }}</span>
+            </template>
             <template v-if="row.reference">
               <span class="text-base-300">·</span>
               <span class="min-w-0 truncate">{{ row.reference }}</span>

@@ -5,7 +5,8 @@ import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
 import { getAttachedFile, getEntityIdsWithActiveFiles } from '~/server/utils/files'
-import type { Reimbursement, ReimbursementPosition, ReimbursementRow } from '~/types/reimbursement'
+import type { Reimbursement, ReimbursementBankConfirmation, ReimbursementPosition, ReimbursementRow } from '~/types/reimbursement'
+import { reimbursementTotalSql } from '~/server/utils/bankBalances'
 import { ReceiptStatus } from '~/types/receipt'
 import type { FileRow } from '~/types/file'
 import { internalError } from '~/server/utils/api/errors'
@@ -48,7 +49,8 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
         r.checked_by,
         r.checked_at,
         r.disbursed_by,
-        r.disbursed_at
+        r.disbursed_at,
+        r.paid_from_account_id
       FROM reimbursements r
       WHERE r.id = ?
       LIMIT 1
@@ -141,6 +143,8 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
         checked_at: reimbursement.checked_at ?? null,
         disbursed_by: reimbursement.disbursed_by != null ? Number(reimbursement.disbursed_by) : null,
         disbursed_at: reimbursement.disbursed_at ?? null,
+        paid_from_account_id: reimbursement.paid_from_account_id != null ? Number(reimbursement.paid_from_account_id) : null,
+        bank_confirmation: await loadBankConfirmation(id),
         positions: Array.from(map.values())
       },
       file: file ?? null
@@ -149,3 +153,28 @@ export default defineEventHandler(async (event): Promise<GetReimbursementRespons
     return internalError('An error occurred while fetching a reimbursement', err)
   }
 })
+
+async function loadBankConfirmation(reimbursementId: number): Promise<ReimbursementBankConfirmation | null> {
+  const [row] = await query<any[]>(
+    `SELECT bsp.id, bsp.bank_statement_id, bsp.position_date, bsp.amount, bs.statement_number, fa.name AS account_name,
+            ${reimbursementTotalSql('bsp.reimbursement_id')} AS total
+     FROM bank_statement_positions bsp
+     INNER JOIN bank_statements bs ON bs.id = bsp.bank_statement_id
+     LEFT JOIN finance_accounts fa ON fa.id = bs.account_id
+     WHERE bsp.reimbursement_id = ? LIMIT 1`,
+    [reimbursementId],
+  )
+  if (!row) return null
+  const amount = Number(row.amount ?? 0)
+  const expected = Number((-Number(row.total ?? 0)).toFixed(2))
+  return {
+    bank_statement_id: Number(row.bank_statement_id),
+    bank_statement_position_id: Number(row.id),
+    statement_number: String(row.statement_number || ''),
+    account_name: String(row.account_name || ''),
+    date: String(row.position_date).slice(0, 10),
+    amount,
+    expected_amount: expected,
+    difference: Number((amount - expected).toFixed(2)),
+  }
+}

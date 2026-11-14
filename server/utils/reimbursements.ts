@@ -4,6 +4,35 @@ import { MAX_RECORD_POSITIONS, TOO_MANY_POSITIONS } from '~/server/utils/api/lim
 import type { CreateReimbursementBody } from '~/types/reimbursement'
 import { ReceiptStatus } from '~/types/receipt'
 import { isLocalDate } from '~/shared/time'
+import { BANK_FEATURES_DISABLED, hasActiveFinanceAccount, validateBookableAccount } from '~/server/utils/financeAccounts'
+
+/**
+ * The own account a reimbursement is paid from. Cash reimbursements have none. A bank reimbursement
+ * needs bank features (an active account) unless it already was one, and an account once disbursed.
+ * An account archived since may be kept by the record that already uses it.
+ */
+export async function resolveReimbursementAccount(
+  reimbursement: CreateReimbursementBody,
+  conn: mariadb.PoolConnection,
+  existing: { cash: unknown, paid_from_account_id: unknown } | null = null,
+): Promise<{ ok: true, accountId: number | null } | { ok: false, error: string }> {
+  if (reimbursement.cash) return { ok: true, accountId: null }
+
+  const wasBank = existing !== null && !Number(existing.cash)
+  if (!wasBank && !await hasActiveFinanceAccount(conn)) {
+    return { ok: false, error: `${BANK_FEATURES_DISABLED} Erstattungen sind nur bar möglich.` }
+  }
+
+  const accountId = Number(reimbursement.paid_from_account_id) || null
+  if (!accountId) {
+    if (reimbursement.disbursed_at) return { ok: false, error: 'Bitte wähle das Konto aus, von dem die Erstattung überwiesen wurde.' }
+    return { ok: true, accountId: null }
+  }
+
+  const currentId = existing?.paid_from_account_id ? Number(existing.paid_from_account_id) : null
+  const error = await validateBookableAccount(accountId, conn, currentId)
+  return error ? { ok: false, error } : { ok: true, accountId }
+}
 
 export function statusFromReimbursement(reimbursement: CreateReimbursementBody): ReceiptStatus {
   if (reimbursement.disbursed_at) return ReceiptStatus.Paid
@@ -70,6 +99,32 @@ export async function releaseRemovedReimbursementReceipts(reimbursementId: numbe
     if (Number(link?.linked)) continue
     await query(`UPDATE receipts SET status = 'open' WHERE id = ? AND status = 'paid'`, [receiptId], conn)
   }
+}
+
+/**
+ * A bank reimbursement a statement confirmed stays a paid-out bank reimbursement from that account:
+ * the statement is the proof of the money flow. Receipts may still change (that only changes the
+ * expected amount and thus the bank difference).
+ */
+export async function validateConfirmedReimbursementChange(
+  reimbursementId: number,
+  updated: CreateReimbursementBody,
+  accountId: number | null,
+  conn: mariadb.PoolConnection,
+) {
+  const [confirmation] = await query<Array<{ account_id: number, statement_number: string }>>(
+    `SELECT bs.account_id, bs.statement_number
+     FROM bank_statement_positions bsp
+     INNER JOIN bank_statements bs ON bs.id = bsp.bank_statement_id
+     WHERE bsp.reimbursement_id = ? LIMIT 1`,
+    [reimbursementId],
+    conn,
+  )
+  if (!confirmation) return null
+  if (updated.cash || !updated.disbursed_at || accountId !== Number(confirmation.account_id)) {
+    return `Die Überweisung ist auf Kontoauszug Nr. ${confirmation.statement_number} bestätigt. Barauszahlung, Auszahlungsdatum und Konto lassen sich erst ändern, wenn die Bestätigung dort entfernt wurde.`
+  }
+  return null
 }
 
 /** The UNIQUE(receipt_id) key turns a concurrent double reimbursement into this error. */

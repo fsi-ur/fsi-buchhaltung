@@ -4,10 +4,11 @@ import { getDbConnection, query } from '~/server/utils/db'
 import { attachFileToEntity } from '~/server/utils/files'
 import { normalizeBankStatementBody, restoreUnlinkedRecordStatuses, validateBankStatementRelations } from '~/server/utils/bankStatements'
 import { resetDatabase } from '../helpers/db'
-import { createCompany, createMember, createReceipt, createUser, resetFixtureCounter } from '../helpers/fixtures'
+import { createCompany, createFinanceAccount, createMember, createReceipt, createUser, resetFixtureCounter } from '../helpers/fixtures'
 
 let conn: PoolConnection
 let memberId: number
+let accountId: number
 let userId: number
 
 async function withFile(receiptId: number) {
@@ -31,6 +32,7 @@ async function createInvoice(status: string) {
 
 function body(positions: Array<Record<string, unknown>>) {
   return normalizeBankStatementBody({
+    account_id: accountId,
     statement_number: 'KA-1',
     checked_by: memberId,
     statement_date: '2026-03-01 10:00:00',
@@ -45,6 +47,7 @@ describe('bank statement links respect record status', () => {
     resetFixtureCounter()
     userId = (await createUser()).id
     memberId = await createMember()
+    accountId = await createFinanceAccount({ isDefault: true })
     conn = await getDbConnection()
   })
   afterEach(() => conn.release())

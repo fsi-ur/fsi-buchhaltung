@@ -22,4 +22,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-website-appointments.mjs',
   'migrate-cash-discrepancy-bookings.mjs',
   'migrate-security-hardening.mjs',
+  'migrate-finance-accounts.mjs',
 ]

@@ -72,7 +72,7 @@
             :summary="analysis.summary"
             :reconciliation="analysis.reconciliation"
             :receipt-status-labels="filters.receiptStatusLabels.value"
-            @show-discrepancies="activeDetailTab = 'cashDiscrepancies'"
+            @show-discrepancies="showDiscrepancies"
           />
 
           <PageFinancesAnalysisComparisonPanel
@@ -82,6 +82,8 @@
           />
 
           <PageFinancesAnalysisDetailTables
+            ref="detailTablesRef"
+            class="scroll-mt-4"
             v-model:tab="activeDetailTab"
             :analysis="analysis"
             :loading="isLoading"
@@ -145,6 +147,14 @@ const isLoading = ref(false)
 const errorMessage = ref('')
 const isExportDialogOpen = ref(false)
 const activeDetailTab = ref<DetailTabKey>('receipts')
+const detailTablesRef = ref<{ $el?: HTMLElement } | null>(null)
+
+/** The warning's "show" link: open the differences tab and bring the table into view. */
+async function showDiscrepancies() {
+  activeDetailTab.value = 'cashDiscrepancies'
+  await nextTick()
+  detailTablesRef.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 /** The filter snapshot the figures on screen were produced with. */
 const appliedState = ref<PersistedFinanceAnalysisState | null>(null)
 
@@ -165,6 +175,7 @@ const exportState = useFinanceAnalysisExport({
   costCentres: () => filters.costCentres.value,
   selectedCostCentre: () => filters.selectedCostCentre.value,
   includeChildCostCentres: () => filters.includeChildCostCentres.value,
+  accountIds: () => filters.selectedAccountIds.value,
 })
 
 const sessionAnalysisState = useState<PersistedFinanceAnalysisState | null>('finance-analysis-session-state', () => null)
@@ -219,6 +230,7 @@ function comparableFilterState(state: PersistedFinanceAnalysisState | null) {
     invoiceDateField: state.invoiceDateField,
     selectedCostCentreId: state.selectedCostCentreId,
     includeChildCostCentres: state.includeChildCostCentres,
+    deselectedAccountIds: state.deselectedAccountIds ?? [],
   })
 }
 

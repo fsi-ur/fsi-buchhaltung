@@ -1,7 +1,11 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, getQuery } from 'h3'
 import { hasPermission, requirePermission } from '~/server/utils/api/guards'
 import { getNumericRouteParam } from '~/server/utils/api/request'
-import { loadAppointmentWebsiteSettings } from '~/server/utils/appointmentWebsite'
+import {
+  loadAppointmentWebsiteSettings,
+  loadOccurrenceWebsitePublished,
+  normalizeOccurrenceDate,
+} from '~/server/utils/appointmentWebsite'
 import { isAppointmentVisible, resolveAppointmentViewer } from '~/server/utils/appointments/visibility'
 import type { AppointmentWebsiteSettings } from '~/types/appointment'
 import { internalError } from '~/server/utils/api/errors'
@@ -9,6 +13,8 @@ import { internalError } from '~/server/utils/api/errors'
 interface GetAppointmentWebsiteSuccess {
   ok: true
   website: AppointmentWebsiteSettings
+  /** Only with `?occurrenceDate=`: that date's deviation from the series (null = like the series). */
+  occurrencePublished: boolean | null
   canPublish: boolean
 }
 
@@ -26,6 +32,10 @@ export default defineEventHandler(async (event): Promise<GetAppointmentWebsiteRe
   const appointmentId = getNumericRouteParam(event)
   if (!appointmentId) return { ok: false, error: 'Ungültige Termin-ID.' }
 
+  const rawOccurrenceDate = getQuery(event).occurrenceDate
+  const occurrenceDate = rawOccurrenceDate == null ? null : normalizeOccurrenceDate(rawOccurrenceDate)
+  if (rawOccurrenceDate != null && !occurrenceDate) return { ok: false, error: 'Ungültiges Datum des Termins.' }
+
   try {
     const viewer = await resolveAppointmentViewer(current.user)
     if (!await isAppointmentVisible(appointmentId, viewer)) {
@@ -35,7 +45,11 @@ export default defineEventHandler(async (event): Promise<GetAppointmentWebsiteRe
     const website = await loadAppointmentWebsiteSettings(appointmentId)
     if (!website) return { ok: false, error: 'Der Termin wurde nicht gefunden.' }
 
-    return { ok: true, website, canPublish: hasPermission(current.user, 'calendar.publish') }
+    const occurrencePublished = occurrenceDate
+      ? await loadOccurrenceWebsitePublished(appointmentId, occurrenceDate)
+      : null
+
+    return { ok: true, website, occurrencePublished, canPublish: hasPermission(current.user, 'calendar.publish') }
   } catch (err: any) {
     return internalError('Die Website-Einstellungen konnten nicht geladen werden', err)
   }

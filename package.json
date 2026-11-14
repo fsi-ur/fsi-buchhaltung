@@ -40,6 +40,7 @@
     "setup:migrate:website-appointments": "node --env-file=.env scripts/migrate-website-appointments.mjs",
     "setup:migrate:cash-discrepancy-bookings": "node --env-file=.env scripts/migrate-cash-discrepancy-bookings.mjs",
     "setup:migrate:security-hardening": "node --env-file=.env scripts/migrate-security-hardening.mjs",
+    "setup:migrate:finance-accounts": "node --env-file=.env scripts/migrate-finance-accounts.mjs",
     "setup:seed:wiki-content": "node --env-file=.env scripts/migrate-wiki.mjs --seed-content",
     "setup:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "setup:audit": "node --env-file=.env scripts/ensure-audit-infrastructure.mjs",
