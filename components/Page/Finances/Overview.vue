@@ -32,6 +32,7 @@ import BudgetListPanel from './Budget/ListPanel.vue'
 import BankStatementListPanel from './BankStatement/ListPanel.vue'
 import FinanceAnalysisPanel from './Analysis.vue'
 import { useFinanceAccounts } from '~/composables/useFinanceAccounts'
+import { FINANCE_ANALYSIS_PERMISSIONS } from '~/config/permissions'
 
 type FinancesTab = 'receipts' | 'invoices' | 'reimbursements' | 'cashCounts' | 'budgets' | 'bankStatements' | 'analysis'
 
@@ -55,7 +56,7 @@ const tabs = computed(() => {
     // Hidden only when there never was an account; with archived ones the old statements stay viewable.
     { key: 'bankStatements', label: t('pages.bankStatements'), show: hasPermission('bank_statements.view') && !(financeAccounts.loaded.value && !financeAccounts.bankVisible.value) },
     { key: 'budgets', label: t('pages.budgets'), show: hasPermission('budgets.view') },
-    { key: 'analysis', label: t('pages.financeAnalysis'), show: hasAllPermissions(['receipts.view', 'cash_counts.view', 'invoices.view']) },
+    { key: 'analysis', label: t('pages.financeAnalysis'), show: hasAllPermissions(FINANCE_ANALYSIS_PERMISSIONS) },
   ] as const
 
   return list.filter(tab => tab.show).map(({ show, ...rest }) => rest)

@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, setHeader } from 'h3'
 import { query } from '~/server/utils/db'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import { requirePermission } from '~/server/utils/api/guards'
+import { FINANCE_ANALYSIS_PERMISSIONS } from '~/config/permissions'
 import { loadBudgetDetail } from '~/server/utils/budgets'
 import {
   parseBooleanFlag,
@@ -41,7 +42,7 @@ function budgetLabel(budget: BudgetDetail) {
 }
 
 export default defineEventHandler(async (event) => {
-  const current = await requirePermission(event, ['receipts.view', 'cash_counts.view', 'invoices.view'], { requireAll: true })
+  const current = await requirePermission(event, FINANCE_ANALYSIS_PERMISSIONS, { requireAll: true })
   if (!current.ok) return current
 
   const body = (await readBody(event)) ?? {}
@@ -72,9 +73,6 @@ export default defineEventHandler(async (event) => {
 
   let comparisonBudgets: BudgetDetail[] = []
   if (compareToBudget) {
-    const budgetAccess = await requirePermission(event, 'budgets.view')
-    if (!budgetAccess.ok) return budgetAccess
-
     const loaded = await Promise.all(requestedBudgetIds.map(budgetId => loadBudgetDetail(budgetId)))
     comparisonBudgets = loaded.filter((budget): budget is BudgetDetail => budget !== null)
   }

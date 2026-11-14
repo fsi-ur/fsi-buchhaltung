@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
+import { FINANCE_ANALYSIS_PERMISSIONS } from '~/config/permissions'
 import { parseFinanceAnalysisFilters } from '~/server/utils/financeAnalysis/filters'
 import { loadFinanceAnalysis } from '~/server/utils/financeAnalysis/load'
 import type { FinanceAnalysisData } from '~/types/financeAnalysis'
@@ -19,7 +20,7 @@ interface FinanceAnalysisError {
 type FinanceAnalysisResponse = FinanceAnalysisSuccess | FinanceAnalysisError
 
 export default defineEventHandler(async (event): Promise<FinanceAnalysisResponse> => {
-  const current = await requirePermission(event, ['receipts.view', 'cash_counts.view', 'invoices.view'], { requireAll: true })
+  const current = await requirePermission(event, FINANCE_ANALYSIS_PERMISSIONS, { requireAll: true })
   if (!current.ok) return current
 
   const filters = parseFinanceAnalysisFilters(getQuery(event), await appTodayLocalDate())

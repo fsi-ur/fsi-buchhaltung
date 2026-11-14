@@ -108,7 +108,6 @@
       :loading="loading"
       :empty-text="t('financeAnalysis.noBankStatementPositions')"
       table-class="min-w-4xl"
-      :can-open-row="canOpenBankStatement"
       @row-open="$emit('open', { page: 'BankStatementCreate', id: $event.bank_statement_id })"
     >
       <template #cell-amount="{ row }">
@@ -159,7 +158,6 @@ const props = defineProps<{
   invoiceDateFieldLabel: string
   receiptStatusLabels: Record<ReceiptStatus, string>
   invoiceStatusLabels: Record<InvoiceStatus, string>
-  canViewBankStatements: boolean
   /** Cost centre the analysis is filtered to; receipt exports from the table are made in its context. */
   costCentreScope?: DocumentExportCostCentreScope | null
   costCentreScopeLabel?: string
@@ -177,10 +175,6 @@ const { formatCurrency, formatDate, formatDateTime } = useLocaleFormatters()
 const search = ref('')
 const selectedReceiptIds = ref<Array<string | number>>([])
 const { canExport: canExportReceipts } = useDocumentExport('receipts')
-
-function canOpenBankStatement() {
-  return props.canViewBankStatements
-}
 
 watch(activeTabKey, () => {
   search.value = ''

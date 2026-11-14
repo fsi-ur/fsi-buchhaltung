@@ -146,6 +146,15 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { key: 'calendar.publish', labelKey: 'permissions.items.calendarPublish', categoryKey: 'permissions.categories.calendar' },
 ]
 
+export const FINANCE_ANALYSIS_PERMISSIONS: PermissionKey[] = [
+  'receipts.view',
+  'invoices.view',
+  'reimbursements.view',
+  'cash_counts.view',
+  'bank_statements.view',
+  'budgets.view',
+]
+
 export const implied: Partial<Record<PermissionKey, PermissionKey[]>> = {
   'cash_register.manage': ['cash_register.use'],
   'members.edit': ['members.view', 'members.approveChanges'],

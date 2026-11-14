@@ -91,7 +91,6 @@
         :invoice-date-field-label="filters.selectedInvoiceDateFieldLabel.value"
         :receipt-status-labels="filters.receiptStatusLabels.value"
         :invoice-status-labels="filters.invoiceStatusLabels.value"
-        :can-view-bank-statements="canViewBankStatements"
         :cost-centre-scope="appliedCostCentreScope"
         :cost-centre-scope-label="appliedCostCentreScopeLabel"
         @open="openRecord"
@@ -155,7 +154,6 @@ async function showDiscrepancies() {
 const appliedState = ref<PersistedFinanceAnalysisState | null>(null)
 
 const hasCostCentreAccess = computed(() => hasPermission('cost_centres.view'))
-const canViewBankStatements = computed(() => hasPermission('bank_statements.view'))
 
 const exportState = useFinanceAnalysisExport({
   analysis: () => analysis.value,

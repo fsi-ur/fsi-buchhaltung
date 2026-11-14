@@ -1,5 +1,4 @@
 import { computed, ref, watch } from 'vue'
-import { useAuth } from '~/composables/useAuth'
 import { useI18n } from '~/composables/useI18n'
 import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import type { GetBudgetResponse } from '~/server/api/finances/budgets/[id].get'
@@ -75,7 +74,6 @@ function findCoveringBudgets(periodStartDate: string, periodEndDate: string, ite
 
 export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) {
   const { t, locale } = useI18n()
-  const { hasPermission } = useAuth()
   const { formatCurrency, formatDate, formatDateTime } = useLocaleFormatters()
   const { nowLocal } = useAppTimeZone()
 
@@ -95,10 +93,8 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
   const reportPagesExportMode = ref<ReportPagesExportMode>('none')
   const budgets = ref<BudgetListItem[]>([])
 
-  const hasBudgetAccess = computed(() => hasPermission('budgets.view'))
-
   const coveringBudgets = computed(() => findCoveringBudgets(context.startDate(), context.endDate(), budgets.value))
-  const canCompareToBudget = computed(() => hasBudgetAccess.value && Boolean(coveringBudgets.value?.length))
+  const canCompareToBudget = computed(() => Boolean(coveringBudgets.value?.length))
   const comparisonBudgetLabel = computed(() => (coveringBudgets.value ?? [])
     .map(budget => `${budget.year} · ${budget.semester === 'summer' ? t('budget.semesters.summer') : t('budget.semesters.winter')}`)
     .join(', '))
@@ -131,7 +127,6 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
   ))
 
   const compareToBudgetHint = computed(() => {
-    if (!hasBudgetAccess.value) return t('financeAnalysis.exportCompareToBudgetNeedsBudgetPermission')
     if (!coveringBudgets.value?.length) return t('financeAnalysis.exportCompareToBudgetUnavailable')
     return t('financeAnalysis.exportCompareToBudgetAvailable', { budgets: comparisonBudgetLabel.value })
   })
@@ -151,8 +146,6 @@ export function useFinanceAnalysisExport(context: FinanceAnalysisExportContext) 
   ))
 
   async function loadBudgets() {
-    if (!hasBudgetAccess.value) return
-
     try {
       const response = await apiFetch<{ ok: true, budgets: BudgetListItem[] } | { ok: false, error: string }>('/api/finances/budgets')
       budgets.value = response.ok ? response.budgets : []
