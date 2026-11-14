@@ -19,7 +19,9 @@
       :rows="documents"
       :columns="columns"
       :empty-text="t('settings.documents.none')"
-      @row-open="canManage ? editDocument($event) : undefined"
+      :openable="canManage"
+      :row-has-actions="(row: AssociationDocument) => canManage || !!row.file_id"
+      @row-open="editDocument($event)"
     >
       <template #cell-file="{ row }">
         <span v-if="row.file_id" class="inline-flex items-center gap-1.5 text-base-700">

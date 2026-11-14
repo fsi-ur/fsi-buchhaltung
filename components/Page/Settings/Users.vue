@@ -47,6 +47,7 @@
         </button>
 
         <button
+          v-if="row.id !== currentUser?.id"
           class="hover:underline cursor-pointer"
           :class="row.is_active ? 'text-danger-500' : 'text-base-500'"
           @click="toggleUserActive(row)"

@@ -21,6 +21,8 @@
       :rows="apiKeys"
       :columns="columns"
       :empty-text="t('settings.apiKeys.none')"
+      :openable="false"
+      :row-has-actions="(row: ApiKey) => !row.revokedAt"
     >
       <template #cell-keyPrefix="{ row }">
         <code class="rounded bg-base-100 px-1.5 py-0.5 text-xs text-base-700">{{ row.keyPrefix }}…</code>
