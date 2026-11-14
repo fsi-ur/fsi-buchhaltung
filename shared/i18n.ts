@@ -175,6 +175,17 @@ export const messages = {
       submit: 'Passwort ändern',
       success: 'Passwort wurde geändert. Du kannst die Anwendung jetzt nutzen.',
     },
+    pageError: {
+      goToStart: 'Zur Startseite',
+      notFound: {
+        title: 'Seite nicht gefunden',
+        text: 'Diese Seite gibt es nicht. Vielleicht ist der Link veraltet oder falsch geschrieben.',
+      },
+      forbidden: {
+        title: 'Kein Zugriff',
+        text: 'Dir fehlt die Berechtigung für diese Seite. Wende dich an die Verwaltung, falls du Zugriff brauchst.',
+      },
+    },
     home: {
       noWidgets: 'Für dich sind aktuell keine Dashboard-Widgets freigegeben.',
       widgets: {
@@ -3713,6 +3724,17 @@ export const messages = {
       text: 'You must change your password before you can continue using the application.',
       submit: 'Change password',
       success: 'Password changed. You can now use the application.',
+    },
+    pageError: {
+      goToStart: 'Go to start page',
+      notFound: {
+        title: 'Page not found',
+        text: 'This page does not exist. The link may be outdated or mistyped.',
+      },
+      forbidden: {
+        title: 'No access',
+        text: 'You do not have permission to view this page. Contact your administrator if you need access.',
+      },
     },
     home: {
       noWidgets: 'No dashboard widgets are available for you yet.',

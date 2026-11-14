@@ -3,6 +3,7 @@
     <component
       v-if="loaded"
       :is="currentComponent"
+      v-bind="currentProps"
       :key="componentKey"
       @open-menu="$emit('openMenu')"
     />
@@ -13,17 +14,19 @@
 import { usePage } from '~/composables/usePage'
 import { useAuth } from '~/composables/useAuth'
 import { useViewAsSimulation } from '~/composables/useViewAsSimulation'
-import { PAGES } from '~/config/pages'
+import type { Component } from 'vue'
 
 import LoginPage from '~/components/Page/Login.vue'
 import ChangePasswordRequiredPage from '~/components/Page/ChangePasswordRequired.vue'
+import ErrorPage from '~/components/Page/Error.vue'
 
 const emit = defineEmits<{
   (e: 'openMenu'): void
 }>()
 
 const { currentPage } = usePage()
-const { user, fetchSession, hasPermission, hasAllPermissions, canOpenSubdivisionLeadership } = useAuth()
+const { user, fetchSession } = useAuth()
+const { findPage, canOpenPage } = usePageAccess()
 const { restore: restoreViewAsSimulation } = useViewAsSimulation()
 const { refreshKey } = useAppRefresh()
 
@@ -49,23 +52,21 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
-const currentComponent = computed(() => {
-  const page = Object.hasOwn(PAGES, currentPage.value) ? PAGES[currentPage.value] : undefined
-  if (!page) return LoginPage
-  if (page.allowGuest) return page.component
-  if (!user.value) return LoginPage
-  if (user.value.must_change_password) return ChangePasswordRequiredPage
-  if (!page.permissions.length) return page.component
-  if (page.allowSubdivisionLeaders && canOpenSubdivisionLeadership()) return page.component
-  if (page.requireAllPermissions ? hasAllPermissions(page.permissions) : hasPermission(page.permissions)) {
-    return page.component
-  }
-  
-  return LoginPage
+const resolved = computed<{ component: Component; props?: Record<string, unknown> }>(() => {
+  const page = findPage(currentPage.value)
+  if (page?.allowGuest) return { component: page.component }
+  if (!user.value) return { component: LoginPage }
+  if (user.value.must_change_password) return { component: ChangePasswordRequiredPage }
+  if (!page) return { component: ErrorPage, props: { reason: 'notFound' } }
+  if (canOpenPage(page)) return { component: page.component }
+  return { component: ErrorPage, props: { reason: 'forbidden' } }
 })
 
+const currentComponent = computed(() => resolved.value.component)
+const currentProps = computed(() => resolved.value.props ?? {})
+
 const componentKey = computed(() => {
-  const page = Object.hasOwn(PAGES, currentPage.value) ? PAGES[currentPage.value] : undefined
+  const page = findPage(currentPage.value)
   if (page?.preserveOnRefresh) return currentPage.value
 
   return `${currentPage.value}:${refreshKey.value}`

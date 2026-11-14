@@ -22,7 +22,8 @@
 import { useAuth } from '~/composables/useAuth'
 import { PAGES } from '~/config/pages'
 
-const { user, fetchSession, hasPermission, hasAllPermissions, canOpenSubdivisionLeadership } = useAuth()
+const { user, fetchSession, hasPermission } = useAuth()
+const { canOpenPage } = usePageAccess()
 const { restore: restoreViewAsSimulation } = useViewAsSimulation()
 
 const menuOpen = ref(false)
@@ -42,9 +43,7 @@ const filteredMenuItems = computed(() => {
     // members.approveChanges or members.configureSelfEditFields) get the same self-edit
     // form via its "Meine Daten" tab, so hide this otherwise-redundant main-nav entry.
     if (it.name === 'MemberSelfService' && hasPermission(['members.view', 'members.approveChanges', 'members.configureSelfEditFields'])) return false
-    if (!it.permissions.length) return true
-    if (it.allowSubdivisionLeaders && canOpenSubdivisionLeadership()) return true
-    return it.requireAllPermissions ? hasAllPermissions(it.permissions) : hasPermission(it.permissions)
+    return canOpenPage(it)
   })
 })
 
