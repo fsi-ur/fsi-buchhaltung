@@ -75,10 +75,9 @@ function open() {
     Object.entries(rest).filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value)),
   )
 
-  if (returnTarget === 'self') {
-    if (props.articleId) meta.returnTarget = buildReturnTarget('WikiArticle', { articleId: props.articleId })
-  } else if (returnTarget) {
-    meta.returnTarget = returnTarget
+  // "self" is the only return target an article may ask for (the server refuses others).
+  if (returnTarget === 'self' && props.articleId) {
+    meta.returnTarget = buildReturnTarget('WikiArticle', { articleId: props.articleId })
   }
 
   setPage(props.page, Object.keys(meta).length ? meta : undefined)

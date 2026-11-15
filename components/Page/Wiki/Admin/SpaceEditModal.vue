@@ -11,14 +11,14 @@
       :title="t('common.validationBlocked')"
     />
 
-    <p class="text-sm text-base-500">{{ t('wiki.space.createHint') }}</p>
+    <p class="text-sm text-base-500">{{ limited ? t('wiki.space.limitedEditHint') : t('wiki.space.createHint') }}</p>
 
     <div class="field">
       <label for="wiki-space-title">{{ t('wiki.space.fields.title') }}</label>
       <input id="wiki-space-title" v-model="form.title" class="input" />
     </div>
 
-    <div class="field">
+    <div v-if="!limited" class="field">
       <label for="wiki-space-slug">{{ t('wiki.space.fields.slug') }}</label>
       <input id="wiki-space-slug" v-model="form.slug" class="input" :placeholder="t('wiki.space.fields.slugPlaceholder')" />
       <p class="mt-1 text-xs text-base-500">
@@ -41,7 +41,7 @@
       <p class="mt-1 text-xs text-base-500">{{ t('wiki.space.fields.iconHint') }}</p>
     </div>
 
-    <div class="grid gap-3 sm:grid-cols-2">
+    <div v-if="!limited" class="grid gap-3 sm:grid-cols-2">
       <div class="field">
         <label for="wiki-space-owner-position">{{ t('wiki.editor.fields.ownerPosition') }}</label>
         <MenuDropdown id="wiki-space-owner-position" v-model="openFieldMenu">
@@ -95,17 +95,20 @@
       </div>
     </div>
 
-    <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-base-700">
-      <input v-model="form.createGrant" type="checkbox" class="checkbox" />
-      {{ t('wiki.editor.fields.createOwnerGrant') }}
-    </label>
+    <div v-if="offerOwnerGrant" class="space-y-1">
+      <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-base-700">
+        <input v-model="form.createGrant" type="checkbox" class="checkbox" />
+        {{ t('wiki.editor.fields.createOwnerGrant') }}
+      </label>
+      <p class="text-xs text-base-500">{{ t('wiki.editor.fields.createOwnerGrantHint') }}</p>
+    </div>
 
     <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-base-700">
       <input v-model="form.requiresReview" type="checkbox" class="checkbox" />
       {{ t('wiki.space.fields.requiresReview') }}
     </label>
 
-    <label v-if="!isCreate" class="flex w-fit cursor-pointer items-center gap-2 text-sm text-base-700">
+    <label v-if="!isCreate && !limited" class="flex w-fit cursor-pointer items-center gap-2 text-sm text-base-700">
       <input v-model="form.isArchived" type="checkbox" class="checkbox" />
       {{ t('wiki.space.fields.isArchived') }}
     </label>
@@ -135,6 +138,8 @@ const props = defineProps<{
   modelValue: boolean
   /** `null` opens the modal in create mode. */
   space?: WikiSpaceAdminView | null
+  /** Space managers without `wiki.manage`: slug, owner and archiving are left as they are. */
+  limited?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -166,6 +171,13 @@ const form = reactive({
 })
 
 const isCreate = computed(() => !props.space)
+// The checkbox is an action for this save, not a stored setting: it is offered only when the owner
+// is set or changed now, so saving an unrelated change never re-creates a removed grant.
+const ownerChanged = computed(() =>
+  form.positionId !== (props.space?.ownerPositionId ?? null)
+  || form.subdivisionId !== (props.space?.ownerSubdivisionId ?? null),
+)
+const offerOwnerGrant = computed(() => ownerChanged.value && (form.positionId !== null || form.subdivisionId !== null))
 const previewIcon = computed(() => (/^[a-z0-9-]+:[a-z0-9-]+$/.test(form.icon.trim()) ? form.icon.trim() : DEFAULT_ICON))
 const ownerPositionLabel = computed(() => positionOptions.value.find(option => option.id === form.positionId)?.label ?? t('wiki.editor.fields.noOwner'))
 const ownerSubdivisionLabel = computed(() => subdivisionOptions.value.find(option => option.id === form.subdivisionId)?.label ?? t('wiki.editor.fields.noOwner'))
@@ -189,7 +201,7 @@ async function loadOwnerOptions() {
 watch(() => props.modelValue, (open) => {
   if (!open) return
   error.value = ''
-  loadOwnerOptions()
+  if (!props.limited) loadOwnerOptions()
 
   const space = props.space
   form.title = space?.title ?? ''
@@ -200,7 +212,7 @@ watch(() => props.modelValue, (open) => {
   form.isArchived = space?.isArchived ?? false
   form.positionId = space?.ownerPositionId ?? null
   form.subdivisionId = space?.ownerSubdivisionId ?? null
-  form.createGrant = true
+  form.createGrant = !space
 })
 
 async function submit() {
@@ -220,7 +232,7 @@ async function submit() {
     isArchived: form.isArchived,
     ownerPositionId: form.positionId,
     ownerSubdivisionId: form.subdivisionId,
-    createGrant: form.createGrant,
+    createGrant: offerOwnerGrant.value && form.createGrant,
   }
 
   saving.value = true

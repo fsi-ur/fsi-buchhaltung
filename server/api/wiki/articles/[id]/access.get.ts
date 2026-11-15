@@ -1,12 +1,20 @@
 import { defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
-import { getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
+import { collectOwnerSubdivisionIds, getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
+import { loadSubdivisionNames } from '~/server/utils/wiki/grants'
 import { loadScopeGrants, type GrantView } from '~/server/utils/wiki/grants'
 import type { WikiAccessLevel } from '~/types/wiki'
 import { internalError } from '~/server/utils/api/errors'
 
 export type WikiScopeAccessResponse =
-  | { ok: true, grants: GrantView[], accessLevel: WikiAccessLevel, canManage: boolean }
+  | {
+    ok: true
+    grants: GrantView[]
+    accessLevel: WikiAccessLevel
+    canManage: boolean
+    /** Owner subdivisions reaching this scope — whoever manages their wiki (`subdivision.wiki.manage`) is admin here. */
+    managingSubdivisions: string[]
+  }
   | { ok: false, error: string }
 
 export default defineEventHandler(async (event): Promise<WikiScopeAccessResponse> => {
@@ -28,6 +36,7 @@ export default defineEventHandler(async (event): Promise<WikiScopeAccessResponse
       grants: await loadScopeGrants(index, 'article', articleId),
       accessLevel: level as WikiAccessLevel,
       canManage: subjects.canManage || levelAtLeast(level, 'admin'),
+      managingSubdivisions: await loadSubdivisionNames(collectOwnerSubdivisionIds(index, articleId)),
     }
   } catch (err: any) {
     return internalError('Failed to load wiki access grants', err)

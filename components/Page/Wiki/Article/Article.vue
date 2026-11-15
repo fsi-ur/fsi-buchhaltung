@@ -51,6 +51,7 @@
             :editable="canEdit"
             @select="openArticle"
             @reorder="saveOrder"
+            @open-space="openSpace"
           />
         </div>
       </aside>
@@ -110,6 +111,14 @@
                 >
                   {{ crumb.title }}
                 </button>
+                <button
+                  v-else-if="crumb.type === 'space' && crumb.id"
+                  type="button"
+                  class="cursor-pointer rounded underline decoration-base-300 underline-offset-2 transition-colors hover:text-accent-700 hover:decoration-accent-400"
+                  @click="openSpace({ id: crumb.id, slug: crumb.slug })"
+                >
+                  {{ crumb.title }}
+                </button>
                 <span v-else>{{ crumb.title }}</span>
               </template>
             </nav>
@@ -122,8 +131,30 @@
               <CommonStatusBadge
                 v-if="article.status !== 'published'"
                 :label="t(`wiki.status.${article.status}`)"
-                tone="base"
+                :tone="article.status === 'archived' ? 'warning' : 'base'"
               />
+            </div>
+
+            <div
+              v-if="article.status === 'archived'"
+              class="flex items-start gap-3 rounded-lg border-l-4 border-warning-500 bg-warning-50 px-3 py-2.5 text-sm text-warning-900"
+              role="status"
+            >
+              <Icon name="material-symbols:archive-outline-rounded" class="mt-0.5 shrink-0 text-lg" aria-hidden="true" />
+              <div class="min-w-0 flex-1 space-y-0.5">
+                <p class="font-semibold">{{ t('wiki.article.archivedTitle') }}</p>
+                <p>{{ t('wiki.article.archivedText') }}</p>
+              </div>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="btn-secondary inline-flex shrink-0 items-center gap-1.5 self-center"
+                :disabled="unarchiving"
+                @click="unarchive"
+              >
+                <Icon name="material-symbols:unarchive-outline-rounded" class="text-base" aria-hidden="true" />
+                {{ t('wiki.article.unarchive') }}
+              </button>
             </div>
 
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-base-100 pt-3 text-xs text-base-500">
@@ -182,7 +213,7 @@
           <div class="grid grid-cols-12 gap-5">
             <CommonCard class="xl:col-span-8 lg:p-8">
               <p
-                v-if="article.status !== 'published'"
+                v-if="article.status !== 'published' && article.status !== 'archived'"
                 class="mb-5 flex items-start gap-2 rounded-lg bg-base-100 px-3 py-2 text-sm text-base-700"
               >
                 <Icon name="material-symbols:visibility-off-outline-rounded" class="mt-0.5 shrink-0 text-base text-base-500" aria-hidden="true" />
@@ -216,7 +247,8 @@
                 <ul class="-mx-2 text-sm">
                   <li v-for="child in article.children" :key="child.id">
                     <button type="button" class="wiki-link-row" @click="openArticleById(child.id)">
-                      <span class="min-w-0 flex-1 truncate font-medium">{{ child.title }}</span>
+                      <span :class="['min-w-0 flex-1 truncate font-medium', child.status === 'archived' ? 'text-base-400 line-through decoration-base-300' : '']">{{ child.title }}</span>
+                      <PageWikiStatusPill :status="child.status" />
                       <Icon name="material-symbols:chevron-right-rounded" class="wiki-link-chevron" aria-hidden="true" />
                     </button>
                   </li>
@@ -323,7 +355,12 @@
   </Page>
 
   <CommonModal v-model="treeOpen" :title="t('wiki.tree.title')" width-class="max-w-lg">
-    <PageWikiNavigationTreeSidebar :spaces="spaces" :current-article-id="article?.id ?? null" @select="openFromDrawer" />
+    <PageWikiNavigationTreeSidebar
+      :spaces="spaces"
+      :current-article-id="article?.id ?? null"
+      @select="openFromDrawer"
+      @open-space="openSpace"
+    />
   </CommonModal>
 </template>
 
@@ -337,6 +374,7 @@ import { useToast } from '~/composables/useToast'
 import type { WikiReorderItem } from '../Navigation/TreeSidebar.vue'
 import type { WikiArticleDetailPayload, WikiArticleDetailResult } from '~/server/utils/wiki/detail'
 import type { WikiTreeResponse } from '~/server/api/wiki/tree.get'
+import type { UnarchiveWikiArticleResponse } from '~/server/api/wiki/articles/[id]/unarchive.post'
 import type { WikiPathDetailResponse } from '~/server/api/wiki/paths/[id].get'
 import type { WikiPathItemView, WikiPathView, WikiTreeSpace } from '~/types/wiki'
 
@@ -428,6 +466,11 @@ function openArticle(target: { id: number, slug: string, spaceSlug: string }) {
   setPage('WikiArticle', { articleId: target.id, slug: `${target.spaceSlug}/${target.slug}` })
 }
 
+function openSpace(space: { id: number, slug: string }) {
+  treeOpen.value = false
+  setPage('WikiSpace', { spaceId: space.id, slug: space.slug })
+}
+
 function openTag(tagSlug: string) {
   setPage('Wiki', { tag: tagSlug })
 }
@@ -499,6 +542,24 @@ async function goToStep(direction: -1 | 1) {
 
 function openPath() {
   if (pathId.value !== null) setPage('WikiPath', { pathId: pathId.value })
+}
+
+const unarchiving = ref(false)
+
+async function unarchive() {
+  if (!article.value) return
+  unarchiving.value = true
+  try {
+    const res = await apiFetch<UnarchiveWikiArticleResponse>(`/api/wiki/articles/${article.value.id}/unarchive`, { method: 'POST' })
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+    toast.success(res.status === 'published' ? t('wiki.article.unarchivedPublishedToast') : t('wiki.article.unarchivedDraftToast'))
+    await Promise.all([loadArticle(), loadTree()])
+  } finally {
+    unarchiving.value = false
+  }
 }
 
 async function saveOrder(items: WikiReorderItem[]) {

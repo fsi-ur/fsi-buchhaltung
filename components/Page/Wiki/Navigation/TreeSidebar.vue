@@ -3,25 +3,39 @@
     <div v-if="!spaces.length" class="text-base-500">{{ t('wiki.tree.empty') }}</div>
 
     <div v-for="space in spaces" :key="space.id" class="space-y-1">
-      <button
-        type="button"
-        class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left font-semibold text-base-800 transition-colors hover:bg-base-100 cursor-pointer"
-        :aria-expanded="expandedSpaces.has(space.id)"
-        @click="toggleSpace(space.id)"
-      >
-        <Icon
-          :name="expandedSpaces.has(space.id) ? 'material-symbols:expand-more-rounded' : 'material-symbols:chevron-right-rounded'"
-          class="h-4 w-4 shrink-0 text-base-400"
-          aria-hidden="true"
-        />
-        <Icon :name="space.icon" class="h-4 w-4 shrink-0 text-accent-500" aria-hidden="true" />
-        <span class="min-w-0 flex-1 truncate">{{ space.title }}</span>
-        <span class="shrink-0 rounded-full bg-base-100 px-1.5 text-xs font-normal text-base-500">
-          {{ space.articles.length }}
-        </span>
-      </button>
+      <div v-if="!hideSpaceHeaders" class="flex items-center gap-0.5">
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left font-semibold text-base-800 transition-colors hover:bg-base-100 cursor-pointer"
+          :aria-expanded="expandedSpaces.has(space.id)"
+          @click="toggleSpace(space.id)"
+        >
+          <Icon
+            :name="expandedSpaces.has(space.id) ? 'material-symbols:expand-more-rounded' : 'material-symbols:chevron-right-rounded'"
+            class="h-4 w-4 shrink-0 text-base-400"
+            aria-hidden="true"
+          />
+          <Icon :name="space.icon" class="h-4 w-4 shrink-0 text-accent-500" aria-hidden="true" />
+          <span class="min-w-0 flex-1 truncate">{{ space.title }}</span>
+          <span class="shrink-0 rounded-full bg-base-100 px-1.5 text-xs font-normal text-base-500">
+            {{ space.articles.length }}
+          </span>
+        </button>
+        <button
+          type="button"
+          class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-1.5 text-base-400 transition-colors hover:bg-base-100 hover:text-base-700"
+          :title="t('wiki.space.open', { title: space.title })"
+          :aria-label="t('wiki.space.open', { title: space.title })"
+          @click="$emit('openSpace', { id: space.id, slug: space.slug })"
+        >
+          <Icon name="material-symbols:open-in-full-rounded" class="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
 
-      <ul v-if="expandedSpaces.has(space.id)" class="ml-4 space-y-0.5 border-l border-base-100 pl-1">
+      <ul
+        v-if="hideSpaceHeaders || expandedSpaces.has(space.id)"
+        :class="hideSpaceHeaders ? 'space-y-0.5' : 'ml-4 space-y-0.5 border-l border-base-100 pl-1'"
+      >
         <PageWikiNavigationTreeSidebarNode
           v-for="article in space.articles"
           :key="article.id"
@@ -55,11 +69,14 @@ const props = defineProps<{
   spaces: WikiTreeSpace[]
   currentArticleId?: number | null
   editable?: boolean
+  /** Lists the articles only (one space's own page), always expanded. */
+  hideSpaceHeaders?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'select', article: { id: number, slug: string, spaceSlug: string }): void
   (e: 'reorder', items: WikiReorderItem[]): void
+  (e: 'openSpace', space: { id: number, slug: string }): void
 }>()
 
 const { t } = useI18n()

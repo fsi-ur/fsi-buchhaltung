@@ -1,7 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { query } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { filterVisibleArticles, getEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
+import { filterVisibleArticles, getEffectiveLevel, getSpaceEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
 import { buildVisibleTree, isStale, loadSpaceRows, loadTreeArticleRows } from '~/server/utils/wiki/articles'
 import { loadPathViews } from '~/server/utils/wiki/paths'
 import type { WikiPathView, WikiTreeSpace } from '~/types/wiki'
@@ -63,7 +63,9 @@ export default defineEventHandler(async (event): Promise<WikiHomeResponse> => {
       loadPathViews(index, subjects, { includeUnpublished: subjects.canManage }),
     ])
 
+    // A space the viewer may write to counts even while it is still empty (e.g. a subdivision's own).
     const canEditSomewhere = levelAtLeast(subjects.globalLevel, 'write')
+      || spaceRows.some(row => !row.is_archived && levelAtLeast(getSpaceEffectiveLevel(index, subjects, Number(row.id)), 'write'))
       || treeRows.some(row => levelAtLeast(getEffectiveLevel(index, subjects, Number(row.id)), 'write'))
 
     const spaces = buildVisibleTree(spaceRows, treeRows, index, subjects, { includeDrafts: canEditSomewhere })

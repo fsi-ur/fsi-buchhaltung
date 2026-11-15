@@ -117,6 +117,18 @@ async function loadSubjectLabels(grants: WikiAccessGrant[], conn?: mariadb.PoolC
   return labels
 }
 
+/** Names of the given subdivisions, in the given order (unknown ids are skipped). */
+export async function loadSubdivisionNames(ids: number[], conn?: mariadb.PoolConnection): Promise<string[]> {
+  if (!ids.length) return []
+  const rows = await query<Array<{ id: number, name: string }>>(
+    `SELECT id, name FROM subdivisions WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ids,
+    conn,
+  )
+  const names = new Map(rows.map(row => [Number(row.id), row.name]))
+  return ids.flatMap(id => names.has(id) ? [names.get(id)!] : [])
+}
+
 export interface ScopeOwner {
   ownerPositionId: number | null
   ownerSubdivisionId: number | null

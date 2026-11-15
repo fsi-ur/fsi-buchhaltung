@@ -353,6 +353,8 @@ export interface WikiArticleLink {
   slug: string
   spaceSlug: string
   title: string
+  /** Set where the reader may also see unpublished articles (e.g. sub-articles of an editor). */
+  status?: WikiArticleStatus
 }
 
 export type WikiAttachment = AttachmentItem
@@ -416,6 +418,7 @@ export interface WikiSearchHit {
   title: string
   summary: string
   snippet: string
+  status: WikiArticleStatus
 }
 
 export interface WikiEmbedOpenReimbursementsData {

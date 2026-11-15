@@ -146,6 +146,26 @@ function hydrateArticleLinks(container: HTMLElement) {
   }
 }
 
+function hydrateSpaceLinks(container: HTMLElement) {
+  for (const anchor of container.querySelectorAll<HTMLAnchorElement>('a[data-wiki-space]')) {
+    const slug = anchor.getAttribute('data-wiki-space') ?? ''
+    const target = props.links?.[slug] ?? null
+    const label = anchor.getAttribute('data-wiki-label') ?? ''
+
+    if (!target) {
+      anchor.classList.add('wiki-link-broken')
+      anchor.textContent = `${label || slug} (${t('wiki.article.brokenLink')})`
+      anchor.removeAttribute('data-wiki-target')
+      continue
+    }
+
+    anchor.classList.remove('wiki-link-broken')
+    anchor.setAttribute('data-wiki-target', String(target.id))
+    anchor.setAttribute('title', t('wiki.article.spaceLinkTitle'))
+    if (!label) anchor.textContent = target.title
+  }
+}
+
 function hydrateImages(container: HTMLElement) {
   for (const image of container.querySelectorAll<HTMLImageElement>('img[data-wiki-image]')) {
     const url = fileUrl(image.getAttribute('data-wiki-image') ?? '')
@@ -248,6 +268,7 @@ async function hydrate() {
   if (!container) return
 
   hydrateArticleLinks(container)
+  hydrateSpaceLinks(container)
   hydrateImages(container)
   collectMounts(container)
   await resolveEmbeds()
@@ -260,6 +281,17 @@ function onClick(event: MouseEvent) {
     return
   }
 
+  const returnTarget = props.articleId ? buildReturnTarget('WikiArticle', { articleId: props.articleId }) : undefined
+
+  const spaceAnchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[data-wiki-space]')
+  if (spaceAnchor) {
+    event.preventDefault()
+    const spaceId = spaceAnchor.getAttribute('data-wiki-target')
+    const slug = spaceAnchor.getAttribute('data-wiki-space') ?? undefined
+    if (spaceId) setPage('WikiSpace', { spaceId: Number(spaceId), slug, returnTarget })
+    return
+  }
+
   const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[data-wiki-article]')
   if (!anchor) return
 
@@ -269,7 +301,7 @@ function onClick(event: MouseEvent) {
 
   setPage('WikiArticle', {
     articleId: Number(targetId),
-    returnTarget: props.articleId ? buildReturnTarget('WikiArticle', { articleId: props.articleId }) : undefined,
+    returnTarget,
   })
 }
 

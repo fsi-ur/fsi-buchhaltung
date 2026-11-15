@@ -16,12 +16,13 @@ export type SubdivisionPermissionKey =
   | 'subdivision.members.manage'
   | 'subdivision.positions.assign'
   | 'subdivision.history.view'
+  | 'subdivision.wiki.edit'
+  | 'subdivision.wiki.manage'
   // Prepared for upcoming features — the keys exist so data and checks can be built on them, but
   // they are hidden from the permission editor until a feature actually honours them.
   | 'subdivision.events.edit'
   | 'subdivision.appointments.edit'
   | 'subdivision.notifications.send'
-  | 'subdivision.wiki.manage'
   | 'subdivision.tasks.manage'
 
 export interface SubdivisionPermissionDefinition {
@@ -51,7 +52,8 @@ export const SUBDIVISION_PERMISSIONS: SubdivisionPermissionDefinition[] = [
   { key: 'subdivision.events.edit', labelKey: 'permissions.subdivisionItems.eventsEdit', coveredBy: ['events.edit'], planned: true },
   { key: 'subdivision.appointments.edit', labelKey: 'permissions.subdivisionItems.appointmentsEdit', coveredBy: ['calendar.manage'], planned: true },
   { key: 'subdivision.notifications.send', labelKey: 'permissions.subdivisionItems.notificationsSend', coveredBy: ['notifications.send'], planned: true },
-  { key: 'subdivision.wiki.manage', labelKey: 'permissions.subdivisionItems.wikiManage', coveredBy: ['wiki.manage'], planned: true },
+  { key: 'subdivision.wiki.edit', labelKey: 'permissions.subdivisionItems.wikiEdit', coveredBy: ['wiki.edit'] },
+  { key: 'subdivision.wiki.manage', labelKey: 'permissions.subdivisionItems.wikiManage', coveredBy: ['wiki.manage'], implies: ['subdivision.wiki.edit'] },
   { key: 'subdivision.tasks.manage', labelKey: 'permissions.subdivisionItems.tasksManage', coveredBy: ['events.edit'], planned: true },
 ]
 

@@ -26,6 +26,28 @@
         <p v-if="loading" class="text-sm text-base-500">{{ t('wiki.loading') }}</p>
 
         <template v-else>
+          <div
+            v-if="status === 'archived'"
+            class="mb-4 flex items-start gap-3 rounded-lg border-l-4 border-warning-500 bg-warning-50 px-3 py-2.5 text-sm text-warning-900"
+            role="status"
+          >
+            <Icon name="material-symbols:archive-outline-rounded" class="mt-0.5 shrink-0 text-lg" aria-hidden="true" />
+            <div class="min-w-0 flex-1 space-y-0.5">
+              <p class="font-semibold">{{ t('wiki.article.archivedTitle') }}</p>
+              <p>{{ t('wiki.editor.archivedRestoreHint') }}</p>
+            </div>
+            <button
+              v-if="!readOnly"
+              type="button"
+              class="btn-secondary inline-flex shrink-0 items-center gap-1.5 self-center"
+              :disabled="unarchiving"
+              @click="unarchive"
+            >
+              <Icon name="material-symbols:unarchive-outline-rounded" class="text-base" aria-hidden="true" />
+              {{ t('wiki.article.unarchive') }}
+            </button>
+          </div>
+
           <div v-if="articleId && historyTables.length" class="mb-4 flex justify-end">
             <PageAuditScopedHistoryButton :tables="historyTables" :parent-id="articleId" />
           </div>
@@ -185,11 +207,11 @@
 
               <div class="field">
                 <label for="wiki-owner-subdivision">{{ t('wiki.editor.fields.ownerSubdivision') }}</label>
-                <MenuDropdown id="wiki-owner-subdivision" v-model="openFieldMenu" :disabled="readOnly">
+                <MenuDropdown id="wiki-owner-subdivision" v-model="openFieldMenu" :disabled="ownerSubdivisionLocked">
                   <template #trigger="{ styling }">
-                    <button type="button" :class="[styling, !readOnly ? 'cursor-pointer' : '']" :disabled="readOnly">
+                    <button type="button" :class="[styling, !ownerSubdivisionLocked ? 'cursor-pointer' : '']" :disabled="ownerSubdivisionLocked">
                       <span class="truncate">{{ ownerSubdivisionLabel }}</span>
-                      <Icon v-if="!readOnly" name="material-symbols:keyboard-arrow-down-rounded" class="text-lg" />
+                      <Icon v-if="!ownerSubdivisionLocked" name="material-symbols:keyboard-arrow-down-rounded" class="text-lg" />
                     </button>
                   </template>
                   <template #default="{ styling }">
@@ -205,16 +227,18 @@
                     </button>
                   </template>
                 </MenuDropdown>
+                <span v-if="!readOnly && ownerSubdivisionLocked" class="text-xs text-base-500">
+                  {{ t('wiki.editor.fields.ownerSubdivisionAdminOnly') }}
+                </span>
               </div>
             </div>
 
-            <label
-              class="flex w-fit items-center gap-2 text-sm text-base-700"
-              :class="readOnly ? 'cursor-default' : 'cursor-pointer'"
-            >
-              <input v-model="owner.createGrant" type="checkbox" class="checkbox" :disabled="readOnly" />
-              {{ t('wiki.editor.fields.createOwnerGrant') }}
-            </label>
+            <div v-if="offerOwnerGrant" class="space-y-1">
+              <button type="button" class="btn-secondary" :disabled="creatingOwnerGrant" @click="createOwnerGrant">
+                {{ t('wiki.editor.fields.createOwnerGrant') }}
+              </button>
+              <p class="text-xs text-base-500">{{ t('wiki.editor.fields.createOwnerGrantHint') }}</p>
+            </div>
 
             <div class="space-y-2 border-t border-base-100 pt-4">
               <div>
@@ -285,7 +309,7 @@
           </div>
 
           <div v-show="activeTab === 'access'">
-            <PageWikiArticleAccessTab v-if="articleId" scope-type="article" :scope-id="articleId" />
+            <PageWikiArticleAccessTab v-if="articleId" :key="accessTabKey" scope-type="article" :scope-id="articleId" />
           </div>
 
           <div v-show="activeTab === 'history'">
@@ -300,7 +324,7 @@
 
           <div class="flex flex-wrap items-center gap-2 border-t border-base-200 pt-4">
             <button
-              v-if="!isCreate && !readOnly"
+              v-if="!isCreate && !readOnly && status !== 'archived'"
               type="button"
               class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-danger-200 px-4 py-2 text-sm text-danger-700 transition-colors hover:bg-danger-50"
               @click="confirmArchive = true"
@@ -395,6 +419,7 @@ import type { TabOverviewItem } from '~/composables/useTabOverviewLayout'
 import type { WikiArticleDetailResult } from '~/server/utils/wiki/detail'
 import type { WikiTreeResponse } from '~/server/api/wiki/tree.get'
 import type { CreateWikiArticleResponse } from '~/server/api/wiki/articles/create.post'
+import type { UnarchiveWikiArticleResponse } from '~/server/api/wiki/articles/[id]/unarchive.post'
 import type { SaveWikiAttachmentsResponse } from '~/server/api/wiki/articles/[id]/attachments.put'
 import type { WikiSubjectOptionsResponse } from '~/server/api/wiki/access/subject-options.get'
 import type { WikiTagsResponse } from '~/server/api/wiki/tags/index.get'
@@ -456,20 +481,26 @@ const form = reactive({
 const owner = reactive({
   positionId: null as number | null,
   subdivisionId: null as number | null,
-  createGrant: true,
 })
 
 function snapshotOwner() {
   return JSON.stringify({
     positionId: owner.positionId,
     subdivisionId: owner.subdivisionId,
-    createGrant: owner.createGrant,
   })
 }
 
 // The owner lives behind its own endpoint, so it is tracked separately but saved together with
 // the draft - one "save" for the whole editor.
 let savedOwnerSnapshot = snapshotOwner()
+// Creating an edit grant for the owner is a one-off action offered right after the owner was picked
+// in this editor — not a stored setting, so saving never re-creates a grant someone removed.
+const ownerPicked = ref(false)
+const creatingOwnerGrant = ref(false)
+const accessTabKey = ref(0)
+const offerOwnerGrant = computed(() =>
+  !readOnly.value && ownerPicked.value && (owner.positionId !== null || owner.subdivisionId !== null),
+)
 
 const dirty = ref(false)
 const savingDraft = ref(false)
@@ -552,11 +583,13 @@ function selectParent(parentId: number | null) {
 
 function selectOwnerPosition(positionId: number | null) {
   owner.positionId = positionId
+  ownerPicked.value = true
   openFieldMenu.value = null
 }
 
 function selectOwnerSubdivision(subdivisionId: number | null) {
   owner.subdivisionId = subdivisionId
+  ownerPicked.value = true
   openFieldMenu.value = null
 }
 
@@ -577,6 +610,8 @@ function removeTag(tagId: number) {
   form.tagIds = form.tagIds.filter(entry => entry !== tagId)
 }
 
+// The owner subdivision decides who manages the article (subdivision.wiki.manage), so only admins may change it.
+const ownerSubdivisionLocked = computed(() => readOnly.value || accessLevel.value !== 'admin')
 const mustSubmit = computed(() => requiresReview.value && accessLevel.value !== 'admin')
 const canMarkReviewed = computed(() => accessLevel.value === 'admin' && status.value === 'published')
 
@@ -663,6 +698,7 @@ async function loadArticle() {
   loading.value = false
   savedSnapshot = snapshotForm()
   savedOwnerSnapshot = snapshotOwner()
+  ownerPicked.value = false
 
   await nextTick()
   suppressAutosave = false
@@ -824,6 +860,24 @@ async function markReviewed() {
   toast.success(t('wiki.editor.reviewedToast'))
 }
 
+const unarchiving = ref(false)
+
+async function unarchive() {
+  if (articleId.value === null) return
+  unarchiving.value = true
+  try {
+    const res = await apiFetch<UnarchiveWikiArticleResponse>(`/api/wiki/articles/${articleId.value}/unarchive`, { method: 'POST' })
+    if (!res.ok) {
+      errors.value = [res.error]
+      return
+    }
+    status.value = res.status
+    toast.success(res.status === 'published' ? t('wiki.article.unarchivedPublishedToast') : t('wiki.article.unarchivedDraftToast'))
+  } finally {
+    unarchiving.value = false
+  }
+}
+
 async function archive() {
   confirmArchive.value = false
   if (articleId.value === null) return
@@ -849,7 +903,7 @@ async function persistOwner() {
     body: {
       ownerPositionId: owner.positionId,
       ownerSubdivisionId: owner.subdivisionId,
-      createGrant: owner.createGrant,
+      createGrant: false,
     },
   })
 
@@ -860,6 +914,35 @@ async function persistOwner() {
 
   savedOwnerSnapshot = snapshotOwner()
   return true
+}
+
+async function createOwnerGrant() {
+  if (articleId.value === null) return
+  creatingOwnerGrant.value = true
+  try {
+    // Save first, so the grant is created for the owner shown here.
+    await saveDraft(false)
+    if (snapshotOwner() !== savedOwnerSnapshot) return
+
+    const res = await apiFetch<{ ok: boolean, error?: string }>(`/api/wiki/articles/${articleId.value}/owner`, {
+      method: 'PUT',
+      body: {
+        ownerPositionId: owner.positionId,
+        ownerSubdivisionId: owner.subdivisionId,
+        createGrant: true,
+      },
+    })
+    if (!res.ok) {
+      errors.value = [res.error ?? t('wiki.errors.saveFailed')]
+      return
+    }
+
+    ownerPicked.value = false
+    accessTabKey.value += 1
+    toast.success(t('wiki.editor.ownerGrantCreatedToast'))
+  } finally {
+    creatingOwnerGrant.value = false
+  }
 }
 
 async function saveAttachments(next: AttachmentSelection) {
@@ -905,7 +988,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 watch(
   () => [
     form.title, form.slug, form.summary, form.markdown, form.parentId, form.reviewIntervalDays,
-    form.tagIds, owner.positionId, owner.subdivisionId, owner.createGrant,
+    form.tagIds, owner.positionId, owner.subdivisionId,
   ],
   scheduleAutosave,
   { deep: true },

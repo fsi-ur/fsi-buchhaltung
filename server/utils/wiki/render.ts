@@ -33,6 +33,8 @@ export interface WikiRenderResult {
   toolLinks: WikiToolLinkRef[]
   checklists: string[]
   articleLinks: WikiArticleLinkRef[]
+  /** Slugs of the spaces linked with `[[wiki:bereich]]`. */
+  spaceLinks: string[]
   glossaryTerms: string[]
   headings: WikiHeading[]
   /** File ids of the `bild:<id>` images in the article. */
@@ -63,6 +65,7 @@ interface RenderEnv {
   toolLinks: WikiToolLinkRef[]
   checklists: string[]
   articleLinks: WikiArticleLinkRef[]
+  spaceLinks: string[]
   glossaryTerms: string[]
   headings: WikiHeading[]
   images: number[]
@@ -76,6 +79,7 @@ const CALLOUT_NAMES = ['hinweis', 'warnung', 'tipp'] as const
 const DIRECTIVE_LINE = /^:::(tool|embed|checklist)\s*\{(.*)\}\s*$/
 const ATTRIBUTE = /([a-zA-Z][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
 const WIKI_SLUG_PATH = /^[a-z0-9-]+\/[a-z0-9-]+$/
+const WIKI_SPACE_SLUG = /^[a-z0-9-]+$/
 const GLOSSARY_KEY = /^[a-z0-9-]+$/
 
 const UMLAUTS: Record<string, string> = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', Ä: 'ae', Ö: 'oe', Ü: 'ue' }
@@ -190,9 +194,12 @@ function buildToolLink(attributes: Record<string, string>, env: RenderEnv): Wiki
       const parsed = JSON.parse(attributes.meta)
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object')
       // Page meta drives navigation state: only flat ids/flags, never nested objects such as a
-      // forged returnTarget chain (SEC-33).
+      // forged returnTarget chain (SEC-33). The one return target an author may set is "self"
+      // (back to the article being read) — the editor inserts it into every tool link, and the
+      // reader (ToolLink.vue) builds the real target from it.
       const entries = Object.entries(parsed)
-      if (entries.some(([key, value]) => !/^[A-Za-z][A-Za-z0-9]*$/.test(key) || key === 'returnTarget'
+      if (entries.some(([key, value]) => !/^[A-Za-z][A-Za-z0-9]*$/.test(key)
+        || (key === 'returnTarget' && value !== 'self')
         || !['string', 'number', 'boolean'].includes(typeof value))) throw new Error('unsupported meta')
       meta = parsed
     } catch {
@@ -285,9 +292,14 @@ function wikiReferenceRule(state: any, silent: boolean) {
   const target = targetRaw.toLowerCase()
   const label = (rawLabel ?? '').trim()
 
-  if (kind === 'wiki') {
+  if (kind === 'wiki' && WIKI_SPACE_SLUG.test(target)) {
+    // [[wiki:bereich]] links the space itself.
+    env.spaceLinks.push(target)
+    const token = state.push('wiki_space_link', '', 0)
+    token.meta = { spaceSlug: target, label }
+  } else if (kind === 'wiki') {
     if (!WIKI_SLUG_PATH.test(target)) {
-      env.errors.push(`Der Wiki-Link „${body}" muss die Form [[wiki:bereich/artikel]] haben.`)
+      env.errors.push(`Der Wiki-Link „${body}" muss die Form [[wiki:bereich]] oder [[wiki:bereich/artikel]] haben.`)
       return false
     }
     const [spaceSlug = '', slug = ''] = target.split('/')
@@ -411,6 +423,11 @@ function createRenderer() {
     return `<a class="wiki-link" data-wiki-article="${escape(path)}" data-wiki-label="${escape(label)}">${escape(label || path)}</a>`
   }
 
+  md.renderer.rules.wiki_space_link = (tokens: any[], index: number) => {
+    const { spaceSlug, label } = tokens[index].meta
+    return `<a class="wiki-link" data-wiki-space="${escape(spaceSlug)}" data-wiki-label="${escape(label)}">${escape(label || spaceSlug)}</a>`
+  }
+
   md.renderer.rules.wiki_glossary_ref = (tokens: any[], index: number) => {
     const { term, label, display } = tokens[index].meta
     return `<span class="wiki-glossary" data-wiki-glossary="${escape(term)}">${escape(label || display || term)}</span>`
@@ -428,7 +445,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     'span', 'div',
   ],
   allowedAttributes: {
-    '*': ['class', 'id', 'data-wiki-image', 'data-wiki-embed', 'data-wiki-args', 'data-wiki-tool', 'data-wiki-tool-meta', 'data-wiki-checklist', 'data-wiki-article', 'data-wiki-glossary', 'data-wiki-callout', 'data-wiki-label'],
+    '*': ['class', 'id', 'data-wiki-image', 'data-wiki-embed', 'data-wiki-args', 'data-wiki-tool', 'data-wiki-tool-meta', 'data-wiki-checklist', 'data-wiki-article', 'data-wiki-space', 'data-wiki-glossary', 'data-wiki-callout', 'data-wiki-label'],
     a: ['href', 'title', 'rel', 'target'],
     img: ['src', 'alt', 'title', 'loading'],
     span: ['class'],
@@ -460,6 +477,8 @@ function collectText(tokens: any[], parts: string[]) {
       collectText(token.children, parts)
     } else if (token.type === 'text' || token.type === 'code_inline') {
       parts.push(token.content)
+    } else if (token.type === 'wiki_space_link') {
+      parts.push(token.meta.label || token.meta.spaceSlug)
     } else if (token.type === 'wiki_article_link' || token.type === 'wiki_glossary_ref') {
       parts.push(token.meta.label || token.meta.term || `${token.meta.spaceSlug}/${token.meta.slug}`)
     } else if (token.type === 'softbreak' || token.type === 'hardbreak') {
@@ -490,6 +509,7 @@ export function renderArticle(markdown: string, options: WikiRenderOptions = {})
     toolLinks: [],
     checklists: [],
     articleLinks: [],
+    spaceLinks: [],
     glossaryTerms: [],
     headings: [],
     images: [],
@@ -521,6 +541,7 @@ export function renderArticle(markdown: string, options: WikiRenderOptions = {})
     toolLinks: env.toolLinks,
     checklists: env.checklists,
     articleLinks: env.articleLinks,
+    spaceLinks: env.spaceLinks,
     glossaryTerms: env.glossaryTerms,
     headings: env.headings,
     images: env.images,
@@ -534,6 +555,7 @@ export function parseArticleTokens(markdown: string, options: WikiRenderOptions 
     toolLinks: [],
     checklists: [],
     articleLinks: [],
+    spaceLinks: [],
     glossaryTerms: [],
     headings: [],
     images: [],

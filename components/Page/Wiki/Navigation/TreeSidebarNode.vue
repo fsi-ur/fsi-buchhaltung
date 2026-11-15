@@ -43,13 +43,10 @@
         :aria-current="isCurrent ? 'page' : undefined"
         @click="$emit('select', { id: article.id, slug: article.slug, spaceSlug })"
       >
-        <span class="block truncate">{{ article.title }}</span>
         <span
-          v-if="article.status !== 'published'"
-          class="mt-0.5 inline-block rounded bg-base-100 px-1 text-[0.65rem] font-medium uppercase tracking-wide text-base-500"
-        >
-          {{ t(`wiki.status.${article.status}`) }}
-        </span>
+          :class="['block truncate', article.status === 'archived' ? 'text-base-400 line-through decoration-base-300' : '']"
+        >{{ article.title }}</span>
+        <PageWikiStatusPill :status="article.status" class="mt-0.5" />
       </button>
 
       <span v-if="canMove" class="flex shrink-0 items-center">

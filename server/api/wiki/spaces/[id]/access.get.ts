@@ -1,7 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { requirePermission } from '~/server/utils/api/guards'
 import { getSpaceEffectiveLevel, getWikiAccess, levelAtLeast } from '~/server/utils/wiki/access'
-import { loadScopeGrants } from '~/server/utils/wiki/grants'
+import { loadScopeGrants, loadSubdivisionNames } from '~/server/utils/wiki/grants'
 import type { WikiScopeAccessResponse } from '~/server/api/wiki/articles/[id]/access.get'
 import type { WikiAccessLevel } from '~/types/wiki'
 import { internalError } from '~/server/utils/api/errors'
@@ -25,6 +25,9 @@ export default defineEventHandler(async (event): Promise<WikiScopeAccessResponse
       grants: await loadScopeGrants(index, 'space', spaceId),
       accessLevel: level as WikiAccessLevel,
       canManage: subjects.canManage || levelAtLeast(level, 'admin'),
+      managingSubdivisions: await loadSubdivisionNames(
+        index.spaceOwnerSubdivisions.has(spaceId) ? [index.spaceOwnerSubdivisions.get(spaceId)!] : [],
+      ),
     }
   } catch (err: any) {
     return internalError('Failed to load wiki access grants', err)

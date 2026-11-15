@@ -4,6 +4,9 @@
       <p class="font-semibold text-base-800">{{ t('wiki.access.summary') }}</p>
       <p class="text-base-700">{{ readSummary }}</p>
       <p v-if="writeSummary" class="text-base-700">{{ writeSummary }}</p>
+      <p v-if="managingSubdivisions.length" class="text-base-700">
+        {{ t('wiki.access.summarySubdivisionManagers', { subdivisions: managingSubdivisions.join(', ') }) }}
+      </p>
     </div>
 
     <p v-if="!canManage" class="text-sm text-base-500">{{ t('wiki.access.readOnlyHint') }}</p>
@@ -34,7 +37,7 @@
         </div>
 
         <button
-          v-if="canManage && !grant.inherited && !grant.owner_derived"
+          v-if="canManage && !grant.inherited"
           type="button"
           class="btn-secondary"
           @click="confirmRemoval = grant.id"
@@ -74,12 +77,15 @@ const props = defineProps<{
   scopeId: number
 }>()
 
+const emit = defineEmits<{ (e: 'changed'): void }>()
+
 const { t } = useI18n()
 const toast = useToast()
 
 const grants = ref<GrantView[]>([])
 const canManage = ref(false)
 const accessLevel = ref<WikiAccessLevel>('read')
+const managingSubdivisions = ref<string[]>([])
 const confirmRemoval = ref<number | null>(null)
 
 const permissionLabels = new Map(PERMISSIONS.map(permission => [permission.key as string, permission.labelKey]))
@@ -126,9 +132,11 @@ async function load() {
   if (!res.ok) {
     grants.value = []
     canManage.value = false
+    managingSubdivisions.value = []
     return
   }
   grants.value = res.grants
+  managingSubdivisions.value = res.managingSubdivisions
   canManage.value = res.canManage
   accessLevel.value = res.accessLevel
 }
@@ -151,6 +159,7 @@ async function addGrant(grant: {
   }
 
   toast.success(t('wiki.access.addedToast'))
+  emit('changed')
   await load()
 }
 
@@ -166,6 +175,7 @@ async function removeGrant() {
   }
 
   toast.success(t('wiki.access.removedToast'))
+  emit('changed')
   await load()
 }
 

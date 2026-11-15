@@ -55,6 +55,7 @@
             </button>
           </span>
           <button type="button" class="btn-secondary" @click="openEdit(space)">{{ t('actions.edit') }}</button>
+          <button type="button" class="btn-secondary" @click="accessSpace = space">{{ t('wiki.space.access') }}</button>
           <button
             v-if="!space.articleCount"
             type="button"
@@ -72,6 +73,7 @@
   </CommonCard>
 
   <PageWikiAdminSpaceEditModal v-model="modalOpen" :space="editing" @saved="load" />
+  <PageWikiSpaceAccessModal :space="accessSpace" @close="accessSpace = null" />
 
   <CommonModal
     v-if="deleteTarget"
@@ -105,6 +107,7 @@ const error = ref('')
 const modalOpen = ref(false)
 const editing = ref<WikiSpaceAdminView | null>(null)
 const deleteTarget = ref<WikiSpaceAdminView | null>(null)
+const accessSpace = ref<WikiSpaceAdminView | null>(null)
 
 function ownerLabel(space: WikiSpaceAdminView) {
   return [space.ownerPositionName, space.ownerSubdivisionName].filter(Boolean).join(' · ')

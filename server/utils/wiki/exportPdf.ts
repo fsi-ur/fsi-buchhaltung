@@ -190,6 +190,12 @@ function inlineRuns(token: any, base: RunStyle = {}): TextRun[] {
         runs.push({ text: ` (Wiki: ${spaceSlug}/${slug})`, style: { ...top(), color: COLOR.muted, size: 8.5 } })
         break
       }
+      case 'wiki_space_link': {
+        const { spaceSlug, label } = child.meta ?? {}
+        runs.push({ text: label || spaceSlug, style: { ...top(), color: COLOR.link, underline: true } })
+        runs.push({ text: ` (Wiki-Bereich: ${spaceSlug})`, style: { ...top(), color: COLOR.muted, size: 8.5 } })
+        break
+      }
       case 'wiki_glossary_ref': {
         const { term, label, display } = child.meta ?? {}
         runs.push({ text: label || display || term, style: { ...top(), color: COLOR.glossary } })

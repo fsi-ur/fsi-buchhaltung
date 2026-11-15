@@ -1,9 +1,11 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { requireArticleWrite } from '~/server/utils/wiki/access'
-import { applyOwnerGrants } from '~/server/utils/wiki/grants'
+import { invalidateWikiAccess, levelAtLeast, requireArticleWrite } from '~/server/utils/wiki/access'
+import { applyOwnerGrants, loadScopeOwner } from '~/server/utils/wiki/grants'
 import { internalError } from '~/server/utils/api/errors'
+
+export const OWNER_SUBDIVISION_NEEDS_ADMIN = 'Die verantwortliche Untergliederung kann nur ändern, wer diesen Artikel verwalten darf.'
 
 export type SetWikiOwnerResponse = { ok: true } | { ok: false, error: string }
 
@@ -34,6 +36,11 @@ export default defineEventHandler(async (event): Promise<SetWikiOwnerResponse> =
     return { ok: false, error: 'Diese Untergliederung wurde nicht gefunden.' }
   }
 
+  const currentOwner = await loadScopeOwner('article', articleId)
+  if (currentOwner.ownerSubdivisionId !== subdivisionId && !levelAtLeast(access.level, 'admin')) {
+    return { ok: false, error: OWNER_SUBDIVISION_NEEDS_ADMIN }
+  }
+
   try {
     await withAuditTransaction(current.user, async (conn) => {
       await query(
@@ -53,6 +60,7 @@ export default defineEventHandler(async (event): Promise<SetWikiOwnerResponse> =
       )
     })
 
+    invalidateWikiAccess(event)
     return { ok: true }
   } catch (err: any) {
     return internalError('Failed to set the wiki article owner', err)

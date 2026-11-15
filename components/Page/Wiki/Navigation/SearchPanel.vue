@@ -89,7 +89,13 @@
         >
           <span class="min-w-0 flex-1">
             <span class="block text-xs text-base-500">{{ hit.spaceTitle }}</span>
-            <span class="block font-semibold text-base-900" v-html="highlight(hit.title)"></span>
+            <span class="flex items-center gap-2">
+              <span
+                :class="['min-w-0 font-semibold', hit.status === 'archived' ? 'text-base-500 line-through decoration-base-300' : 'text-base-900']"
+                v-html="highlight(hit.title)"
+              ></span>
+              <PageWikiStatusPill :status="hit.status" />
+            </span>
             <span
               v-if="hit.snippet"
               class="mt-1 block text-sm leading-relaxed text-base-600"

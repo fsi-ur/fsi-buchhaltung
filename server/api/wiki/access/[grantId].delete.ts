@@ -2,7 +2,7 @@ import { defineEventHandler } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
 import { invalidateWikiAccess, requireScopeAdmin } from '~/server/utils/wiki/access'
-import { checkLastAdmin, findGrant, isOwnerDerivedGrant, loadScopeOwner } from '~/server/utils/wiki/grants'
+import { checkLastAdmin, findGrant } from '~/server/utils/wiki/grants'
 import { internalError } from '~/server/utils/api/errors'
 
 export type DeleteWikiGrantResponse = { ok: true } | { ok: false, error: string }
@@ -20,10 +20,6 @@ export default defineEventHandler(async (event): Promise<DeleteWikiGrantResponse
   const access = await requireScopeAdmin(event, current.user, grant.scope_type, Number(grant.scope_id))
   if (!access.ok) return access
 
-  const owner = await loadScopeOwner(grant.scope_type, Number(grant.scope_id))
-  if (isOwnerDerivedGrant(grant, owner)) {
-    return { ok: false, error: 'Diese Berechtigung stammt aus der Zuständigkeit (Amt/Untergliederung). Entferne zuerst die Zuständigkeit, um sie zu entfernen.' }
-  }
 
   const lastAdmin = checkLastAdmin(access.index, access.subjects, grant)
   if (lastAdmin) return { ok: false, error: lastAdmin }

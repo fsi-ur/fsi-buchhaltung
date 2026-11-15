@@ -138,7 +138,26 @@
               <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
                 <Icon :name="space.icon" class="h-5 w-5" aria-hidden="true" />
               </span>
-              <h3 class="min-w-0 flex-1 font-semibold text-base-900">{{ space.title }}</h3>
+              <h3 class="min-w-0 flex-1 font-semibold text-base-900">
+                <button
+                  type="button"
+                  class="cursor-pointer text-left transition-colors hover:text-accent-700"
+                  :title="t('wiki.space.open', { title: space.title })"
+                  @click="openSpace(space)"
+                >
+                  {{ space.title }}
+                </button>
+              </h3>
+              <button
+                v-if="space.accessLevel === 'admin'"
+                type="button"
+                class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-base-400 transition-colors hover:bg-base-100 hover:text-base-700"
+                :title="t('wiki.space.access')"
+                :aria-label="t('wiki.space.access')"
+                @click="accessSpace = space"
+              >
+                <Icon name="material-symbols:shield-person-outline-rounded" class="h-5 w-5" aria-hidden="true" />
+              </button>
               <a
                 :href="`/api/wiki/spaces/${space.id}/export-pdf`"
                 target="_blank"
@@ -156,16 +175,24 @@
               <li v-for="article in space.articles.slice(0, 5)" :key="article.id">
                 <button type="button" class="wiki-link-row" @click="openArticle(article.id)">
                   <Icon name="material-symbols:article-outline-rounded" class="shrink-0 text-base text-base-300" aria-hidden="true" />
-                  <span class="min-w-0 flex-1 truncate">{{ article.title }}</span>
+                  <span :class="['min-w-0 flex-1 truncate', article.status === 'archived' ? 'text-base-400 line-through decoration-base-300' : '']">{{ article.title }}</span>
+                  <PageWikiStatusPill :status="article.status" />
                   <Icon name="material-symbols:chevron-right-rounded" class="wiki-link-chevron" aria-hidden="true" />
                 </button>
               </li>
             </ul>
             <p v-else class="mt-3 text-sm text-base-400">{{ t('wiki.home.empty') }}</p>
 
-            <p v-if="space.articles.length > 5" class="mt-1 pl-2 text-xs text-base-400">
-              {{ t('wiki.home.moreArticles', { count: space.articles.length - 5 }) }}
-            </p>
+            <button
+              type="button"
+              class="mt-1 inline-flex cursor-pointer items-center gap-1 rounded pl-2 text-xs font-medium text-accent-700 hover:underline"
+              @click="openSpace(space)"
+            >
+              {{ space.articles.length > 5
+                ? t('wiki.home.moreArticles', { count: space.articles.length - 5 })
+                : t('wiki.space.open', { title: space.title }) }}
+              <Icon name="material-symbols:arrow-forward-rounded" class="text-sm" aria-hidden="true" />
+            </button>
           </section>
         </div>
       </CommonCard>
@@ -200,6 +227,8 @@
           </ul>
         </CommonCard>
       </div>
+
+      <PageWikiSpaceAccessModal :space="accessSpace" @close="accessSpace = null" @changed="load" />
     </template>
   </Page>
 </template>
@@ -227,6 +256,7 @@ const { pageMeta, setPage } = usePage()
 const initialTag = pageMeta.value?.tag ? String(pageMeta.value.tag) : null
 
 const spaces = ref<WikiTreeSpace[]>([])
+const accessSpace = ref<WikiTreeSpace | null>(null)
 const recentlyUpdated = ref<WikiHomeArticle[]>([])
 const recentlyRead = ref<WikiHomeArticle[]>([])
 const paths = ref<WikiPathView[]>([])
@@ -250,6 +280,10 @@ function openPath(pathId: number) {
 
 function openArticle(articleId: number) {
   setPage('WikiArticle', { articleId })
+}
+
+function openSpace(space: { id: number, slug: string }) {
+  setPage('WikiSpace', { spaceId: space.id, slug: space.slug, returnTarget: buildReturnTarget('Wiki') })
 }
 
 function openGlossary() {

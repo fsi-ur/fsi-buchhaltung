@@ -9,6 +9,8 @@ import type {
   WikiScopeType,
 } from '~/types/wiki'
 import { appTodayLocalDate } from '~/server/utils/time'
+import { getUserSubdivisionPermissions } from '~/server/utils/subdivisionLeadership'
+import type { SubdivisionPermissionKey } from '~/config/subdivisionPermissions'
 
 const LEVEL_ORDER: Record<WikiEffectiveLevel, number> = { none: 0, read: 1, write: 2, admin: 3 }
 
@@ -33,6 +35,17 @@ export interface ViewerSubjects {
   canReview: boolean
   /** `wiki.manage`: bypasses the ACL and is the only key that may manage spaces, paths and glossary. */
   canManage: boolean
+  /**
+   * Subdivisions whose wiki the user edits (scoped `subdivision.wiki.edit`): write on every
+   * space/article such a subdivision is responsible for, including everything below it.
+   */
+  wikiEditSubdivisionIds: number[]
+  /**
+   * Subdivisions whose wiki the user manages (scoped `subdivision.wiki.manage`, or every active
+   * subdivision with `subdivisions.leadership.edit`): admin on the same content. Always also listed
+   * in `wikiEditSubdivisionIds`.
+   */
+  wikiManageSubdivisionIds: number[]
 }
 
 export interface ArticleNode {
@@ -40,10 +53,13 @@ export interface ArticleNode {
   spaceId: number
   parentId: number | null
   status: string
+  ownerSubdivisionId: number | null
 }
 
 export interface WikiAccessIndex {
   spaceIds: Set<number>
+  /** Owner subdivision per space (only spaces that have one). */
+  spaceOwnerSubdivisions: Map<number, number>
   articles: Map<number, ArticleNode>
   grantsBySpace: Map<number, WikiAccessGrant[]>
   grantsByArticle: Map<number, WikiAccessGrant[]>
@@ -98,6 +114,7 @@ export async function resolveViewerSubjects(user: User, conn?: mariadb.PoolConne
 
   return {
     userId: Number(user.id),
+    ...await resolveSubdivisionWikiAccess(user, conn),
     roleIds: roleRows.map(row => Number(row.role_id)),
     positionIds,
     subdivisionIds,
@@ -109,10 +126,40 @@ export async function resolveViewerSubjects(user: User, conn?: mariadb.PoolConne
   }
 }
 
+/** Subdivisions whose wiki this user edits / manages — see `ViewerSubjects`. */
+export async function resolveSubdivisionWikiAccess(
+  user: User,
+  conn?: mariadb.PoolConnection,
+): Promise<Pick<ViewerSubjects, 'wikiEditSubdivisionIds' | 'wikiManageSubdivisionIds'>> {
+  if (user.permissions.includes('subdivisions.leadership.edit')) {
+    const rows = await query<Array<{ id: number }>>('SELECT id FROM subdivisions WHERE is_active = 1', [], conn)
+    const ids = rows.map(row => Number(row.id))
+    return { wikiEditSubdivisionIds: ids, wikiManageSubdivisionIds: [...ids] }
+  }
+
+  // Implied keys are already expanded: subdivision.wiki.manage brings subdivision.wiki.edit along.
+  const scoped = Object.entries(await getUserSubdivisionPermissions(Number(user.id), conn))
+  const holding = (key: SubdivisionPermissionKey) => scoped.filter(([, keys]) => keys.includes(key)).map(([id]) => Number(id))
+  return {
+    wikiEditSubdivisionIds: holding('subdivision.wiki.edit'),
+    wikiManageSubdivisionIds: holding('subdivision.wiki.manage'),
+  }
+}
+
 export async function loadAccessIndex(conn?: mariadb.PoolConnection): Promise<WikiAccessIndex> {
-  const spaceRows = await query<Array<{ id: number }>>('SELECT id FROM wiki_spaces', [], conn)
-  const articleRows = await query<Array<{ id: number, space_id: number, parent_id: number | null, status: string }>>(
-    'SELECT id, space_id, parent_id, status FROM wiki_articles',
+  const spaceRows = await query<Array<{ id: number, owner_subdivision_id: number | null }>>(
+    'SELECT id, owner_subdivision_id FROM wiki_spaces',
+    [],
+    conn,
+  )
+  const articleRows = await query<Array<{
+    id: number
+    space_id: number
+    parent_id: number | null
+    status: string
+    owner_subdivision_id: number | null
+  }>>(
+    'SELECT id, space_id, parent_id, status, owner_subdivision_id FROM wiki_articles',
     [],
     conn,
   )
@@ -131,7 +178,13 @@ export async function loadAccessIndex(conn?: mariadb.PoolConnection): Promise<Wi
       spaceId: Number(row.space_id),
       parentId: row.parent_id === null ? null : Number(row.parent_id),
       status: row.status,
+      ownerSubdivisionId: row.owner_subdivision_id === null ? null : Number(row.owner_subdivision_id),
     })
+  }
+
+  const spaceOwnerSubdivisions = new Map<number, number>()
+  for (const row of spaceRows) {
+    if (row.owner_subdivision_id !== null) spaceOwnerSubdivisions.set(Number(row.id), Number(row.owner_subdivision_id))
   }
 
   const grantsBySpace = new Map<number, WikiAccessGrant[]>()
@@ -147,6 +200,7 @@ export async function loadAccessIndex(conn?: mariadb.PoolConnection): Promise<Wi
 
   return {
     spaceIds: new Set(spaceRows.map(row => Number(row.id))),
+    spaceOwnerSubdivisions,
     articles,
     grantsBySpace,
     grantsByArticle,
@@ -188,6 +242,38 @@ export function collectApplicableGrants(index: WikiAccessIndex, articleId: numbe
   return grants
 }
 
+/**
+ * Owner subdivisions that reach an article: its own, its ancestors' and its space's (nearest first,
+ * without duplicates). Ownership works like a grant with `include_descendants`.
+ */
+export function collectOwnerSubdivisionIds(index: WikiAccessIndex, articleId: number): number[] {
+  const article = index.articles.get(articleId)
+  if (!article) return []
+
+  const ids: number[] = []
+  const add = (id: number | null | undefined) => {
+    if (id !== null && id !== undefined && !ids.includes(id)) ids.push(id)
+  }
+
+  const seen = new Set<number>()
+  let node: ArticleNode | undefined = article
+  while (node && !seen.has(node.id)) {
+    seen.add(node.id)
+    add(node.ownerSubdivisionId)
+    node = node.parentId === null ? undefined : index.articles.get(node.parentId)
+  }
+  add(index.spaceOwnerSubdivisions.get(article.spaceId))
+
+  return ids
+}
+
+/** Level the owner subdivisions give: admin if the user manages one's wiki, write if they edit one's. */
+function subdivisionLevel(subjects: ViewerSubjects, ownerSubdivisionIds: number[]): WikiEffectiveLevel {
+  if (ownerSubdivisionIds.some(id => subjects.wikiManageSubdivisionIds.includes(id))) return 'admin'
+  if (ownerSubdivisionIds.some(id => subjects.wikiEditSubdivisionIds.includes(id))) return 'write'
+  return 'none'
+}
+
 function resolveFromGrants(grants: WikiAccessGrant[], subjects: ViewerSubjects): WikiEffectiveLevel {
   let level: WikiEffectiveLevel = 'none'
   let restricted = false
@@ -210,7 +296,10 @@ export function getEffectiveLevel(
   articleId: number,
 ): WikiEffectiveLevel {
   if (!index.articles.has(articleId)) return 'none'
-  return resolveFromGrants(collectApplicableGrants(index, articleId), subjects)
+  return maxLevel(
+    resolveFromGrants(collectApplicableGrants(index, articleId), subjects),
+    subdivisionLevel(subjects, collectOwnerSubdivisionIds(index, articleId)),
+  )
 }
 
 export function getSpaceEffectiveLevel(
@@ -219,7 +308,9 @@ export function getSpaceEffectiveLevel(
   spaceId: number,
 ): WikiEffectiveLevel {
   if (!index.spaceIds.has(spaceId)) return 'none'
-  return resolveFromGrants(index.grantsBySpace.get(spaceId) ?? [], subjects)
+  const owner = index.spaceOwnerSubdivisions.get(spaceId)
+  const fromOwner = owner === undefined ? 'none' : subdivisionLevel(subjects, [owner])
+  return maxLevel(fromOwner, resolveFromGrants(index.grantsBySpace.get(spaceId) ?? [], subjects))
 }
 
 export function filterVisibleArticles<T extends { id: number } | { article_id: number }>(

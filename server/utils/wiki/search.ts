@@ -1,7 +1,7 @@
 import type * as mariadb from 'mariadb'
 import { query } from '~/server/utils/db'
 import { filterVisibleArticles, type ViewerSubjects, type WikiAccessIndex } from '~/server/utils/wiki/access'
-import type { WikiSearchHit } from '~/types/wiki'
+import type { WikiArticleStatus, WikiSearchHit } from '~/types/wiki'
 
 interface SearchRow {
   id: number
@@ -12,6 +12,7 @@ interface SearchRow {
   title: string
   summary: string
   content_text: string | null
+  status: WikiArticleStatus
 }
 
 export interface WikiSearchFilters {
@@ -111,7 +112,7 @@ export async function searchArticles(
 
   const rows = await query<SearchRow[]>(
     `SELECT a.id, a.space_id, s.slug AS space_slug, s.title AS space_title,
-            a.slug, a.title, a.summary, a.content_text
+            a.slug, a.title, a.summary, a.content_text, a.status
      FROM wiki_articles a
      JOIN wiki_spaces s ON s.id = a.space_id
      WHERE ${conditions.join(' AND ')}
@@ -131,5 +132,6 @@ export async function searchArticles(
       title: row.title,
       summary: row.summary,
       snippet: buildSnippet(row.content_text, hasTerm ? term : ''),
+      status: row.status,
     }))
 }

@@ -1,13 +1,15 @@
 import { defineEventHandler, readBody } from 'h3'
 import { query, withAuditTransaction } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/api/guards'
-import { invalidateWikiAccess } from '~/server/utils/wiki/access'
+import { invalidateWikiAccess, requireSpaceAdmin } from '~/server/utils/wiki/access'
 import { slugifyTitle } from '~/server/utils/wiki/articles'
 import { applyOwnerGrants } from '~/server/utils/wiki/grants'
 import { DEFAULT_SPACE_ICON, isSpaceSlugTaken, validateSpaceFields } from '~/server/utils/wiki/spaces'
 import { internalError } from '~/server/utils/api/errors'
 
 export type UpdateWikiSpaceResponse = { ok: true } | { ok: false, error: string }
+
+export const SPACE_FIELDS_NEED_MANAGE = 'Kurzname, Zuständigkeit und Archivierung eines Bereichs kann nur ändern, wer das Wiki verwaltet.'
 
 const NOT_FOUND = 'Der Bereich wurde nicht gefunden.'
 
@@ -17,14 +19,28 @@ async function exists(table: string, id: number) {
 }
 
 export default defineEventHandler(async (event): Promise<UpdateWikiSpaceResponse> => {
-  const current = await requirePermission(event, 'wiki.manage')
+  const current = await requirePermission(event, 'wiki.view')
   if (!current.ok) return current
 
   const spaceId = Number(event.context.params?.id)
   if (!Number.isInteger(spaceId) || spaceId <= 0) return { ok: false, error: NOT_FOUND }
 
-  const spaceRows = await query<Array<{ id: number }>>('SELECT id FROM wiki_spaces WHERE id = ? LIMIT 1', [spaceId])
-  if (!spaceRows.length) return { ok: false, error: NOT_FOUND }
+  const spaceRows = await query<Array<{
+    id: number
+    slug: string
+    is_archived: number
+    owner_position_id: number | null
+    owner_subdivision_id: number | null
+  }>>(
+    'SELECT id, slug, is_archived, owner_position_id, owner_subdivision_id FROM wiki_spaces WHERE id = ? LIMIT 1',
+    [spaceId],
+  )
+  const existing = spaceRows[0]
+  if (!existing) return { ok: false, error: NOT_FOUND }
+
+  const access = await requireSpaceAdmin(event, current.user, spaceId)
+  if (!access.ok) return access
+  const canManageWiki = access.subjects.canManage
 
   const body = await readBody(event)
   const title = String(body?.title ?? '').trim()
@@ -35,7 +51,16 @@ export default defineEventHandler(async (event): Promise<UpdateWikiSpaceResponse
   const isArchived = body?.isArchived ? 1 : 0
   const ownerPositionId = body?.ownerPositionId ? Number(body.ownerPositionId) : null
   const ownerSubdivisionId = body?.ownerSubdivisionId ? Number(body.ownerSubdivisionId) : null
-  const createGrant = body?.createGrant === true
+  const createGrant = body?.createGrant === true && canManageWiki
+
+  if (!canManageWiki && (
+    slug !== existing.slug
+    || isArchived !== Number(existing.is_archived)
+    || ownerPositionId !== (existing.owner_position_id === null ? null : Number(existing.owner_position_id))
+    || ownerSubdivisionId !== (existing.owner_subdivision_id === null ? null : Number(existing.owner_subdivision_id))
+  )) {
+    return { ok: false, error: SPACE_FIELDS_NEED_MANAGE }
+  }
 
   const invalid = validateSpaceFields({ title, slug, description, icon })
   if (invalid) return { ok: false, error: invalid }

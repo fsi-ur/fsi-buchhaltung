@@ -6,7 +6,7 @@ const pageMeta = ref<Record<string, any> | null>(null)
 const pendingLoginTarget = ref<{ page: PageName; meta: Record<string, any> | null } | null>(null)
 
 // Only these meta keys are persisted in the URL hash; ephemeral keys like returnTarget are excluded
-const HASH_META_KEYS = ['eventId', 'tab', 'articleId', 'slug', 'pathId', 'tag']
+const HASH_META_KEYS = ['eventId', 'tab', 'articleId', 'spaceId', 'slug', 'pathId', 'tag']
 
 function buildHash(page: PageName, meta: Record<string, any> | null): string {
   const params = new URLSearchParams()

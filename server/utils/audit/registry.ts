@@ -417,6 +417,7 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     domain: 'wiki',
     viewPermissions: ['wiki.manage'],
     describe: state => state.title ?? null,
+    openPage: { page: 'WikiSpace', metaKey: 'spaceId' },
   },
   wiki_article_revisions: {
     table: 'wiki_article_revisions',

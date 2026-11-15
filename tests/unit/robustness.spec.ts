@@ -24,6 +24,10 @@ describe('wiki tool links', () => {
   it('accept flat meta values only', () => {
     expect(renderArticle(':::tool{page="ReceiptList" meta=\'{"receiptId":5}\'}').ok).toBe(true)
     expect(renderArticle(':::tool{page="ReceiptList" meta=\'{"returnTarget":{"page":"X"}}\'}').ok).toBe(false)
+    expect(renderArticle(':::tool{page="ReceiptList" meta=\'{"returnTarget":"ReceiptList"}\'}').ok).toBe(false)
+    // What the editor inserts into every tool link: back to the article being read.
+    expect(renderArticle(':::tool{page="Settings" meta=\'{"returnTarget":"self","tab":"app"}\'}').ok).toBe(true)
+    expect(renderArticle(':::tool{page="EventCreate" meta=\'{"returnTarget":"self","eventId":3,"tab":"tasks"}\'}').ok).toBe(true)
     expect(renderArticle(':::tool{page="ReceiptList" meta=\'{"nested":{"a":1}}\'}').ok).toBe(false)
   })
 })

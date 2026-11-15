@@ -62,6 +62,21 @@ export default async function setup() {
         + '  Run:  npm run test:db:setup',
       )
     }
+
+    // `resetDatabase()` empties tables with DELETE between tests, which keeps every auto-increment
+    // counter running — across runs, too, until a small key (spheres.id is a TINYINT) overflows.
+    // Once per run, TRUNCATE empties everything and restarts the counters at 1 (fast, and it fires
+    // no audit triggers). Within a run ids keep growing, so audit rows never meet a reused id.
+    const baseTables = await conn.query(
+      `SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'`,
+      [target.database],
+    ) as Array<{ name: string }>
+    await conn.query('SET FOREIGN_KEY_CHECKS = 0')
+    try {
+      for (const { name } of baseTables) await conn.query(`TRUNCATE TABLE \`${name}\``)
+    } finally {
+      await conn.query('SET FOREIGN_KEY_CHECKS = 1')
+    }
   } finally {
     await conn.end()
   }

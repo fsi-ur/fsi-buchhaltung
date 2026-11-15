@@ -21,9 +21,13 @@ import {
 } from '~/server/utils/wiki/articles'
 import { loadArticleChecklists } from '~/server/utils/wiki/checklists'
 import { loadArticleImages } from '~/server/utils/wiki/images'
-import type { WikiAccessLevel, WikiArticle, WikiArticleLink, WikiChecklistView, WikiImage, WikiSpace } from '~/types/wiki'
+import type { WikiAccessLevel, WikiArticle, WikiArticleLink, WikiArticleStatus, WikiChecklistView, WikiImage, WikiSpace } from '~/types/wiki'
 import type { WikiHeading } from '~/server/utils/wiki/render'
 
+/**
+ * Link targets of an article's HTML, `null` when missing or not visible to the reader. Keys are
+ * `bereich/artikel` for article links and `bereich` (no slash) for space links.
+ */
 export type WikiLinkResolution = Record<string, { id: number, title: string } | null>
 
 export interface WikiArticleDetailPayload {
@@ -67,9 +71,10 @@ export type WikiArticleDetailResult =
   | { ok: false, error: string }
 
 const LINK_ATTRIBUTE = /data-wiki-article="([^"]+)"/g
+const SPACE_LINK_ATTRIBUTE = /data-wiki-space="([^"]+)"/g
 
-function toLink(node: { id: number, slug: string, title: string }, spaceSlug: string): WikiArticleLink {
-  return { id: node.id, slug: node.slug, spaceSlug, title: node.title }
+function toLink(node: { id: number, slug: string, title: string, status: WikiArticleStatus }, spaceSlug: string): WikiArticleLink {
+  return { id: node.id, slug: node.slug, spaceSlug, title: node.title, status: node.status }
 }
 
 export async function loadArticleDetail(
@@ -150,6 +155,15 @@ export async function loadArticleDetail(
     links[path] = target && canReadArticle(index, subjects, Number(target.id))
       ? { id: Number(target.id), title: target.title }
       : null
+  }
+
+  // Space links resolve to spaces the reader can see at all (the same rule as the tree).
+  SPACE_LINK_ATTRIBUTE.lastIndex = 0
+  while ((match = SPACE_LINK_ATTRIBUTE.exec(contentHtml)) !== null) {
+    const spaceSlug = match[1] ?? ''
+    if (spaceSlug in links) continue
+    const target = tree.find(entry => entry.slug === spaceSlug)
+    links[spaceSlug] = target ? { id: target.id, title: target.title } : null
   }
 
   if (options.track !== false) void trackArticleView(subjects.userId, articleId)
