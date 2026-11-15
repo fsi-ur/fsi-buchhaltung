@@ -1,32 +1,42 @@
 <template>
   <div class="space-y-3">
     <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        class="btn-primary flex h-9 items-center gap-1.5 px-3 text-sm"
+        :title="t('wiki.editor.toolbar.insertTitle', { shortcut: `${modKey}+/` })"
+        @click="openHelper('insert')"
+      >
+        <Icon name="material-symbols:add-circle-outline-rounded" class="h-5 w-5" aria-hidden="true" />
+        <span>{{ t('wiki.editor.toolbar.insert') }}</span>
+      </button>
+
       <div class="wiki-toolbar-group">
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.bold')" :aria-label="t('wiki.editor.toolbar.bold')" @click="wrap('**', '**')">
+        <button type="button" class="wiki-toolbar-btn" :title="`${t('wiki.editor.toolbar.bold')} (${modKey}+B)`" :aria-label="t('wiki.editor.toolbar.bold')" @click="wrap('**', '**')">
           <Icon name="material-symbols:format-bold-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.italic')" :aria-label="t('wiki.editor.toolbar.italic')" @click="wrap('*', '*')">
+        <button type="button" class="wiki-toolbar-btn" :title="`${t('wiki.editor.toolbar.italic')} (${modKey}+I)`" :aria-label="t('wiki.editor.toolbar.italic')" @click="wrap('*', '*')">
           <Icon name="material-symbols:format-italic-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.heading')" :aria-label="t('wiki.editor.toolbar.heading')" @click="prefixLine('## ')">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.heading')" :aria-label="t('wiki.editor.toolbar.heading')" @click="prefixLines('## ')">
           <Icon name="material-symbols:format-h2-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
         <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.code')" :aria-label="t('wiki.editor.toolbar.code')" @click="wrap('`', '`')">
           <Icon name="material-symbols:code-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.link')" :aria-label="t('wiki.editor.toolbar.link')" @click="wrap('[', '](https://)')">
+        <button type="button" class="wiki-toolbar-btn" :title="`${t('wiki.editor.toolbar.link')} (${modKey}+K)`" :aria-label="t('wiki.editor.toolbar.link')" @click="insertLink">
           <Icon name="material-symbols:link-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
 
       <div class="wiki-toolbar-group">
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.list')" :aria-label="t('wiki.editor.toolbar.list')" @click="prefixLine('- ')">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.list')" :aria-label="t('wiki.editor.toolbar.list')" @click="prefixLines('- ')">
           <Icon name="material-symbols:format-list-bulleted-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.numberedList')" :aria-label="t('wiki.editor.toolbar.numberedList')" @click="prefixLine('1. ')">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.numberedList')" :aria-label="t('wiki.editor.toolbar.numberedList')" @click="prefixLines('1. ')">
           <Icon name="material-symbols:format-list-numbered-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
-        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.table')" :aria-label="t('wiki.editor.toolbar.table')" @click="insertBlock(TABLE_SNIPPET)">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.table')" :aria-label="t('wiki.editor.toolbar.table')" @click="applySnippet({ text: WIKI_TABLE_SNIPPET, block: true })">
           <Icon name="material-symbols:table-rounded" class="h-5 w-5" aria-hidden="true" />
         </button>
         <button
@@ -50,99 +60,19 @@
       </div>
 
       <div class="wiki-toolbar-group">
-        <button type="button" class="wiki-toolbar-btn" @click="insertBlock(':::hinweis\n\n:::')">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.boxTitle')" @click="wrapBox('hinweis')">
           <Icon name="material-symbols:info-outline-rounded" class="h-4 w-4 text-info-500" aria-hidden="true" />
           {{ t('wiki.editor.toolbar.hint') }}
         </button>
-        <button type="button" class="wiki-toolbar-btn" @click="insertBlock(':::warnung\n\n:::')">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.boxTitle')" @click="wrapBox('warnung')">
           <Icon name="material-symbols:warning-outline-rounded" class="h-4 w-4 text-warning-500" aria-hidden="true" />
           {{ t('wiki.editor.toolbar.warning') }}
         </button>
-        <button type="button" class="wiki-toolbar-btn" @click="insertBlock(':::tipp\n\n:::')">
+        <button type="button" class="wiki-toolbar-btn" :title="t('wiki.editor.toolbar.boxTitle')" @click="wrapBox('tipp')">
           <Icon name="material-symbols:lightbulb-outline-rounded" class="h-4 w-4 text-success-500" aria-hidden="true" />
           {{ t('wiki.editor.toolbar.tip') }}
         </button>
       </div>
-
-      <MenuDropdown v-model="openInsertMenu" id="insert" wrapper-class="relative w-auto">
-        <template #trigger="{ styling }">
-          <button type="button" :class="[styling, 'w-auto cursor-pointer gap-1.5 py-2 text-sm']">
-            <Icon name="material-symbols:add-circle-outline-rounded" class="text-base text-base-500" aria-hidden="true" />
-            <span>{{ t('wiki.editor.toolbar.insert') }}</span>
-            <Icon name="material-symbols:keyboard-arrow-down-rounded" class="text-lg" />
-          </button>
-        </template>
-
-        <template #default="{ styling }">
-          <div class="px-3 py-1 text-xs font-semibold text-base-500">{{ t('wiki.editor.toolbar.insertTool') }}</div>
-          <button
-            v-for="page in toolPages"
-            :key="`tool:${page}`"
-            type="button"
-            :class="styling"
-            @click="chooseInsert(`tool:${page}`)"
-          >
-            {{ pageLabel(page) }}
-          </button>
-          <div v-if="settingsTabs.length" class="px-3 py-1 text-xs font-semibold text-base-500">{{ t('wiki.editor.toolbar.insertSettingsTab') }}</div>
-          <button
-            v-for="tab in settingsTabs"
-            :key="`settingsTab:${tab.key}`"
-            type="button"
-            :class="styling"
-            @click="chooseInsert(`settingsTab:${tab.key}`)"
-          >
-            {{ t(tab.labelKey) }}
-          </button>
-          <template v-if="canLinkEventTab">
-            <div class="px-3 py-1 text-xs font-semibold text-base-500">{{ t('wiki.editor.toolbar.insertEventTab') }}</div>
-            <button type="button" :class="styling" @click="openEventTabPicker">
-              {{ t('wiki.editor.toolbar.insertEventTab') }}
-            </button>
-          </template>
-          <div class="px-3 py-1 text-xs font-semibold text-base-500">{{ t('wiki.editor.toolbar.insertEmbed') }}</div>
-          <button
-            v-for="embed in embeds"
-            :key="`embed:${embed.key}`"
-            type="button"
-            :class="styling"
-            @click="chooseInsert(`embed:${embed.key}`)"
-          >
-            {{ t(embed.labelKey) }}
-            <span v-if="embed.argsSchema" class="ml-1 text-xs text-base-400">
-              {{ Object.keys(embed.argsSchema).join(', ') }}
-            </span>
-          </button>
-          <div class="px-3 py-1 text-xs font-semibold text-base-500">{{ t('wiki.editor.toolbar.insertChecklist') }}</div>
-          <p v-if="!checklists.length" class="px-3 py-1 text-xs text-base-400">
-            {{ t('wiki.editor.toolbar.noChecklists') }}
-          </p>
-          <button
-            v-for="checklist in checklists"
-            :key="`checklist:${checklist.keySlug}`"
-            type="button"
-            :class="styling"
-            @click="chooseInsert(`checklist:${checklist.keySlug}`)"
-          >
-            {{ checklist.title }}
-            <span class="ml-1 text-xs text-base-400">{{ checklist.keySlug }}</span>
-          </button>
-          <div class="px-3 py-1 text-xs font-semibold text-base-500">{{ t('wiki.editor.toolbar.insertGlossary') }}</div>
-          <p v-if="!glossaryTerms.length" class="px-3 py-1 text-xs text-base-400">
-            {{ t('wiki.editor.toolbar.noGlossaryTerms') }}
-          </p>
-          <button
-            v-for="entry in glossaryTerms"
-            :key="`glossary:${entry.key}`"
-            type="button"
-            :class="styling"
-            @click="chooseInsert(`glossary:${entry.key}`)"
-          >
-            {{ entry.term }}
-            <span class="ml-1 text-xs text-base-400">{{ entry.key }}</span>
-          </button>
-        </template>
-      </MenuDropdown>
     </div>
 
     <div class="segmented xl:hidden" role="group">
@@ -171,12 +101,19 @@
           :value="modelValue"
           class="input min-h-104 flex-1 font-mono text-sm leading-relaxed"
           spellcheck="false"
-          @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+          @input="onInput"
+          @keydown="onKeydown"
           @paste="onPaste"
           @dragover="onDragOver"
           @drop="onDrop"
         ></textarea>
         <p class="mt-1 text-xs text-base-400">
+          {{ t('wiki.editor.toolbar.slashHint', { shortcut: `${modKey}+/` }) }}
+          <button type="button" class="cursor-pointer font-medium text-link-600 hover:text-link-800" @click="openHelper('reference')">
+            {{ t('wiki.editor.toolbar.openReference') }}
+          </button>
+        </p>
+        <p class="mt-0.5 text-xs text-base-400">
           <template v-if="uploadingImages > 0">{{ t('wiki.editor.toolbar.imageUploading') }}</template>
           <template v-else-if="articleId">{{ t('wiki.editor.toolbar.imageHint') }}</template>
           <template v-else>{{ t('wiki.editor.toolbar.imageSaveFirst') }}</template>
@@ -208,72 +145,37 @@
       @deleted="fileId => $emit('imageDeleted', fileId)"
     />
 
-    <CommonModal v-model="eventTabModalOpen" :title="t('wiki.editor.eventTabLink.title')">
-      <div class="field">
-        <label class="section-title">{{ t('wiki.editor.eventTabLink.eventLabel') }}</label>
-        <CommonSearchSelect
-          v-model="eventQuery"
-          :options="eventOptions"
-          :selected-label="selectedEvent ? eventLabel(selectedEvent) : ''"
-          :placeholder="t('wiki.editor.eventTabLink.eventPlaceholder')"
-          :empty-text="t('wiki.editor.eventTabLink.noEvents')"
-          @select="onSelectEvent"
-          @clear-selection="selectedEvent = null"
-        />
-      </div>
-
-      <div v-if="selectedEvent" class="field">
-        <label class="section-title">{{ t('wiki.editor.eventTabLink.tabLabel') }}</label>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="tab in linkableEventTabs"
-            :key="tab.key"
-            type="button"
-            class="cursor-pointer rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
-            :class="selectedEventTab === tab.key
-              ? 'border-accent-400 bg-accent-50 text-accent-700'
-              : 'border-base-200 bg-white text-base-600 hover:bg-base-100'"
-            @click="selectedEventTab = tab.key"
-          >
-            {{ t(tab.labelKey) }}
-          </button>
-        </div>
-      </div>
-
-      <template #footer>
-        <button type="button" class="btn-secondary" @click="eventTabModalOpen = false">
-          {{ t('wiki.editor.eventTabLink.cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
-          :disabled="!selectedEvent || !selectedEventTab"
-          @click="insertEventTabLink"
-        >
-          {{ t('wiki.editor.eventTabLink.insert') }}
-        </button>
-      </template>
-    </CommonModal>
+    <PageWikiArticleInsertHelper
+      v-model="helperOpen"
+      :initial-tab="helperTab"
+      :selected-text="helperSelectedText"
+      :checklists="checklists"
+      :glossary-terms="glossaryTerms"
+      :images="images"
+      @insert="onHelperInsert"
+      @update:model-value="open => { if (!open) onHelperClosed() }"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
-import { PAGES } from '~/config/pages'
-import { WIKI_EMBEDS } from '~/config/wikiEmbeds'
-import { SETTINGS_TABS } from '~/config/settingsTabs'
-import { EVENT_PLANNING_TABS } from '~/config/eventPlanningTabs'
-import { useAuth } from '~/composables/useAuth'
 import { useWikiGlossary } from '~/composables/useWikiGlossary'
-import { useLocaleFormatters } from '~/composables/useLocaleFormatters'
 import { useToast } from '~/composables/useToast'
+import {
+  WIKI_TABLE_SNIPPET,
+  altFromFileName,
+  applyWikiSnippet,
+  buildImage,
+  prefixWikiLines,
+  type AppliedWikiSnippet,
+  type WikiSnippet,
+} from '~/utils/wikiSnippets'
+import type { WikiInsertHelperTab } from '~/components/Page/Wiki/Article/InsertHelper.vue'
 import type { PreviewResponse } from '~/server/api/wiki/preview.post'
 import type { UploadWikiImageResponse } from '~/server/api/wiki/articles/[id]/images.post'
-import type { GetEventsResponse } from '~/server/api/events/index.get'
 import type { GlossaryTermView } from '~/server/utils/wiki/glossary'
-import type { SearchSelectOption } from '~/components/Common/SearchSelect.vue'
-import type { Event } from '~/types/event'
 import type { WikiChecklistView, WikiImage } from '~/types/wiki'
 
 const props = withDefaults(defineProps<{
@@ -298,178 +200,143 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { hasPermission } = useAuth()
 const { loadGlossary } = useWikiGlossary()
-const { formatDateTime } = useLocaleFormatters()
 const toast = useToast()
-
-const TABLE_SNIPPET = '| Spalte | Spalte |\n| --- | --- |\n| Wert | Wert |'
 
 const textareaId = useId()
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const uploadingImages = ref(0)
 const mobileView = ref<'editor' | 'preview'>('editor')
-const openInsertMenu = ref<string | null>(null)
 const previewHtml = ref('')
 const previewError = ref('')
-const embeds = WIKI_EMBEDS
 const checklists = computed(() => props.checklists)
 const glossaryTerms = ref<GlossaryTermView[]>([])
 
 loadGlossary().then((terms) => { glossaryTerms.value = terms })
 
-const toolPages = Object.entries(PAGES)
-  .filter(([, page]) => !page.permissions.length || hasPermission(page.permissions))
-  .map(([name]) => name)
-  .sort()
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+const modKey = computed(() => isMac ? '⌘' : t('wiki.editor.helper.shortcuts.ctrlKey'))
 
-function pageLabel(name: string) {
-  const page = PAGES[name]
-  return page ? `${t(page.labelKey)} (${name})` : name
-}
-
-const settingsTabs = computed(() => SETTINGS_TABS
-  .filter(tab => !tab.permission || hasPermission(tab.permission)))
-
-const canLinkEventTab = computed(() => {
-  const page = PAGES.EventCreate
-  if (!page) return false
-  return !page.permissions.length || hasPermission(page.permissions)
-})
-
-const runtimeConfig = useRuntimeConfig()
-const cashRegisterAvailable = computed(() =>
-  runtimeConfig.public.cashRegisterMode === 'connected' && hasPermission('cash_register.manage'),
-)
-const linkableEventTabs = computed(() => EVENT_PLANNING_TABS
-  .filter(tab => tab.key !== 'cashRegister' || cashRegisterAvailable.value))
-const DEFAULT_EVENT_TAB = EVENT_PLANNING_TABS[0]?.key ?? 'overview'
-
-const eventTabModalOpen = ref(false)
-const eventQuery = ref('')
-const events = ref<Event[]>([])
-const eventsLoaded = ref(false)
-const selectedEvent = ref<Event | null>(null)
-const selectedEventTab = ref(DEFAULT_EVENT_TAB)
-
-const eventOptions = computed<SearchSelectOption<number>[]>(() => events.value
-  .map(event => ({
-    key: event.id,
-    label: eventLabel(event),
-    searchText: [event.name, event.location].filter(Boolean).join(' '),
-    value: event.id,
-  })))
-
-function eventLabel(event: Event) {
-  const startsAt = formatDateTime(event.starts_at)
-  return [event.name, startsAt, event.location].filter(Boolean).join(' | ')
-}
-
-async function ensureEventsLoaded() {
-  if (eventsLoaded.value) return
-  eventsLoaded.value = true
-  const res = await apiFetch<GetEventsResponse>('/api/events')
-  if (res.ok) events.value = res.events
-}
-
-function openEventTabPicker() {
-  openInsertMenu.value = null
-  eventQuery.value = ''
-  selectedEvent.value = null
-  selectedEventTab.value = DEFAULT_EVENT_TAB
-  eventTabModalOpen.value = true
-  ensureEventsLoaded()
-}
-
-function onSelectEvent(value: unknown) {
-  selectedEvent.value = events.value.find(event => event.id === value) ?? null
-}
-
-function escapeAttr(value: string) {
-  return value.replace(/"/g, "'")
-}
-
-function insertEventTabLink() {
-  const event = selectedEvent.value
-  if (!event || !selectedEventTab.value) return
-
-  const tab = EVENT_PLANNING_TABS.find(entry => entry.key === selectedEventTab.value)
-  const label = escapeAttr(`${event.name} – ${tab ? t(tab.labelKey) : selectedEventTab.value}`)
-  const meta = JSON.stringify({ returnTarget: 'self', eventId: event.id, tab: selectedEventTab.value })
-  eventTabModalOpen.value = false
-  insertBlock(`:::tool{page="EventCreate" meta='${meta}' label="${label}"}`)
-}
-
-function replaceSelection(build: (selected: string) => { text: string, cursor?: number }) {
+function commit(result: AppliedWikiSnippet) {
+  emit('update:modelValue', result.value)
   const textarea = textareaRef.value
   if (!textarea) return
-
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const selected = props.modelValue.slice(start, end)
-  const { text, cursor } = build(selected)
-
-  const next = props.modelValue.slice(0, start) + text + props.modelValue.slice(end)
-  emit('update:modelValue', next)
-
   requestAnimationFrame(() => {
     textarea.focus()
-    const position = start + (cursor ?? text.length)
-    textarea.setSelectionRange(position, position)
+    textarea.setSelectionRange(result.selectionStart, result.selectionEnd)
   })
 }
 
-function wrap(before: string, after: string) {
-  replaceSelection(selected => ({ text: `${before}${selected}${after}`, cursor: before.length + selected.length }))
-}
-
-function prefixLine(prefix: string) {
-  replaceSelection(selected => ({ text: `${prefix}${selected}` }))
-}
-
-function insertBlock(snippet: string) {
-  replaceSelection(selected => ({ text: `${selected ? `${selected}\n\n` : ''}${snippet}\n` }))
-}
-
-function chooseInsert(value: string) {
-  openInsertMenu.value = null
-
-  const [kind, key = ''] = value.split(':')
-  if (kind === 'glossary') {
-    replaceSelection(selected => ({ text: `[[glossar:${key}${selected ? `|${selected}` : ''}]]` }))
-    return
-  }
-  if (kind === 'checklist') {
-    insertBlock(`:::checklist{id="${key}"}`)
-    return
-  }
-  if (kind === 'tool') {
-    const page = PAGES[key]
-    insertBlock(`:::tool{page="${key}" meta='{"returnTarget":"self"}' label="${page ? t(page.labelKey) : key}"}`)
-    return
-  }
-  if (kind === 'settingsTab') {
-    const tab = SETTINGS_TABS.find(entry => entry.key === key)
-    const label = escapeAttr(`${t('pages.settings')} – ${tab ? t(tab.labelKey) : key}`)
-    insertBlock(`:::tool{page="Settings" meta='{"returnTarget":"self","tab":"${key}"}' label="${label}"}`)
-    return
-  }
-
-  insertBlock(`:::embed{widget="${key}"}`)
-}
-
-/** Puts an image on a line of its own at the cursor, so it renders as its own picture rather than mid-sentence. */
-function insertImageMarkdown(markdown: string) {
+function currentRange() {
   const textarea = textareaRef.value
-  const start = textarea ? textarea.selectionStart : props.modelValue.length
-  const before = props.modelValue.slice(0, start)
-  const prefix = !before || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n'
-  replaceSelection(() => ({ text: `${prefix}${markdown}\n\n` }))
+  if (!textarea) return { start: props.modelValue.length, end: props.modelValue.length }
+  return { start: textarea.selectionStart, end: textarea.selectionEnd }
 }
 
-function chooseImage(image: WikiImage) {  const alt = image.fileName.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').replace(/[[\]]/g, '').trim()
-  insertImageMarkdown(`![${alt}](bild:${image.fileId})`)
+function applySnippet(snippet: WikiSnippet, range = currentRange()) {
+  commit(applyWikiSnippet(props.modelValue, range.start, range.end, snippet))
+}
+
+function wrap(before: string, after: string) {
+  applySnippet({ text: before, wrapAfter: after, block: false })
+}
+
+/** The selected text goes into the box; without a selection a placeholder is selected for typing over. */
+function wrapBox(name: 'hinweis' | 'warnung' | 'tipp') {
+  applySnippet({ text: `:::${name}\n`, wrapAfter: '\n:::', placeholder: t('wiki.editor.helper.placeholders.boxText'), block: true })
+}
+
+function prefixLines(prefix: string) {
+  const { start, end } = currentRange()
+  commit(prefixWikiLines(props.modelValue, start, end, prefix))
+}
+
+/** Selected text becomes the link text and the URL gets selected; without a selection the link text does. */
+function insertLink() {
+  const { start, end } = currentRange()
+  const selected = props.modelValue.slice(start, end)
+  if (!selected) {
+    applySnippet({ text: '[', wrapAfter: '](https://)', placeholder: t('wiki.editor.helper.placeholders.linkText'), block: false })
+    return
+  }
+  const result = applyWikiSnippet(props.modelValue, start, end, { text: `[${selected}](https://)`, block: false, replacesSelection: true })
+  const urlStart = start + selected.length + 3
+  commit({ ...result, selectionStart: urlStart, selectionEnd: urlStart + 'https://'.length })
+}
+
+const helperOpen = ref(false)
+const helperTab = ref<WikiInsertHelperTab>('insert')
+const helperSelectedText = ref('')
+/** Where the helper's snippet goes; for the "/" trigger this covers the typed slash. */
+const helperRange = ref<{ start: number, end: number, slash: boolean }>({ start: 0, end: 0, slash: false })
+let helperInserted = false
+
+function openHelper(tab: WikiInsertHelperTab, slashAt: number | null = null) {
+  const range = currentRange()
+  helperRange.value = slashAt === null
+    ? { ...range, slash: false }
+    : { start: slashAt, end: slashAt + 1, slash: true }
+  helperSelectedText.value = slashAt === null ? props.modelValue.slice(range.start, range.end) : ''
+  helperTab.value = tab
+  helperInserted = false
+  helperOpen.value = true
+}
+
+function onHelperInsert(snippet: WikiSnippet) {
+  helperInserted = true
+  const { start, end, slash } = helperRange.value
+  if (!slash) {
+    applySnippet(snippet, { start, end })
+    return
+  }
+  // The typed "/" only opened the helper: drop it, then insert where it was.
+  const withoutSlash = props.modelValue.slice(0, start) + props.modelValue.slice(end)
+  commit(applyWikiSnippet(withoutSlash, start, start, snippet))
+}
+
+function onHelperClosed() {
+  if (helperInserted) return
+  // Cancelled: back to where the author was; a typed "/" simply stays as text.
+  const { start, end, slash } = helperRange.value
+  const textarea = textareaRef.value
+  if (!textarea) return
+  requestAnimationFrame(() => {
+    textarea.focus()
+    if (slash) textarea.setSelectionRange(end, end)
+    else textarea.setSelectionRange(start, end)
+  })
+}
+
+function onInput(event: globalThis.Event) {
+  const textarea = event.target as HTMLTextAreaElement
+  emit('update:modelValue', textarea.value)
+
+  // "/" at the start of a line or after a space opens the helper — not inside URLs or "und/oder".
+  const input = event as InputEvent
+  if (input.inputType !== 'insertText' || input.data !== '/') return
+  const slashAt = textarea.selectionStart - 1
+  const before = slashAt > 0 ? textarea.value[slashAt - 1] ?? '' : ''
+  if (slashAt === 0 || /\s/.test(before)) openHelper('insert', slashAt)
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+  const key = event.key.toLowerCase()
+  // "/" needs Shift on German keyboards (Shift+7), so Shift is only refused for the letter shortcuts.
+  if (key === '/') openHelper('insert')
+  else if (event.shiftKey) return
+  else if (key === 'b') wrap('**', '**')
+  else if (key === 'i') wrap('*', '*')
+  else if (key === 'k') insertLink()
+  else return
+  event.preventDefault()
+}
+
+// ---- Images -------------------------------------------------------------------------------------
+
+function chooseImage(image: WikiImage) {
+  applySnippet({ text: buildImage(image.fileId, altFromFileName(image.fileName)), block: true })
 }
 
 function imageFiles(list: FileList | DataTransferItemList | null | undefined): File[] {
@@ -503,7 +370,7 @@ async function uploadImages(files: File[]) {
         continue
       }
       emit('imageUploaded', res.image)
-      insertImageMarkdown(res.markdown)
+      applySnippet({ text: res.markdown, block: true })
     } catch {
       toast.error(t('wiki.editor.toolbar.imageUploadFailed'))
     } finally {
