@@ -4,6 +4,8 @@ import { query } from '~/server/utils/db'
 import { localWallClockNow } from '~/server/utils/notifications/time'
 import type { NotificationChannel } from '~/server/utils/notifications/types'
 import { stripNotificationFormatting } from '~/utils/notificationFormatting'
+import { createPushResponseToken, type PushResponseTarget } from '~/server/utils/notifications/pushResponse'
+import { translate } from '~/shared/i18n'
 
 let vapidConfigured = false
 
@@ -26,11 +28,34 @@ function buildDeepLinkUrl(link: { page: string, meta?: Record<string, any> } | n
   return `${base}/#${link.page}${queryString}`
 }
 
+/**
+ * What the service worker needs to show answer buttons and answer in the background. The order of
+ * `actions` matters: systems that show only two buttons keep the first two (Zusage, Absage).
+ * Browsers without notification actions simply ignore this and show the notification as before.
+ */
+function buildResponsePayload(target: PushResponseTarget, userId: number, memberId: number, locale: 'de' | 'en') {
+  const base = (process.env.APP_BASE_URL || '/').replace(/\/$/, '')
+  const t = (key: string) => translate(locale, `notifications.pushResponse.${key}`)
+  return {
+    url: `${base}/api/notifications/push-respond`,
+    token: createPushResponseToken({ userId, memberId, ...target }),
+    tag: `appointment-response:${target.appointmentId}:${target.occurrenceDate}`,
+    actions: [
+      { action: 'yes', title: t('yes') },
+      { action: 'no', title: t('no') },
+      { action: 'maybe', title: t('maybe') },
+    ],
+    saved: { yes: t('savedYes'), no: t('savedNo'), maybe: t('savedMaybe') },
+    failed: t('failed'),
+    failedBody: t('failedBody'),
+  }
+}
+
 export const pushChannel: NotificationChannel = {
   key: 'push',
   isConfigured: settings => Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) && settings.channels_enabled.push,
   addressFor: recipient => (recipient.userId ? String(recipient.userId) : null),
-  async send({ recipient, rendered }) {
+  async send({ recipient, rendered, pushResponse }) {
     ensureVapidConfigured()
     if (!vapidConfigured) throw new Error('VAPID keys are not configured')
     if (!recipient.userId) throw new Error('Recipient has no account')
@@ -55,6 +80,9 @@ export const pushChannel: NotificationChannel = {
       title: rendered.subject,
       body: stripNotificationFormatting(rendered.body),
       url: buildDeepLinkUrl(rendered.link),
+      response: pushResponse && recipient.memberId != null
+        ? buildResponsePayload(pushResponse, recipient.userId, recipient.memberId, recipient.locale)
+        : undefined,
     })
 
     const results = await Promise.allSettled(subscriptions.map(async (sub) => {

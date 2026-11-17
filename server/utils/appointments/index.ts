@@ -448,6 +448,13 @@ export async function notifyAppointment(args: AppointmentNotificationArgs): Prom
   if (args.type === 'appointment.changed' && !appointment.notify_on_change) return
   if (args.type === 'appointment.cancelled' && !appointment.notify_on_change) return
 
+  // The one date a push notification may offer answer buttons for (see pushResponse.ts): a single
+  // occurrence, or the only date of a non-recurring appointment — never a whole series, and never
+  // for a cancellation.
+  const responseOccurrenceDate = args.type === 'appointment.cancelled'
+    ? null
+    : args.occurrenceDate ?? (appointment.recurrence_freq ? null : appointment.starts_at)
+
   await enqueueNotification({
     type: args.type,
     payload: {
@@ -459,6 +466,7 @@ export async function notifyAppointment(args: AppointmentNotificationArgs): Prom
       occurrence_date: args.occurrenceDate ?? appointment.starts_at,
       location: appointment.location ?? '',
       changes: args.changes ?? [],
+      response_occurrence_date: responseOccurrenceDate,
     },
     recipients: args.recipients ?? { kind: 'appointmentParticipants', appointmentId: appointment.id },
     createdByUserId: args.createdByUserId,

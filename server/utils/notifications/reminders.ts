@@ -210,6 +210,7 @@ async function sweepAppointmentReminders(now: Date, settings: NotificationSettin
             appointment_start: occurrence.startsAt,
             appointment_end: occurrence.endsAt,
             occurrence_date: occurrence.occurrenceDate,
+            response_occurrence_date: occurrence.occurrenceDate,
             location: occurrence.location ?? '',
             lead_minutes: lead,
           },

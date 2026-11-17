@@ -2,7 +2,7 @@ import { defineEventHandler, getRequestURL, setResponseHeader, setResponseStatus
 import { getClientIp, publicIpLimiter } from '~/server/utils/rateLimit'
 
 // Unauthenticated endpoints that do token lookups or DB work per request (SEC-04).
-const PUBLIC_PREFIXES = ['/api/calendar/', '/api/public/', '/api/notifications/unsubscribe']
+const PUBLIC_PREFIXES = ['/api/calendar/', '/api/public/', '/api/notifications/unsubscribe', '/api/notifications/push-respond']
 // Signed-in calendar route that shares the /api/calendar/ prefix but is not the token feed.
 const EXCLUDED = ['/api/calendar/entries']
 

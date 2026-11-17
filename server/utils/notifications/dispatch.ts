@@ -12,6 +12,8 @@ import { loadMailAttachments } from '~/server/utils/attachments'
 import { resolveNotificationAttachments } from '~/server/utils/notifications/attachments'
 import { loadShiftStaffing, understaffedPayload, understaffedShiftsOfCluster } from '~/server/utils/notifications/reminders'
 import { personalizeReminder, reminderEntityId, reminderLeadMinutes } from '~/server/utils/notifications/personalize'
+import { pushResponseTarget, type PushResponseTarget } from '~/server/utils/notifications/pushResponse'
+import { loadAppointmentAudience } from '~/server/utils/appointments/visibility'
 import { createShiftPlanRenderer, shiftPlanMailAttachment, shiftPlanRequestFor, type ShiftPlanRenderer } from '~/server/utils/notifications/shiftPlan'
 import { NOTIFICATION_TYPE_MAP, SCHEDULE_ANCHOR_VARIABLES, SELF_ACTION_EXEMPT_TYPES, type NotificationTypeKey } from '~/config/notificationTypes'
 import type { NotificationChannelKey } from '~/config/notificationChannels'
@@ -157,6 +159,13 @@ async function processNotification(id: number, settings: NotificationSettings, n
       if (selection.documentIds.length || selection.fileIds.length) attachments = await loadMailAttachments(selection, conn)
     }
 
+    // Answer buttons on the push copy: only for a single appointment date, and only for recipients
+    // who belong to its audience (the creator may be notified without being invited).
+    const responseTarget = pushResponseTarget(row.type_key, payload)
+    const responseAudience = responseTarget && recipients.length
+      ? new Set((await loadAppointmentAudience(responseTarget.appointmentId, conn)).memberIds)
+      : null
+
     // The personal shift plan is rendered per e-mail recipient; its data is only loaded once, and
     // only if some recipient actually gets an e-mail.
     const shiftPlanRequest = shiftPlanRequestFor(row.type_key, payload, settings)
@@ -218,8 +227,12 @@ async function processNotification(id: number, settings: NotificationSettings, n
           if (shiftPlan) channelAttachments = [...attachments, shiftPlanMailAttachment(shiftPlan, recipient.memberId)]
         }
 
+        const pushResponse = channelKey === 'push' && responseTarget && recipient.memberId != null && responseAudience?.has(recipient.memberId)
+          ? responseTarget
+          : null
+
         try {
-          await channel.send({ recipient, rendered, deliveryId, settings, unsubscribeToken, attachments: channelAttachments })
+          await channel.send({ recipient, rendered, deliveryId, settings, unsubscribeToken, attachments: channelAttachments, pushResponse })
           await query(`UPDATE notification_deliveries SET status = 'sent', sent_at = ? WHERE id = ?`, [toMysqlDatetime(now), deliveryId], conn)
         } catch (err: any) {
           anyFailed = true
@@ -313,6 +326,14 @@ async function retryFailedDeliveries(settings: NotificationSettings, now: Date) 
       const shiftPlan = shiftPlanRequest ? await createShiftPlanRenderer(shiftPlanRequest) : null
       if (shiftPlan) attachments.push(shiftPlanMailAttachment(shiftPlan, delivery.member_id))
 
+      let pushResponse: PushResponseTarget | null = null
+      if (delivery.channel === 'push' && delivery.member_id != null) {
+        const target = pushResponseTarget(delivery.type_key, delivery.payload ? JSON.parse(delivery.payload) : null)
+        if (target && (await loadAppointmentAudience(target.appointmentId)).memberIds.includes(Number(delivery.member_id))) {
+          pushResponse = target
+        }
+      }
+
       await channel.send({
         attachments,
         recipient: { memberId: delivery.member_id, userId: delivery.user_id, email: delivery.address, displayName: '', firstName: null, locale: 'de' },
@@ -323,6 +344,7 @@ async function retryFailedDeliveries(settings: NotificationSettings, now: Date) 
         },
         deliveryId: delivery.id,
         settings,
+        pushResponse,
       })
       await query(`UPDATE notification_deliveries SET status = 'sent', sent_at = ? WHERE id = ?`, [toMysqlDatetime(now), delivery.id])
     } catch (err: any) {

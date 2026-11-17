@@ -3,6 +3,7 @@ import type { NotificationChannelKey } from '~/config/notificationChannels'
 import type { NotificationSettings } from '~/types/notification'
 import type { MailAttachment } from '~/server/utils/attachments'
 import type { ChangedField } from '~/server/utils/notifications/changeDescription'
+import type { PushResponseTarget } from '~/server/utils/notifications/pushResponse'
 
 export type RecipientRule =
   | { kind: 'members', memberIds: number[] }
@@ -43,6 +44,8 @@ export interface NotificationChannel {
     settings: NotificationSettings
     unsubscribeToken?: string | null
     attachments?: MailAttachment[]
+    /** Push only: the single appointment date this recipient may answer from the notification. */
+    pushResponse?: PushResponseTarget | null
   }): Promise<void>
 }
 
