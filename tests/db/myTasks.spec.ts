@@ -52,6 +52,10 @@ describe('my open tasks', () => {
     const directTask = tasks.find(task => task.id === direct)!
     expect(directTask).toMatchObject({ eventId, eventName: 'Sommerfest', assignedDirectly: true, viaSubdivisions: [], deadline: '2026-06-01' })
 
+    expect(directTask.description).toBeNull()
+    await query('UPDATE event_tasks SET description = ? WHERE id = ?', ['Getränke bei Müller', direct])
+    expect((await loadMyOpenTasks(memberId)).find(task => task.id === direct)?.description).toBe('Getränke bei Müller')
+
     const groupTask = tasks.find(task => task.id === viaGroup)!
     expect(groupTask).toMatchObject({ status: 'in_progress', assignedDirectly: false })
     expect(groupTask.viaSubdivisions).toEqual([{ id: subdivisionId, code: 'FIN', name: 'Finanzen' }])

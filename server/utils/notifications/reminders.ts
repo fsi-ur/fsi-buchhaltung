@@ -113,8 +113,8 @@ async function sweepTaskDeadlineReminders(now: Date, settings: NotificationSetti
   const leadMinutes = settings.lead_times['task.deadline_reminder'] || []
   if (!leadMinutes.length) return
 
-  const tasks = await query<Array<{ id: number, event_id: number, title: string, deadline: string | null, status: string, event_name: string }>>(
-    `SELECT et.id, et.event_id, et.title, et.deadline, et.status, e.name AS event_name
+  const tasks = await query<Array<{ id: number, event_id: number, title: string, description: string | null, deadline: string | null, status: string, event_name: string }>>(
+    `SELECT et.id, et.event_id, et.title, et.description, et.deadline, et.status, e.name AS event_name
      FROM event_tasks et
      JOIN events e ON e.id = et.event_id
      WHERE et.deadline IS NOT NULL AND et.status != 'done'`,
@@ -139,6 +139,7 @@ async function sweepTaskDeadlineReminders(now: Date, settings: NotificationSetti
           event_id: task.event_id,
           event_name: task.event_name,
           task_title: task.title,
+          task_description: task.description ?? null,
           task_deadline: task.deadline,
           lead_minutes: lead,
         },
@@ -377,8 +378,8 @@ export function isOverdueReminderDay(daysOverdue: number): boolean {
 }
 
 async function sweepTaskOverdue(now: Date, planned: Set<string>, conn?: DbConn) {
-  const tasks = await query<Array<{ id: number, event_id: number, title: string, deadline: string | null, event_name: string }>>(
-    `SELECT et.id, et.event_id, et.title, et.deadline, e.name AS event_name
+  const tasks = await query<Array<{ id: number, event_id: number, title: string, description: string | null, deadline: string | null, event_name: string }>>(
+    `SELECT et.id, et.event_id, et.title, et.description, et.deadline, e.name AS event_name
      FROM event_tasks et
      JOIN events e ON e.id = et.event_id
      WHERE et.deadline IS NOT NULL AND et.status != 'done'`,
@@ -399,6 +400,7 @@ async function sweepTaskOverdue(now: Date, planned: Set<string>, conn?: DbConn) 
       task_id: Number(task.id),
       title: task.title,
       deadline,
+      description: task.description ?? null,
       days_overdue: diffLocalDates(deadline.slice(0, 10), today),
     })
     byEvent.set(eventId, group)

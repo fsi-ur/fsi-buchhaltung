@@ -44,6 +44,7 @@
     "setup:migrate:subdivision-leadership": "node --env-file=.env scripts/migrate-subdivision-leadership.mjs",
     "setup:migrate:finance-analysis-tab": "node --env-file=.env scripts/migrate-finance-analysis-tab.mjs",
     "setup:migrate:appointment-response-reconfirmation": "node --env-file=.env scripts/migrate-appointment-response-reconfirmation.mjs",
+    "setup:migrate:event-task-description": "node --env-file=.env scripts/migrate-event-task-description.mjs",
     "setup:seed:wiki-content": "node --env-file=.env scripts/migrate-wiki.mjs --seed-content",
     "setup:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "setup:audit": "node --env-file=.env scripts/ensure-audit-infrastructure.mjs",

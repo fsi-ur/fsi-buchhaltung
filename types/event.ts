@@ -142,6 +142,7 @@ export interface EventTaskSubdivision {
 export interface EventTask {
   id: number
   title: string
+  description: string | null
   status: 'open' | 'in_progress' | 'done'
   deadline: string | null
   position: number
@@ -158,6 +159,7 @@ export interface MyEventTask {
   eventId: number
   eventName: string
   title: string
+  description: string | null
   status: Exclude<EventTaskStatus, 'done'>
   deadline: string | null
   /** Personally assigned (as opposed to only through a subdivision). */
@@ -172,6 +174,7 @@ export interface MyEventTask {
 export interface SaveEventTask {
   id?: number
   title: string
+  description: string | null
   status: 'open' | 'in_progress' | 'done'
   deadline: string | null
   position: number

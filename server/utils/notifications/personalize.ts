@@ -50,8 +50,8 @@ async function personalShiftReminder(eventId: number, shiftId: number, memberId:
 }
 
 async function personalTaskReminder(eventId: number, taskId: number, memberId: number, lead: number, conn?: DbConn) {
-  const rows = await query<Array<{ id: number, title: string, deadline: string | null }>>(
-    `SELECT DISTINCT et.id, et.title, et.deadline
+  const rows = await query<Array<{ id: number, title: string, deadline: string | null, description: string | null }>>(
+    `SELECT DISTINCT et.id, et.title, et.deadline, et.description
      FROM event_tasks et
      LEFT JOIN event_task_members etm ON etm.task_id = et.id AND etm.member_id = ?
      LEFT JOIN event_task_subdivisions ets ON ets.task_id = et.id
@@ -63,7 +63,7 @@ async function personalTaskReminder(eventId: number, taskId: number, memberId: n
   )
   const tasks = rows.flatMap((row) => {
     const deadline = normalizeDeadline(row.deadline)
-    return deadline ? [{ id: Number(row.id), title: row.title, deadline }] : []
+    return deadline ? [{ id: Number(row.id), title: row.title, deadline, description: row.description ?? null }] : []
   })
   const cluster = findCluster(
     tasks.map(task => ({ id: task.id, start: deadlineWallClock(task.deadline), end: deadlineWallClock(task.deadline) })),
@@ -78,7 +78,7 @@ async function personalTaskReminder(eventId: number, taskId: number, memberId: n
   const list: TaskListEntry[] = tasks
     .filter(task => ids.has(task.id))
     .sort((a, b) => deadlineWallClock(a.deadline).localeCompare(deadlineWallClock(b.deadline)))
-    .map(task => ({ task_id: task.id, title: task.title, deadline: task.deadline }))
+    .map(task => ({ task_id: task.id, title: task.title, deadline: task.deadline, description: task.description }))
   return { task_list: list }
 }
 

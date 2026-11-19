@@ -155,7 +155,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     descriptionKey: 'notifications.types.task.assigned.description',
     userConfigurable: true,
     audience: 'assignees',
-    variables: ['member_name', 'event_name', 'task_list', 'task_title', 'task_deadline'],
+    variables: ['member_name', 'event_name', 'task_list', 'task_title', 'task_description', 'task_deadline'],
     link: taskLink,
   },
   {
@@ -166,7 +166,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDefinition[] = [
     userConfigurable: true,
     audience: 'assignees',
     schedule: { defaultLeadMinutes: [2880, 480], anchor: 'task.deadline' },
-    variables: ['member_name', 'event_name', 'task_list', 'task_title', 'task_deadline', 'lead_text'],
+    variables: ['member_name', 'event_name', 'task_list', 'task_title', 'task_description', 'task_deadline', 'lead_text'],
     link: taskLink,
   },
   {

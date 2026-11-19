@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { query, withAuditTransaction } from '~/server/utils/db'
-import { getChecklistControlledTaskIds, replaceEventTasks } from '~/server/utils/eventTasks'
+import { getChecklistControlledTaskIds, loadEventTasks, normalizeEventTasks, replaceEventTasks } from '~/server/utils/eventTasks'
 import { resetDatabase } from '../helpers/db'
 import { createEvent, createUser, resetFixtureCounter } from '../helpers/fixtures'
 
@@ -32,8 +32,8 @@ describe('replacing an event’s tasks', () => {
       conn,
       actingUserId: actorId,
       tasks: [
-        { id: linked, title: 'Umbenannt', status: 'done', deadline: null, position: 0, member_ids: [], subdivision_ids: [] },
-        { id: free, title: 'Ohne Checkliste', status: 'done', deadline: null, position: 1, member_ids: [], subdivision_ids: [] },
+        { id: linked, title: 'Umbenannt', description: null, status: 'done', deadline: null, position: 0, member_ids: [], subdivision_ids: [] },
+        { id: free, title: 'Ohne Checkliste', description: null, status: 'done', deadline: null, position: 1, member_ids: [], subdivision_ids: [] },
       ],
     }))
     expect(error).toBeNull()
@@ -43,5 +43,39 @@ describe('replacing an event’s tasks', () => {
       { id: linked, title: 'Umbenannt', status: 'in_progress' },
       { id: free, title: 'Ohne Checkliste', status: 'done' },
     ])
+  })
+
+  it('stores, changes and clears a task description', async () => {
+    const save = (tasks: unknown[]) => withAuditTransaction({ id: actorId }, conn => replaceEventTasks({
+      eventId,
+      conn,
+      actingUserId: actorId,
+      tasks: normalizeEventTasks(tasks)!,
+    }))
+
+    expect(await save([{ title: 'Bühne', description: '  Aufbau ab 14 Uhr\r\nSchlüssel bei Max  ', status: 'open', member_ids: [], subdivision_ids: [] }])).toBeNull()
+    const [created] = await loadEventTasks(eventId)
+    expect(created?.description).toBe('Aufbau ab 14 Uhr\nSchlüssel bei Max')
+
+    expect(await save([{ id: created!.id, title: 'Bühne', description: 'Nur noch Abbau', status: 'open', member_ids: [], subdivision_ids: [] }])).toBeNull()
+    expect((await loadEventTasks(eventId))[0]?.description).toBe('Nur noch Abbau')
+
+    expect(await save([{ id: created!.id, title: 'Bühne', description: '   ', status: 'open', member_ids: [], subdivision_ids: [] }])).toBeNull()
+    expect((await loadEventTasks(eventId))[0]?.description).toBeNull()
+  })
+})
+
+describe('normalizing task input', () => {
+  const base = { title: 'Aufgabe', status: 'open', member_ids: [], subdivision_ids: [] }
+
+  it('treats a missing or blank description as none', () => {
+    expect(normalizeEventTasks([base])?.[0]?.description).toBeNull()
+    expect(normalizeEventTasks([{ ...base, description: '' }])?.[0]?.description).toBeNull()
+  })
+
+  it('rejects descriptions that are not text or too long', () => {
+    expect(normalizeEventTasks([{ ...base, description: 42 }])).toBeNull()
+    expect(normalizeEventTasks([{ ...base, description: 'x'.repeat(5001) }])).toBeNull()
+    expect(normalizeEventTasks([{ ...base, description: 'x'.repeat(5000) }])).not.toBeNull()
   })
 })

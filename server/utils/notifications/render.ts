@@ -41,6 +41,15 @@ function formatShiftList(locale: 'de' | 'en', entries: ShiftListEntry[]): string
   }).join('\n')
 }
 
+/** Longest description shown per task in `{task_list}` — the list is a summary, the planner has the rest. */
+const TASK_LIST_DESCRIPTION_LENGTH = 200
+
+export function shortenTaskDescription(value: unknown, maxLength = TASK_LIST_DESCRIPTION_LENGTH): string {
+  const text = String(value ?? '').trim()
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength).trimEnd()} …`
+}
+
 function formatTaskList(locale: 'de' | 'en', entries: TaskListEntry[]): string {
   return entries.map((entry) => {
     let line = entry.title
@@ -48,6 +57,9 @@ function formatTaskList(locale: 'de' | 'en', entries: TaskListEntry[]): string {
       ? ` (${translate(locale, 'notifications.lists.deadline', { deadline: formatLocalDateTime(entry.deadline) })})`
       : ` (${translate(locale, 'notifications.lists.noDeadline')})`
     if (entry.days_overdue) line += ` – ${translate(locale, 'notifications.lists.overdueDays', { count: entry.days_overdue })}`
+    const description = shortenTaskDescription(entry.description)
+    // Indented below its task so a multi-line description doesn't read as further list entries.
+    if (description) line += `\n${description.split('\n').map(part => `  ${part}`).join('\n')}`
     return `- ${line}`
   }).join('\n')
 }
@@ -73,6 +85,8 @@ function formatPayload(payload: Record<string, any>, locale: 'de' | 'en'): Recor
       formatted[key] = describeChangedFields(locale, value as ChangedField[])
     } else if (key === 'shift_list' && Array.isArray(value)) {
       formatted[key] = formatShiftList(locale, value as ShiftListEntry[])
+    } else if (key === 'task_description') {
+      formatted[key] = shortenTaskDescription(value)
     } else if (key === 'task_list' && Array.isArray(value)) {
       formatted[key] = formatTaskList(locale, value as TaskListEntry[])
     } else if (key === 'leader_action') {

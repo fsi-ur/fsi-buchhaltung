@@ -73,5 +73,7 @@ export interface TaskListEntry {
   task_id: number
   title: string
   deadline: string | null
+  /** The task's description, if any — shown shortened below the line. */
+  description?: string | null
   days_overdue?: number
 }

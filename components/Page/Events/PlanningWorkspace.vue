@@ -314,6 +314,7 @@
             <EventTasksPanel
               v-else-if="activeTab === 'tasks' && canViewAll"
               v-model:tasks="planningTasks"
+              :saved-tasks="savedTasks"
               :event-id="eventId"
               :can-manage="canManagePlanning"
               :disabled="!canManagePlanning || taskLoading || taskSaving || !canManageTasks"
@@ -325,6 +326,7 @@
               :checklists="reusableChecklists"
               :status-only-task-ids="statusOnlyTaskIds"
               @save="saveEventTasks"
+              @save-task="saveEventTask"
               @change-status="changeTaskStatus($event.taskId, $event.status)"
               @link-checklist-to-task="linkChecklistToTask"
               @navigate-to-checklists="activeTab = 'checklists'"
@@ -532,13 +534,16 @@ const eventIdRef = computed(() => eventId.value)
 
 const {
   planningTasks,
+  savedTasks,
   taskLoading,
   taskSaving,
   canManageTasks,
   assignedTaskIds,
   loadEventTasks,
   saveEventTasks,
+  saveEventTask,
   changeTaskStatus,
+  patchTask,
   reset: resetTasks,
 } = useEventTasks(eventIdRef)
 
@@ -1041,6 +1046,7 @@ async function createTaskFromChecklist({ checklistId, title, deadline }: { check
   const tempTask: EventPlanningTask = {
     id: nextTempTaskId.value--,
     title,
+    description: null,
     deadline,
     status: 'open',
     memberIds: [],
@@ -1095,9 +1101,8 @@ async function handleSetChecklistItemDone({ checklistId, itemId, done }: { check
   const progress = checklist
     ? { done: checklist.items.filter(item => item.done).length, total: checklist.items.length }
     : null
-  planningTasks.value = planningTasks.value.map(t => t.id === task.id
-    ? { ...t, status: task.status, linkedChecklistProgress: progress ?? t.linkedChecklistProgress }
-    : t)
+  const current = planningTasks.value.find(t => t.id === task.id)
+  patchTask(task.id, { status: task.status, linkedChecklistProgress: progress ?? current?.linkedChecklistProgress ?? null })
 }
 
 function setTaskDone(taskId: number, done: boolean) {

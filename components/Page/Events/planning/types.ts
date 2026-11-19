@@ -8,6 +8,7 @@ export type EventPlanningTaskStatus = 'open' | 'in_progress' | 'done'
 export interface EventPlanningTask {
   id: number
   title: string
+  description: string | null
   deadline: string | null
   status: EventPlanningTaskStatus
   memberIds: number[]

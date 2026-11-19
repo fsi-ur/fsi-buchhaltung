@@ -58,21 +58,47 @@
         </div>
       </div>
 
-      <div v-if="canManage !== false" class="mt-4 rounded-lg border border-base-200 bg-base-50 p-3">
-        <div class="grid gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(12rem,auto)] lg:items-end xl:grid-cols-[minmax(14rem,1fr)_11rem_13rem_13rem_auto]">
-          <div class="sm:col-span-2 lg:col-span-2 xl:col-span-1">
-            <label class="text-xs font-medium text-base-500">{{ t('event.planning.taskTitle') }}</label>
-            <input
-              v-model="quickAdd.title"
-              class="input mt-1"
-              :placeholder="t('event.planning.quickAddTaskPlaceholder')"
-              :disabled="disabled"
-              @keydown.enter.prevent="addTask"
-            >
-          </div>
+      <div v-if="canManage !== false" class="mt-4 rounded-lg border border-base-200 bg-base-50 p-2.5">
+        <div class="flex items-center gap-2">
+          <input
+            v-model="quickAdd.title"
+            class="input min-w-0 flex-1"
+            :aria-label="t('event.planning.taskTitle')"
+            :placeholder="t('event.planning.quickAddTaskPlaceholder')"
+            :disabled="disabled"
+            @keydown.enter.prevent="addTask"
+          >
+          <button
+            type="button"
+            class="btn-secondary inline-flex h-9.5 shrink-0 items-center gap-1.5 px-3 font-medium disabled:opacity-60"
+            :class="showQuickAddDetails ? 'bg-base-300!' : ''"
+            :title="t('event.planning.taskDetails')"
+            :aria-expanded="showQuickAddDetails"
+            :disabled="disabled"
+            @click="showQuickAddDetails = !showQuickAddDetails"
+          >
+            <span class="hidden sm:inline">{{ t('event.planning.taskDetails') }}</span>
+            <Icon
+              name="material-symbols:keyboard-arrow-down-rounded"
+              class="text-lg transition-transform"
+              :class="showQuickAddDetails ? 'rotate-180' : ''"
+            />
+          </button>
+          <button
+            type="button"
+            class="btn-primary inline-flex h-9.5 shrink-0 items-center justify-center gap-2"
+            :title="t('event.planning.addTask')"
+            :disabled="disabled || !quickAdd.title.trim()"
+            @click="addTask"
+          >
+            <Icon name="material-symbols:add-rounded" />
+            <span class="hidden sm:inline">{{ t('event.planning.addTask') }}</span>
+          </button>
+        </div>
 
+        <div v-if="showQuickAddDetails" class="mt-3 grid gap-3 sm:grid-cols-3">
           <div>
-            <div class="flex items-center justify-between gap-2">
+            <div class="flex h-5 items-center justify-between gap-2">
               <label class="text-xs font-medium text-base-500">{{ t('event.planning.deadline') }}</label>
               <button
                 type="button"
@@ -87,7 +113,7 @@
           </div>
 
           <div>
-            <label class="text-xs font-medium text-base-500">{{ t('event.planning.assignedMembers') }}</label>
+            <label class="flex h-5 items-center text-xs font-medium text-base-500">{{ t('event.planning.assignedMembers') }}</label>
             <CommonSearchSelect
               v-model="quickAddMemberQuery"
               class="mt-1"
@@ -101,7 +127,7 @@
           </div>
 
           <div>
-            <label class="text-xs font-medium text-base-500">{{ t('event.planning.subdivision') }}</label>
+            <label class="flex h-5 items-center text-xs font-medium text-base-500">{{ t('event.planning.subdivision') }}</label>
             <CommonSearchSelect
               v-model="quickAddSubdivisionQuery"
               class="mt-1"
@@ -114,13 +140,54 @@
             />
           </div>
 
-          <button type="button" class="btn-primary inline-flex items-center justify-center gap-2 lg:w-full h-9.5 xl:w-auto" :disabled="disabled || !quickAdd.title.trim()" @click="addTask">
-            <Icon name="material-symbols:add-rounded" />
-            {{ t('event.planning.addTask') }}
-          </button>
+          <div class="sm:col-span-3">
+            <label class="flex h-5 items-center text-xs font-medium text-base-500">{{ t('event.planning.taskDescription') }}</label>
+            <textarea
+              v-model="quickAdd.description"
+              class="input mt-1 min-h-14 text-sm"
+              rows="2"
+              :maxlength="MAX_TASK_DESCRIPTION_LENGTH"
+              :placeholder="t('event.planning.taskDescriptionPlaceholder')"
+              :disabled="disabled"
+            />
+          </div>
         </div>
 
-        <div v-if="quickAdd.memberIds.length || quickAdd.subdivisionIds.length" class="mt-3 flex flex-wrap gap-1.5">
+        <div v-if="quickAddDetailCount && (!showQuickAddDetails || quickAdd.memberIds.length || quickAdd.subdivisionIds.length)" class="mt-2 flex flex-wrap gap-1.5">
+          <template v-if="!showQuickAddDetails">
+            <span
+              v-if="quickAdd.deadline"
+              class="inline-flex items-center gap-1 rounded border border-base-300 bg-white px-1.5 py-0.5 text-[0.7rem] font-medium text-base-700"
+            >
+              <Icon name="material-symbols:event-upcoming-rounded" class="shrink-0 text-sm text-base-400" />
+              <button type="button" class="cursor-pointer" @click="showQuickAddDetails = true">{{ formatDateTime(quickAdd.deadline) }}</button>
+              <button
+                type="button"
+                class="inline-flex h-4 w-4 items-center justify-center rounded text-base-500 hover:bg-danger-50 hover:text-danger-600 disabled:opacity-60 cursor-pointer"
+                :title="t('actions.remove')"
+                :disabled="disabled"
+                @click="quickAdd.deadline = null"
+              >
+                <Icon name="material-symbols:close-rounded" class="text-sm" />
+              </button>
+            </span>
+            <span
+              v-if="quickAdd.description.trim()"
+              class="inline-flex min-w-0 max-w-full items-center gap-1 rounded border border-base-300 bg-white px-1.5 py-0.5 text-[0.7rem] font-medium text-base-700 sm:max-w-80"
+            >
+              <Icon name="material-symbols:notes-rounded" class="shrink-0 text-sm text-base-400" />
+              <button type="button" class="min-w-0 truncate cursor-pointer" :title="quickAdd.description" @click="showQuickAddDetails = true">{{ quickAdd.description }}</button>
+              <button
+                type="button"
+                class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-base-500 hover:bg-danger-50 hover:text-danger-600 disabled:opacity-60 cursor-pointer"
+                :title="t('actions.remove')"
+                :disabled="disabled"
+                @click="quickAdd.description = ''"
+              >
+                <Icon name="material-symbols:close-rounded" class="text-sm" />
+              </button>
+            </span>
+          </template>
           <span
             v-for="memberId in quickAdd.memberIds"
             :key="`quick-member-${memberId}`"
@@ -170,17 +237,16 @@
           <span class="h-2.5 w-2.5 rounded-full" :class="column.dotClass" />
         </div>
 
-        <div class="mt-3 space-y-3">
+        <div class="mt-3 space-y-2">
           <article
             v-for="task in tasksByStatus[column.status]"
             :key="task.id"
             :data-task-id="task.id"
-            :draggable="canDragTask(task)"
-            class="rounded-lg border border-base-200 border-l-4 bg-base-50 p-3 transition-all"
+            :draggable="canDragTask(task) && editingTaskId !== task.id"
+            class="group rounded-lg border border-base-200 border-l-4 bg-base-50 px-2.5 py-2 transition-all"
             :class="[
               draggedTaskId === task.id ? 'opacity-40' : '',
-              dragOverTaskId === task.id ? 'ring-2 ring-inset ring-accent-400' : '',
-              deadlineBorderClass(task),
+              dragOverTaskId === task.id ? 'ring-2 ring-inset ring-accent-400' : '',              deadlineBorderClass(task),
             ]"
             @dragstart="canDragTask(task) && onDragStart(task.id, $event)"
             @dragover.prevent="canDropOnTask(task) && onDragOver(task.id)"
@@ -188,11 +254,14 @@
             @drop.prevent.stop="canDropOnTask(task) && onDrop(task.id, column.status)"
             @dragend="onDragEnd"
           >
-            <div class="flex items-start gap-2">
+            <div class="flex gap-1.5" :class="editingTaskId === task.id ? 'items-center' : 'items-start'">
               <span
                 v-if="!disabled || isStatusOnlyTask(task)"
-                class="mt-0.5 shrink-0 touch-none"
-                :class="task.linkedChecklistId ? 'cursor-default' : 'cursor-grab'"
+                class="flex shrink-0 touch-none items-center"
+                :class="[
+                  task.linkedChecklistId ? 'cursor-default' : 'cursor-grab',
+                  editingTaskId === task.id ? 'h-7' : 'h-5',
+                ]"
                 @touchstart.prevent="!task.linkedChecklistId && startTaskCardTouchDrag(task.id, $event)"
               >
                 <Icon
@@ -201,92 +270,135 @@
                   :title="task.linkedChecklistId ? t('event.planning.checklistControlled') : undefined"
                 />
               </span>
-              <input
-                :value="task.title"
-                class="min-w-0 flex-1 truncate bg-transparent text-sm font-semibold text-base-900 outline-none disabled:opacity-70"
-                :disabled="disabled"
-                @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
-              >
-              <!-- Checklist link icon button -->
-              <button
-                v-if="task.linkedChecklistId"
-                type="button"
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-info-200 bg-info-50 text-info-600 hover:bg-info-100 cursor-pointer"
-                :title="`${linkedChecklistTitle(task)}${task.linkedChecklistProgress ? ` (${task.linkedChecklistProgress.done}/${task.linkedChecklistProgress.total})` : ''}`"
-                @click="emit('navigate-to-checklists')"
-              >
-                <Icon name="material-symbols:checklist-rounded" />
-              </button>
-              <button
-                v-else-if="!disabled"
-                type="button"
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-base-200 bg-white text-base-400 hover:bg-base-50 hover:text-base-600 cursor-pointer"
-                :title="t('event.planning.linkChecklist')"
-                @click="linkingChecklistForTaskId = linkingChecklistForTaskId === task.id ? null : task.id"
-              >
-                <Icon name="material-symbols:checklist-rounded" />
-              </button>
-              <button
-                v-if="canManage !== false"
-                type="button"
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-danger-200 bg-danger-50 text-danger-700 hover:bg-danger-100 disabled:opacity-60 cursor-pointer"
-                :disabled="disabled"
-                :title="t('actions.remove')"
-                @click="removeTask(task.id)"
-              >
-                <Icon name="material-symbols:delete-rounded" />
-              </button>
+
+              <template v-if="editingTaskId === task.id">
+                <input
+                  :value="task.title"
+                  class="input h-7 min-w-0 flex-1 py-0.5 text-sm font-semibold"
+                  :aria-label="t('event.planning.taskTitle')"
+                  :disabled="disabled"
+                  @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
+                  @keydown.enter.prevent="saveEditedTask"
+                  @keydown.esc.prevent="cancelEditing"
+                >
+                <button
+                  type="button"
+                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-base-400 hover:bg-base-100 hover:text-base-700 cursor-pointer"
+                  :title="t('actions.cancel')"
+                  :aria-label="t('actions.cancel')"
+                  @click="cancelEditing"
+                >
+                  <Icon name="material-symbols:close-rounded" />
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-60 not-disabled:cursor-pointer"
+                  :title="t('actions.save')"
+                  :aria-label="t('actions.save')"
+                  :disabled="saving || !task.title.trim()"
+                  @click="saveEditedTask"
+                >
+                  <Icon :name="saving ? 'material-symbols:progress-activity' : 'material-symbols:save-rounded'" :class="saving ? 'animate-spin' : ''" />
+                </button>
+              </template>
+              <template v-else>
+                <p class="min-w-0 flex-1 line-clamp-2 break-words text-sm font-semibold leading-5 text-base-900">{{ task.title }}</p>
+                <button
+                  v-if="canEditTask"
+                  type="button"
+                  class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-400 transition hover:bg-base-100 hover:text-base-700 focus-visible:opacity-100 cursor-pointer [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+                  :title="t('actions.edit')"
+                  :aria-label="t('actions.edit')"
+                  @click="startEditing(task.id)"
+                >
+                  <Icon name="material-symbols:edit-rounded" class="text-sm" />
+                </button>
+              </template>
             </div>
 
-            <!-- Checklist link dropdown (opens inline below title) -->
-            <div v-if="linkingChecklistForTaskId === task.id && !disabled" class="mt-1.5 flex items-center gap-1.5">
-              <CommonSearchSelect
-                class="event-task-compact-input min-w-0 flex-1"
-                :model-value="checklistLinkQuery"
-                :options="checklistLinkOptions"
-                :placeholder="t('event.planning.selectChecklist')"
-                :empty-text="t('event.planning.noUnlinkedChecklists')"
-                @update:model-value="checklistLinkQuery = $event"
-                @select="selectChecklistForTask(task.id, $event)"
-                @clear-selection="checklistLinkQuery = ''"
-              />
-              <button type="button" class="shrink-0 text-xs text-base-400 hover:text-base-600 cursor-pointer" @click="linkingChecklistForTaskId = null">
-                {{ t('actions.cancel') }}
-              </button>
-            </div>
+            <!-- Read view: just what's needed to scan the board -->
+            <template v-if="editingTaskId !== task.id">
+              <p
+                v-if="task.description"
+                class="mt-0.5 line-clamp-2 whitespace-pre-line break-words text-xs text-base-600"
+                :title="task.description"
+              >{{ task.description }}</p>
 
-            <div class="mt-2 flex items-center gap-1.5">
-              <Icon name="material-symbols:event-upcoming-rounded" class="shrink-0" :class="deadlineTextClass(task)" />
-              <CommonDateInput
-                class="min-w-0 flex-1"
-                size="sm"
-                :model-value="task.deadline"
-                :mode="taskDateMode(task)"
+              <div class="mt-1.5 flex flex-wrap items-center gap-1">
+                <span
+                  v-if="task.deadline"
+                  class="inline-flex h-5 items-center gap-0.5 text-[0.7rem] leading-none font-medium"
+                  :class="deadlineTextClass(task)"
+                >
+                  <Icon :name="isOverdue(task) ? 'material-symbols:warning-rounded' : 'material-symbols:event-upcoming-rounded'" class="text-sm" />
+                  {{ formatDateTime(task.deadline) }}
+                </span>
+                <button
+                  v-if="task.linkedChecklistId"
+                  type="button"
+                  class="inline-flex h-5 items-center gap-0.5 rounded border border-info-200 bg-info-50 px-1.5 text-[0.7rem] leading-none font-medium text-info-700 hover:bg-info-100 cursor-pointer"
+                  :title="linkedChecklistTitle(task)"
+                  @click="emit('navigate-to-checklists')"
+                >
+                  <Icon name="material-symbols:checklist-rounded" class="text-sm" />
+                  <template v-if="task.linkedChecklistProgress">{{ task.linkedChecklistProgress.done }}/{{ task.linkedChecklistProgress.total }}</template>
+                </button>
+                <span
+                  v-for="chip in visibleAssigneeChips(task)"
+                  :key="chip.key"
+                  class="inline-flex h-5 max-w-36 items-center rounded border border-base-200 bg-white px-1.5 text-[0.7rem] leading-none font-medium text-base-700"
+                  :title="chip.label"
+                ><span class="truncate">{{ chip.label }}</span></span>
+                <span
+                  v-if="hiddenAssigneeCount(task)"
+                  class="inline-flex h-5 items-center rounded border border-base-200 bg-white px-1.5 text-[0.7rem] leading-none font-medium text-base-500"
+                  :title="allAssigneeLabels(task)"
+                >+{{ hiddenAssigneeCount(task) }}</span>
+                <span v-if="!task.memberIds.length && !task.subdivisionIds.length" class="inline-flex h-5 items-center rounded border border-dashed border-base-300 px-1.5 text-[0.7rem] leading-none font-medium text-base-400">
+                  {{ t('event.planning.unassigned') }}
+                </span>
+              </div>
+            </template>
+
+            <!-- Edit view -->
+            <div v-else class="mt-2 space-y-2">
+              <textarea
+                :value="task.description ?? ''"
+                class="input min-h-14 w-full py-1 text-xs"
+                rows="2"
+                :maxlength="MAX_TASK_DESCRIPTION_LENGTH"
+                :aria-label="t('event.planning.taskDescription')"
+                :placeholder="t('event.planning.taskDescriptionPlaceholder')"
                 :disabled="disabled"
-                :empty-value="null"
-                @update:model-value="updateTask(task.id, { deadline: $event })"
+                @input="updateTask(task.id, { description: ($event.target as HTMLTextAreaElement).value })"
               />
-              <button
-                type="button"
-                class="inline-flex shrink-0 items-center justify-center text-accent-600 hover:text-accent-700 disabled:opacity-60 not-disabled:cursor-pointer"
-                :title="taskDateMode(task) === 'date' ? t('event.planning.dateAndTime') : t('event.planning.dateOnly')"
-                :disabled="disabled"
-                @click="toggleTaskDateMode(task)"
-              >
-                <span class="flex items-center xl:hidden">
+
+              <div class="flex items-center gap-1.5">
+                <Icon name="material-symbols:event-upcoming-rounded" class="shrink-0" :class="deadlineTextClass(task)" />
+                <CommonDateInput
+                  class="min-w-0 flex-1"
+                  size="sm"
+                  :model-value="task.deadline"
+                  :mode="taskDateMode(task)"
+                  :disabled="disabled"
+                  :empty-value="null"
+                  @update:model-value="updateTask(task.id, { deadline: $event })"
+                />
+                <button
+                  type="button"
+                  class="inline-flex shrink-0 items-center justify-center text-accent-600 hover:text-accent-700 disabled:opacity-60 not-disabled:cursor-pointer"
+                  :title="taskDateMode(task) === 'date' ? t('event.planning.dateAndTime') : t('event.planning.dateOnly')"
+                  :disabled="disabled"
+                  @click="toggleTaskDateMode(task)"
+                >
                   <Icon
                     class="text-base"
                     :name="taskDateMode(task) === 'date' ? 'material-symbols:schedule-rounded' : 'material-symbols:calendar-today-rounded'"
                   />
-                </span>
-                <span class="hidden text-xs font-medium xl:inline">
-                  {{ taskDateMode(task) === 'date' ? t('event.planning.dateOnly') : t('event.planning.dateAndTime') }}
-                </span>
-              </button>
-            </div>
+                </button>
+              </div>
 
-            <div class="mt-3 space-y-2">
-              <div class="flex flex-wrap gap-1.5">
+              <div v-if="task.memberIds.length || task.subdivisionIds.length" class="flex flex-wrap gap-1.5">
                 <span
                   v-for="memberId in task.memberIds"
                   :key="`task-${task.id}-member-${memberId}`"
@@ -294,7 +406,6 @@
                 >
                   {{ memberLabel(memberId) }}
                   <button
-                    v-if="canManage !== false"
                     type="button"
                     class="inline-flex h-4 w-4 items-center justify-center rounded text-base-500 hover:bg-danger-50 hover:text-danger-600 disabled:opacity-60 cursor-pointer"
                     :disabled="disabled"
@@ -310,7 +421,6 @@
                 >
                   {{ subdivisionLabel(subdivisionId) }}
                   <button
-                    v-if="canManage !== false"
                     type="button"
                     class="inline-flex h-4 w-4 items-center justify-center rounded text-base-500 hover:bg-danger-50 hover:text-danger-600 disabled:opacity-60 cursor-pointer"
                     :disabled="disabled"
@@ -319,12 +429,9 @@
                     <Icon name="material-symbols:close-rounded" class="text-sm" />
                   </button>
                 </span>
-                <span v-if="!task.memberIds.length && !task.subdivisionIds.length" class="rounded border border-dashed border-base-300 bg-white px-1.5 py-0.5 text-[0.7rem] font-medium text-base-500">
-                  {{ t('event.planning.unassigned') }}
-                </span>
               </div>
 
-              <div v-if="canManage !== false" class="grid gap-2 sm:grid-cols-2">
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
                 <CommonSearchSelect
                   class="event-task-compact-input"
                   :model-value="memberQueries[task.id] ?? ''"
@@ -347,6 +454,52 @@
                   @select="addTaskSubdivision(task.id, $event)"
                   @clear-selection="subdivisionQueries[task.id] = ''"
                 />
+              </div>
+
+              <div v-if="linkingChecklistForTaskId === task.id" class="flex items-center gap-1.5">
+                <CommonSearchSelect
+                  class="event-task-compact-input min-w-0 flex-1"
+                  :model-value="checklistLinkQuery"
+                  :options="checklistLinkOptions"
+                  :placeholder="t('event.planning.selectChecklist')"
+                  :empty-text="t('event.planning.noUnlinkedChecklists')"
+                  @update:model-value="checklistLinkQuery = $event"
+                  @select="selectChecklistForTask(task.id, $event)"
+                  @clear-selection="checklistLinkQuery = ''"
+                />
+                <button type="button" class="shrink-0 text-xs text-base-400 hover:text-base-600 cursor-pointer" @click="linkingChecklistForTaskId = null">
+                  {{ t('actions.cancel') }}
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between gap-2 border-t border-base-100 pt-2">
+                <button
+                  type="button"
+                  class="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs leading-none font-medium text-danger-600 hover:bg-danger-50 disabled:opacity-60 cursor-pointer"
+                  :disabled="disabled"
+                  @click="removeTask(task.id)"
+                >
+                  <Icon name="material-symbols:delete-rounded" class="shrink-0 text-sm" />
+                  {{ t('actions.remove') }}
+                </button>
+                <button
+                  v-if="task.linkedChecklistId"
+                  type="button"
+                  class="inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-xs leading-none font-medium text-info-600 hover:bg-info-50 cursor-pointer"
+                  @click="emit('navigate-to-checklists')"
+                >
+                  <Icon name="material-symbols:checklist-rounded" class="shrink-0 text-sm" />
+                  <span class="truncate">{{ linkedChecklistTitle(task) }}</span>
+                </button>
+                <button
+                  v-else-if="linkingChecklistForTaskId !== task.id"
+                  type="button"
+                  class="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs leading-none font-medium text-base-500 hover:bg-base-100 hover:text-base-700 cursor-pointer"
+                  @click="linkingChecklistForTaskId = task.id"
+                >
+                  <Icon name="material-symbols:checklist-rounded" class="shrink-0 text-sm" />
+                  {{ t('event.planning.linkChecklist') }}
+                </button>
               </div>
             </div>
           </article>
@@ -384,6 +537,9 @@ import type { EventPlanningTask, EventPlanningTaskStatus, PlanningChecklist } fr
 
 type DateMode = 'date' | 'datetime'
 
+/** Mirrors the server limit in `server/utils/eventTasks.ts`. */
+const MAX_TASK_DESCRIPTION_LENGTH = 5000
+
 const props = defineProps<{
   disabled?: boolean
   canManage?: boolean
@@ -399,10 +555,14 @@ const props = defineProps<{
    * to them). Moving one of these emits `change-status` instead of editing the list locally.
    */
   statusOnlyTaskIds?: number[]
+  /** The tasks as last saved on the server — what "unsaved changes" is measured against. */
+  savedTasks: EventPlanningTask[]
 }>()
 
 const emit = defineEmits<{
   (e: 'save', tasks: EventPlanningTask[]): void
+  /** Save just this one task, leaving other cards' unsaved edits alone. */
+  (e: 'save-task', task: EventPlanningTask): void
   (e: 'link-checklist-to-task', value: { checklistId: number; taskId: number }): void
   (e: 'navigate-to-checklists'): void
   (e: 'change-status', value: { taskId: number; status: EventPlanningTaskStatus }): void
@@ -410,16 +570,25 @@ const emit = defineEmits<{
 
 const tasks = defineModel<EventPlanningTask[]>('tasks', { required: true })
 const { t } = useI18n()
+const { formatDateTime } = useLocaleFormatters()
 
 const nextDraftTaskId = ref(-1)
 
 const quickAdd = reactive({
   title: '',
+  description: '',
   deadline: null as string | null,
   memberIds: [] as number[],
   subdivisionIds: [] as number[],
 })
 const quickAddDateMode = ref<DateMode>('date')
+const showQuickAddDetails = ref(false)
+/** How many details are filled in — shown on the collapsed "Details" toggle so nothing set is forgotten. */
+const quickAddDetailCount = computed(() =>
+  (quickAdd.deadline ? 1 : 0)
+  + (quickAdd.description.trim() ? 1 : 0)
+  + quickAdd.memberIds.length
+  + quickAdd.subdivisionIds.length)
 const quickAddMemberQuery = ref('')
 const quickAddSubdivisionQuery = ref('')
 const memberQueries = reactive<Record<number, string>>({})
@@ -467,16 +636,7 @@ function startTaskCardTouchDrag(taskId: number, event: TouchEvent) {
   if (article) startTaskTouchDrag(event, article)
 }
 
-const savedSnapshot = ref(JSON.stringify(tasks.value))
-const isDirty = computed(() => JSON.stringify(tasks.value) !== savedSnapshot.value)
-
-watch(() => props.loading, (now, was) => {
-  if (was && !now) savedSnapshot.value = JSON.stringify(tasks.value)
-})
-
-watch(() => props.saving, (now, was) => {
-  if (was && !now) savedSnapshot.value = JSON.stringify(tasks.value)
-})
+const isDirty = computed(() => JSON.stringify(tasks.value.map(normalizeTask)) !== JSON.stringify(props.savedTasks.map(normalizeTask)))
 
 const statusColumns = computed(() => [
   { status: 'open' as const, label: t('event.planning.taskStatus.open'), dotClass: 'bg-base-400' },
@@ -520,6 +680,7 @@ function normalizeTask(task: EventPlanningTask): EventPlanningTask {
   const status = task.status ?? 'open'
   const normalized = {
     ...task,
+    description: task.description ?? null,
     deadline: task.deadline || null,
     status,
     memberIds: task.memberIds ?? [],
@@ -529,6 +690,7 @@ function normalizeTask(task: EventPlanningTask): EventPlanningTask {
   }
 
   return normalized.status === task.status
+    && normalized.description === task.description
     && normalized.deadline === task.deadline
     && normalized.memberIds === task.memberIds
     && normalized.subdivisionIds === task.subdivisionIds
@@ -545,6 +707,7 @@ function addTask() {
     {
       id: nextDraftTaskId.value--,
       title,
+      description: quickAdd.description.trim() || null,
       deadline: quickAdd.deadline || null,
       status: 'open' as const,
       memberIds: [...quickAdd.memberIds],
@@ -556,6 +719,7 @@ function addTask() {
   tasks.value = next
 
   quickAdd.title = ''
+  quickAdd.description = ''
   quickAdd.deadline = null
   quickAdd.memberIds = []
   quickAdd.subdivisionIds = []
@@ -577,6 +741,69 @@ function removeTask(taskId: number) {
   delete memberQueries[taskId]
   delete subdivisionQueries[taskId]
   delete taskDateModes[taskId]
+  if (editingTaskId.value === taskId) stopEditing()
+}
+
+/** Cards show a compact read view; the editing controls only appear for the one card being edited. */
+const editingTaskId = ref<number | null>(null)
+const canEditTask = computed(() => props.canManage !== false && !props.disabled)
+
+watch(canEditTask, (allowed) => { if (!allowed) stopEditing() })
+
+/** The card as it was when editing started — "cancel" puts it back. */
+let editSnapshot: EventPlanningTask | null = null
+
+// Switching to another card keeps the first card's unsaved edits (the header's save button still
+// shows them) rather than silently discarding them.
+function startEditing(taskId: number) {
+  const task = tasks.value.find(entry => entry.id === taskId)
+  editSnapshot = task ? JSON.parse(JSON.stringify(task)) : null
+  editingTaskId.value = taskId
+  linkingChecklistForTaskId.value = null
+}
+
+function stopEditing() {
+  editingTaskId.value = null
+  editSnapshot = null
+  linkingChecklistForTaskId.value = null
+}
+
+function cancelEditing() {
+  const snapshot = editSnapshot
+  if (snapshot) tasks.value = tasks.value.map(task => task.id === snapshot.id ? snapshot : task)
+  stopEditing()
+}
+
+function saveEditedTask() {
+  const task = tasks.value.find(entry => entry.id === editingTaskId.value)
+  if (!task || !task.title.trim() || props.saving) return
+  stopEditing()
+  emit('save-task', { ...task, title: task.title.trim() })
+}
+
+const MAX_VISIBLE_ASSIGNEES = 3
+
+function assigneeChips(task: EventPlanningTask) {
+  return [
+    ...task.memberIds.map(id => ({ key: `m-${id}`, label: memberLabel(id) })),
+    ...task.subdivisionIds.map(id => ({ key: `s-${id}`, label: subdivisionShortLabel(id) })),
+  ]
+}
+
+function visibleAssigneeChips(task: EventPlanningTask) {
+  return assigneeChips(task).slice(0, MAX_VISIBLE_ASSIGNEES)
+}
+
+function hiddenAssigneeCount(task: EventPlanningTask) {
+  return Math.max(0, task.memberIds.length + task.subdivisionIds.length - MAX_VISIBLE_ASSIGNEES)
+}
+
+function allAssigneeLabels(task: EventPlanningTask) {
+  return [...task.memberIds.map(memberLabel), ...task.subdivisionIds.map(subdivisionLabel)].join(', ')
+}
+
+function subdivisionShortLabel(subdivisionId: number) {
+  return props.subdivisions.find(entry => entry.id === subdivisionId)?.code ?? String(subdivisionId)
 }
 
 function selectQuickMember(value: unknown) {

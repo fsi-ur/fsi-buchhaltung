@@ -7,6 +7,7 @@ import { queueTaskChanges, type TaskChangeInput } from '~/server/utils/notificat
 interface EventTaskRow {
   id: number
   title: string
+  description: string | null
   status: string
   deadline: string | null
   position: number
@@ -56,6 +57,16 @@ export function normalizeDeadline(value: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/.test(str) ? str : null
 }
 
+export const MAX_TASK_DESCRIPTION_LENGTH = 5000
+
+export function normalizeTaskDescription(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') return undefined
+  const str = value.replace(/\r\n?/g, '\n').trim()
+  if (!str) return null
+  return str.length <= MAX_TASK_DESCRIPTION_LENGTH ? str : undefined
+}
+
 function normalizeStatus(value: unknown): 'open' | 'in_progress' | 'done' | null {
   const str = String(value ?? '')
   if (str === 'open' || str === 'in_progress' || str === 'done') return str
@@ -74,17 +85,19 @@ export function normalizeEventTasks(value: unknown): SaveEventTask[] | null {
     const raw = entry as Record<string, unknown>
     const id = raw.id === undefined || raw.id === null ? undefined : normalizePositiveInteger(raw.id)
     const title = String(raw.title ?? '').trim()
+    const description = normalizeTaskDescription(raw.description)
     const status = normalizeStatus(raw.status)
     const deadline = normalizeDeadline(raw.deadline)
     const memberIds = normalizeIds(raw.member_ids ?? raw.memberIds ?? [])
     const subdivisionIds = normalizeIds(raw.subdivision_ids ?? raw.subdivisionIds ?? [])
 
     if (raw.id !== undefined && raw.id !== null && !id) return null
-    if (!title || !status || !memberIds || !subdivisionIds) return null
+    if (!title || description === undefined || !status || !memberIds || !subdivisionIds) return null
 
     tasks.push({
       ...(id ? { id } : {}),
       title,
+      description,
       status,
       deadline,
       position: i,
@@ -98,7 +111,7 @@ export function normalizeEventTasks(value: unknown): SaveEventTask[] | null {
 
 export async function loadEventTasks(eventId: number, conn?: mariadb.PoolConnection): Promise<EventTask[]> {
   const taskRows = await query<EventTaskRow[]>(
-    `SELECT t.id, t.title, t.status, t.deadline, t.position,
+    `SELECT t.id, t.title, t.description, t.status, t.deadline, t.position,
             c.id AS linked_checklist_id,
             COALESCE(ci_agg.done, 0) AS checklist_done,
             COALESCE(ci_agg.total, 0) AS checklist_total
@@ -165,6 +178,7 @@ export async function loadEventTasks(eventId: number, conn?: mariadb.PoolConnect
   return taskRows.map(row => ({
     id: Number(row.id),
     title: String(row.title),
+    description: row.description ? String(row.description) : null,
     status: String(row.status) as 'open' | 'in_progress' | 'done',
     deadline: row.deadline ? String(row.deadline) : null,
     position: Number(row.position),
@@ -328,7 +342,7 @@ export async function replaceEventTasks({
   )
 
   const existingRows = await query<EventTaskRow[]>(
-    `SELECT id, title, status, deadline, position FROM event_tasks WHERE event_id = ?`,
+    `SELECT id, title, description, status, deadline, position FROM event_tasks WHERE event_id = ?`,
     [eventId],
     conn,
   )
@@ -348,10 +362,11 @@ export async function replaceEventTasks({
   if (relationError) return relationError
 
   const taskChanges: TaskChangeInput[] = []
-  const taskEntry = (id: number, task: { title: string, deadline: string | null }) => ({
+  const taskEntry = (id: number, task: { title: string, deadline: string | null, description: string | null }) => ({
     task_id: id,
     title: String(task.title),
     deadline: task.deadline ?? null,
+    description: task.description ?? null,
   })
 
   const incomingIdSet = new Set(incomingIds)
@@ -385,6 +400,7 @@ export async function replaceEventTasks({
         existing
         && (
           String(existing.title) !== task.title
+          || (existing.description ?? null) !== task.description
           || String(existing.status) !== task.status
           || (existing.deadline ?? null) !== task.deadline
           || Number(existing.position) !== task.position
@@ -394,17 +410,17 @@ export async function replaceEventTasks({
 
         await query(
           `UPDATE event_tasks
-           SET title = ?, status = ?, deadline = ?, position = ?
+           SET title = ?, description = ?, status = ?, deadline = ?, position = ?
            WHERE id = ? AND event_id = ?`,
-          [task.title, task.status, task.deadline, task.position, taskId, eventId],
+          [task.title, task.description, task.status, task.deadline, task.position, taskId, eventId],
           conn,
         )
       }
     } else {
       const result: any = await query(
-        `INSERT INTO event_tasks (event_id, title, status, deadline, position)
-         VALUES (?, ?, ?, ?, ?)`,
-        [eventId, task.title, task.status, task.deadline, task.position],
+        `INSERT INTO event_tasks (event_id, title, description, status, deadline, position)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [eventId, task.title, task.description, task.status, task.deadline, task.position],
         conn,
       )
       taskId = Number(result.insertId)

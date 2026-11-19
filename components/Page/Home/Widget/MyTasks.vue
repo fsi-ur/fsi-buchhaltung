@@ -77,6 +77,12 @@
                 </span>
               </span>
 
+              <span
+                v-if="task.description"
+                class="mt-0.5 line-clamp-2 whitespace-pre-line break-words text-xs text-base-600"
+                :title="task.description"
+              >{{ task.description }}</span>
+
               <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-base-500">
                 <span class="min-w-0 truncate">{{ task.eventName }}</span>
                 <span

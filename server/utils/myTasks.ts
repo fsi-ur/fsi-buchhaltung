@@ -8,6 +8,7 @@ interface MyTaskRow {
   event_id: number
   event_name: string
   title: string
+  description: string | null
   status: string
   deadline: string | null
   assigned_directly: number
@@ -35,7 +36,7 @@ export function normalizeTaskStatus(value: unknown): EventTaskStatus | null {
  */
 export async function loadMyOpenTasks(memberId: number, conn?: mariadb.PoolConnection): Promise<MyEventTask[]> {
   const rows = await query<MyTaskRow[]>(
-    `SELECT t.id, t.event_id, e.name AS event_name, t.title, t.status, t.deadline,
+    `SELECT t.id, t.event_id, e.name AS event_name, t.title, t.description, t.status, t.deadline,
             EXISTS (SELECT 1 FROM event_task_members etm WHERE etm.task_id = t.id AND etm.member_id = ?) AS assigned_directly,
             c.id AS checklist_id,
             COALESCE(ci_agg.done, 0) AS checklist_done,
@@ -90,6 +91,7 @@ export async function loadMyOpenTasks(memberId: number, conn?: mariadb.PoolConne
     eventId: Number(row.event_id),
     eventName: String(row.event_name),
     title: String(row.title),
+    description: row.description ? String(row.description) : null,
     status: String(row.status) as MyEventTask['status'],
     deadline: row.deadline ? String(row.deadline) : null,
     assignedDirectly: Boolean(Number(row.assigned_directly)),

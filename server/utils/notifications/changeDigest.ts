@@ -279,6 +279,7 @@ export async function queueTaskChanges(args: {
             task_list: list,
             task_title: first.title,
             task_deadline: first.deadline,
+            task_description: first.description ?? null,
           }
         : null,
     })

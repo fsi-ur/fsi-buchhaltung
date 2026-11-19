@@ -26,4 +26,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-subdivision-leadership.mjs',
   'migrate-finance-analysis-tab.mjs',
   'migrate-appointment-response-reconfirmation.mjs',
+  'migrate-event-task-description.mjs',
 ]

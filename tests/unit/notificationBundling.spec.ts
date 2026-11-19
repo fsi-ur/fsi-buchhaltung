@@ -201,4 +201,34 @@ describe('list variables', () => {
     })
     expect(rendered.body).toContain('- Plakate (Frist: 20.05.2026) – seit 3 Tag(en) überfällig')
   })
+
+  it('shows a task’s description indented below its line, shortened when long', () => {
+    const rendered = renderNotification({
+      type: 'task.assigned',
+      payload: {
+        member_name: 'Max',
+        event_name: 'Sommerfest',
+        task_list: [
+          { task_id: 1, title: 'Bühne', deadline: null, description: 'Aufbau ab 14 Uhr\nSchlüssel bei Erika' },
+          { task_id: 2, title: 'Plakate', deadline: null, description: 'x'.repeat(250) },
+          { task_id: 3, title: 'Kasse', deadline: null },
+        ],
+      },
+      locale: 'de',
+      settings: DEFAULT_NOTIFICATION_SETTINGS,
+    })
+    expect(rendered.body).toContain('- Bühne (ohne Frist)\n  Aufbau ab 14 Uhr\n  Schlüssel bei Erika\n- Plakate')
+    expect(rendered.body).toContain(`  ${'x'.repeat(200)} …\n- Kasse (ohne Frist)`)
+  })
+
+  it('offers the first task’s shortened description as {task_description}', () => {
+    const rendered = renderNotification({
+      type: 'task.assigned',
+      payload: { task_title: 'Plakate', task_description: 'y'.repeat(300) },
+      locale: 'de',
+      settings: DEFAULT_NOTIFICATION_SETTINGS,
+      bodyOverride: '{task_title}: {task_description}',
+    })
+    expect(rendered.body).toBe(`Plakate: ${'y'.repeat(200)} …`)
+  })
 })
