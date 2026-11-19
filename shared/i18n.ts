@@ -2837,6 +2837,7 @@ export const messages = {
       },
       rsvp: {
         question: 'Bist du dabei?',
+        yourAnswer: 'Deine Antwort:',
         yes: 'Zusagen',
         no: 'Absagen',
         maybe: 'Vielleicht',
@@ -6564,6 +6565,7 @@ export const messages = {
       },
       rsvp: {
         question: 'Are you coming?',
+        yourAnswer: 'Your answer:',
         yes: 'Accept',
         no: 'Decline',
         maybe: 'Maybe',

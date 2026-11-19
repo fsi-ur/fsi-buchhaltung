@@ -268,7 +268,10 @@ const view = ref<CalendarViewMode>(
 // of the month `anchor` points at, and keeping it as "today" is what makes switching straight from
 // the initial month view to week view land on the current week instead of the week containing the
 // 1st.
-const anchor = ref(nowWallClockFrame(timeZone.value))
+const initialOccurrenceDate = pageMeta.value?.occurrenceDate as string | undefined
+const anchor = ref(initialOccurrenceDate
+  ? parseDayKey(dayKeyOf(initialOccurrenceDate))
+  : nowWallClockFrame(timeZone.value))
 const entries = ref<CalendarEntry[]>([])
 const appointmentTypes = ref<AppointmentTypeRow[]>([])
 const loading = ref(true)
@@ -541,6 +544,10 @@ async function fetchWindow(window: { from: string, to: string }) {
   if (!res.ok) throw new Error(res.error || t('calendar.loadFailed'))
   entries.value = res.entries
   appointmentTypes.value = res.appointmentTypes
+  // Open a deep-linked entry as soon as any fetch contains it — the list view keeps growing its
+  // window over several more requests, and waiting for all of them left the user staring at the
+  // list (or tapping away) before the appointment ever opened.
+  tryOpenDeepLink(res.entries)
 }
 
 async function growListWindowIfNeeded() {
@@ -569,19 +576,50 @@ async function load() {
   }
 }
 
-/** A notification deep link carries the occurrence it is about; open that entry straight away. */
-function applyDeepLink() {
+/**
+ * A deep link (notification, home widget) carries the occurrence it is about. It stays pending until
+ * a fetch contains that entry, then opens it once — so a later reload never reopens a closed modal.
+ */
+let pendingDeepLink: { appointmentId: number, occurrenceDate?: string } | null = null
+
+function readDeepLink() {
   const appointmentId = Number(pageMeta.value?.appointmentId)
-  const occurrenceDate = pageMeta.value?.occurrenceDate as string | undefined
-  if (!Number.isFinite(appointmentId) || appointmentId <= 0) return
+  if (!Number.isFinite(appointmentId) || appointmentId <= 0) return null
+  return { appointmentId, occurrenceDate: pageMeta.value?.occurrenceDate as string | undefined }
+}
 
-  if (occurrenceDate) anchor.value = parseDayKey(dayKeyOf(occurrenceDate))
+function tryOpenDeepLink(candidates: CalendarEntry[]) {
+  const link = pendingDeepLink
+  if (!link) return
 
-  const match = entries.value.find(entry => entry.source === 'appointment'
-    && entry.id === appointmentId
-    && (!occurrenceDate || entry.occurrenceDate === occurrenceDate))
+  const match = candidates.find(entry => entry.source === 'appointment'
+    && entry.id === link.appointmentId
+    && (!link.occurrenceDate || entry.occurrenceDate === link.occurrenceDate))
+  if (!match) return
 
-  if (match) openEntry(match)
+  pendingDeepLink = null
+  openEntry(match)
+}
+
+/** Fallback when the view's own window never contained it (e.g. the list starts at today). */
+async function resolveDeepLink() {
+  const link = pendingDeepLink
+  pendingDeepLink = null
+  if (!link?.occurrenceDate) return
+
+  try {
+    const day = dayKeyOf(link.occurrenceDate)
+    const res = await apiFetch<GetCalendarEntriesResponse>('/api/calendar/entries', {
+      query: { from: `${day} 00:00:00`, to: `${day} 23:59:59` },
+    })
+    if (!res.ok) return
+    pendingDeepLink = link
+    tryOpenDeepLink(res.entries)
+  } catch {
+    // The calendar itself loaded; failing to open one linked entry isn't worth an error toast.
+  } finally {
+    pendingDeepLink = null
+  }
 }
 
 watch(sourceFilter, (value) => {
@@ -599,11 +637,20 @@ watch([anchor, view], (_next, previous) => {
 })
 
 watch(() => [pageMeta.value?.appointmentId, pageMeta.value?.occurrenceDate], async () => {
-  if (!pageMeta.value?.appointmentId) return
-  const occurrenceDate = pageMeta.value?.occurrenceDate as string | undefined
-  if (occurrenceDate) anchor.value = parseDayKey(dayKeyOf(occurrenceDate))
+  pendingDeepLink = readDeepLink()
+  if (!pendingDeepLink) return
+
+  const { occurrenceDate } = pendingDeepLink
+  // Changing the anchor already reloads via the [anchor, view] watcher; only reload by hand when it
+  // won't (list view, or already on that day) — two loads at once would just race each other.
+  const nextAnchor = occurrenceDate ? parseDayKey(dayKeyOf(occurrenceDate)) : null
+  if (nextAnchor && view.value !== 'list' && nextAnchor.getTime() !== anchor.value.getTime()) {
+    anchor.value = nextAnchor
+    return
+  }
+  if (nextAnchor) anchor.value = nextAnchor
   await load()
-  applyDeepLink()
+  await resolveDeepLink()
 })
 
 function onKeydown(event: KeyboardEvent) {
@@ -631,10 +678,9 @@ onMounted(async () => {
     headerStickyObserver.observe(headerSentinelRef.value)
   }
 
-  const occurrenceDate = pageMeta.value?.occurrenceDate as string | undefined
-  if (occurrenceDate) anchor.value = parseDayKey(dayKeyOf(occurrenceDate))
+  pendingDeepLink = readDeepLink()
   await load()
-  applyDeepLink()
+  await resolveDeepLink()
 })
 
 onBeforeUnmount(() => {
