@@ -25,4 +25,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-finance-accounts.mjs',
   'migrate-subdivision-leadership.mjs',
   'migrate-finance-analysis-tab.mjs',
+  'migrate-appointment-response-reconfirmation.mjs',
 ]

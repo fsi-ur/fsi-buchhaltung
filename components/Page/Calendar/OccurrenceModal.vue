@@ -80,6 +80,14 @@
           >
             <h4 class="text-sm font-semibold text-base-800">{{ t('calendar.rsvp.question') }}</h4>
 
+            <p
+              v-if="unconfirmedResponse && !ownResponse"
+              class="mt-2 flex items-start gap-2 rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800"
+            >
+              <Icon name="material-symbols:sync-problem-rounded" class="mt-0.5 shrink-0 text-base" />
+              <span>{{ t('calendar.rsvp.reconfirmHint', { answer: t(`calendar.rsvp.${unconfirmedResponse}Short`) }) }}</span>
+            </p>
+
             <div class="mt-2 flex flex-wrap gap-2">
               <button
                 v-for="option in responseOptions"
@@ -139,6 +147,9 @@
                 <template v-if="entry.responseSummary.pending">
                   · {{ t('calendar.detail.pendingCount', { count: entry.responseSummary.pending }) }}
                 </template>
+                <template v-if="entry.responseSummary.unconfirmed">
+                  ({{ t('calendar.detail.unconfirmedCount', { count: entry.responseSummary.unconfirmed }) }})
+                </template>
               </span>
             </h4>
 
@@ -153,6 +164,15 @@
               >
                 <span class="truncate text-base-800">{{ participant.name }}</span>
                 <span
+                  v-if="participant.unconfirmed"
+                  class="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-base-300 px-2 py-0.5 text-[11px] font-semibold text-base-500"
+                  :title="t('calendar.rsvp.unconfirmedTitle')"
+                >
+                  <Icon name="material-symbols:sync-problem-rounded" class="text-[13px]" />
+                  {{ t('calendar.rsvp.unconfirmed', { answer: t(`calendar.rsvp.${participant.unconfirmed}Short`) }) }}
+                </span>
+                <span
+                  v-else
                   class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
                   :class="participant.response ? responseBadgeClass(participant.response) : 'bg-base-100 text-base-500'"
                 >
@@ -253,6 +273,8 @@ const isResponding = ref(false)
 const pendingResponse = ref<AppointmentResponseValue | null>(null)
 const applyToSeries = ref(false)
 const ownResponse = ref<AppointmentResponseValue | null>(null)
+/** The viewer's answer from before the occurrence changed; shown until they answer again. */
+const unconfirmedResponse = ref<AppointmentResponseValue | null>(null)
 
 const canOpenEvent = computed(() => hasPermission(['events.access', 'events.view', 'events.shifts.signup']))
 const canEdit = computed(() => Boolean(props.entry?.source === 'appointment' && props.entry.canEdit))
@@ -314,13 +336,17 @@ const participantRows = computed(() => {
   const responsesByMember = new Map(
     detail.value.responses
       .filter(response => response.occurrence_date === props.entry?.occurrenceDate)
-      .map(response => [response.member_id, response.response]),
+      .map(response => [response.member_id, response]),
   )
 
-  return detail.value.participants.map(participant => ({
-    ...participant,
-    response: responsesByMember.get(participant.id) ?? null,
-  }))
+  return detail.value.participants.map((participant) => {
+    const row = responsesByMember.get(participant.id)
+    return {
+      ...participant,
+      response: row && !row.needs_reconfirmation ? row.response : null,
+      unconfirmed: row?.needs_reconfirmation ? row.response : null,
+    }
+  })
 })
 
 function responseBadgeClass(response: AppointmentResponseValue) {
@@ -397,6 +423,7 @@ async function respond(response: AppointmentResponseValue) {
     // Reflect the answer immediately — the parent's reload (via 'responded') only lands once it
     // resolves, and `entry` itself will not carry it until the parent re-passes a fresh object.
     ownResponse.value = response
+    unconfirmedResponse.value = null
     emit('responded')
     await loadDetail()
   } catch {
@@ -448,6 +475,7 @@ async function reactivate() {
 watch(() => [props.modelValue, props.entry?.key] as const, ([open]) => {
   if (!open) return
   ownResponse.value = props.entry?.ownResponse ?? null
+  unconfirmedResponse.value = props.entry?.unconfirmedResponse ?? null
   loadDetail()
 }, { immediate: true })
 </script>

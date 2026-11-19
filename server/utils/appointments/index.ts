@@ -13,11 +13,10 @@ import type {
   SaveAppointmentBody,
 } from '~/types/appointment'
 import {
-  formatWallClock,
   formatWallClockDate,
-  listScheduledOccurrenceDates,
   parseWallClock,
 } from '~/server/utils/appointments/recurrence'
+import { planOccurrenceDataChanges, type ReconfirmMode } from '~/server/utils/appointments/occurrenceData'
 import { normalizeAllDayRange, normalizeIdList } from '~/server/utils/appointments/validate'
 import { loadAppointmentAudience } from '~/server/utils/appointments/visibility'
 import { pickChangedFields, type ChangedField } from '~/server/utils/notifications/changeDescription'
@@ -358,57 +357,136 @@ export async function moveOccurrenceDataFrom(
   )
   await query(
     `UPDATE appointment_responses
-       SET appointment_id = ?
+       SET appointment_id = ?, responded_at = responded_at
      WHERE appointment_id = ? AND occurrence_date >= ?`,
     [toAppointmentId, fromAppointmentId, occurrenceDate],
     conn,
   )
 }
 
-export async function dropOrphanedOccurrenceData(appointmentId: number, conn: DbConn): Promise<number> {
-  const appointment = await loadAppointment(appointmentId, conn)
-  if (!appointment) return 0
+export interface ReconcileOccurrenceDataOptions {
+  /** The series before the change (for a split: the series it was split from). */
+  previous: AppointmentSeries
+  /** Wall clock in the app time zone. */
+  now: string
+  /** Which upcoming answers to flag for reconfirmation; defaults to 'auto'. */
+  reconfirm?: ReconfirmMode
+}
 
-  const valid = new Set(listScheduledOccurrenceDates(appointment))
+export interface ReconcileOccurrenceDataResult {
+  deleted: number
+  moved: number
+  reconfirm: number
+}
+
+/**
+ * Brings a series' overrides and answers in line with its current rule after a change — see
+ * planOccurrenceDataChanges for the rules (move to the same day, delete only future orphans, flag
+ * changed future answers for reconfirmation).
+ */
+export async function reconcileOccurrenceData(
+  appointmentId: number,
+  options: ReconcileOccurrenceDataOptions,
+  conn: DbConn,
+): Promise<ReconcileOccurrenceDataResult> {
+  const current = await loadAppointment(appointmentId, conn)
+  if (!current) return { deleted: 0, moved: 0, reconfirm: 0 }
 
   const [overrideRows, responseRows] = await Promise.all([
-    query<Array<{ id: number, occurrence_date: string }>>(
-      `SELECT id, occurrence_date FROM appointment_occurrence_overrides WHERE appointment_id = ?`,
+    query<Array<Record<string, any>>>(
+      `SELECT id, occurrence_date, is_cancelled, starts_at, ends_at
+       FROM appointment_occurrence_overrides WHERE appointment_id = ?`,
       [appointmentId],
       conn,
     ),
-    query<Array<{ id: number, occurrence_date: string }>>(
-      `SELECT id, occurrence_date FROM appointment_responses WHERE appointment_id = ?`,
+    query<Array<Record<string, any>>>(
+      `SELECT id, member_id, occurrence_date, needs_reconfirmation
+       FROM appointment_responses WHERE appointment_id = ?`,
       [appointmentId],
       conn,
     ),
   ])
 
-  const isOrphan = (value: string) => {
-    const parsed = parseWallClock(value)
-    return !parsed || !valid.has(formatWallClock(parsed))
-  }
+  const plan = planOccurrenceDataChanges({
+    previous: options.previous,
+    current,
+    overrides: overrideRows.map(row => ({
+      id: Number(row.id),
+      occurrence_date: String(row.occurrence_date),
+      is_cancelled: Boolean(Number(row.is_cancelled)),
+      starts_at: row.starts_at == null ? null : String(row.starts_at),
+      ends_at: row.ends_at == null ? null : String(row.ends_at),
+    })),
+    responses: responseRows.map(row => ({
+      id: Number(row.id),
+      member_id: Number(row.member_id),
+      occurrence_date: String(row.occurrence_date),
+      needs_reconfirmation: Boolean(Number(row.needs_reconfirmation)),
+    })),
+    now: options.now,
+    reconfirm: options.reconfirm,
+  })
 
-  const orphanOverrides = overrideRows.filter(row => isOrphan(String(row.occurrence_date))).map(row => Number(row.id))
-  const orphanResponses = responseRows.filter(row => isOrphan(String(row.occurrence_date))).map(row => Number(row.id))
-
-  if (orphanOverrides.length) {
+  // Deletes first: a moved row's target is always a date the rule produces, never a deleted row's.
+  if (plan.overrideDeletes.length) {
     await query(
-      `DELETE FROM appointment_occurrence_overrides WHERE id IN (${orphanOverrides.map(() => '?').join(',')})`,
-      orphanOverrides,
+      `DELETE FROM appointment_occurrence_overrides WHERE id IN (${plan.overrideDeletes.map(() => '?').join(',')})`,
+      plan.overrideDeletes,
+      conn,
+    )
+  }
+  if (plan.responseDeletes.length) {
+    await query(
+      `DELETE FROM appointment_responses WHERE id IN (${plan.responseDeletes.map(() => '?').join(',')})`,
+      plan.responseDeletes,
+      conn,
+    )
+  }
+  for (const move of plan.overrideMoves) {
+    await query(
+      `UPDATE appointment_occurrence_overrides SET occurrence_date = ? WHERE id = ?`,
+      [move.occurrenceDate, move.id],
+      conn,
+    )
+  }
+  for (const move of plan.responseMoves) {
+    await query(
+      `UPDATE appointment_responses SET occurrence_date = ?, responded_at = responded_at WHERE id = ?`,
+      [move.occurrenceDate, move.id],
+      conn,
+    )
+  }
+  if (plan.responseReconfirm.length) {
+    await query(
+      `UPDATE appointment_responses
+         SET needs_reconfirmation = 1, responded_at = responded_at
+       WHERE id IN (${plan.responseReconfirm.map(() => '?').join(',')})`,
+      plan.responseReconfirm,
       conn,
     )
   }
 
-  if (orphanResponses.length) {
-    await query(
-      `DELETE FROM appointment_responses WHERE id IN (${orphanResponses.map(() => '?').join(',')})`,
-      orphanResponses,
-      conn,
-    )
+  return {
+    deleted: plan.overrideDeletes.length + plan.responseDeletes.length,
+    moved: plan.overrideMoves.length + plan.responseMoves.length,
+    reconfirm: plan.responseReconfirm.length,
   }
+}
 
-  return orphanOverrides.length + orphanResponses.length
+/** Flags every answer to one occurrence for reconfirmation. Returns how many were flagged. */
+export async function requestOccurrenceReconfirmation(
+  appointmentId: number,
+  occurrenceDate: string,
+  conn: DbConn,
+): Promise<number> {
+  const result = await query<{ affectedRows?: number }>(
+    `UPDATE appointment_responses
+       SET needs_reconfirmation = 1, responded_at = responded_at
+     WHERE appointment_id = ? AND occurrence_date = ? AND needs_reconfirmation = 0`,
+    [appointmentId, occurrenceDate],
+    conn,
+  )
+  return Number(result?.affectedRows ?? 0)
 }
 
 export async function withdrawOccurrenceReminders(

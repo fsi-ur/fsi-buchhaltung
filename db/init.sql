@@ -1017,6 +1017,7 @@ CREATE TABLE IF NOT EXISTS appointment_responses (
   occurrence_date DATETIME NOT NULL,
   response ENUM('yes','no','maybe') NOT NULL,
   comment VARCHAR(255) NULL,
+  needs_reconfirmation TINYINT(1) NOT NULL DEFAULT 0,
   responded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY unique_appointment_response (appointment_id, member_id, occurrence_date),
   FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,

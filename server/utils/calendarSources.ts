@@ -60,6 +60,8 @@ export interface CalendarAppointmentSource {
   occurrences: AppointmentOccurrence[]
   typesById: Map<number, AppointmentTypeRow>
   ownResponses: Map<string, AppointmentResponseValue>
+  /** The viewer's answers that await reconfirmation, kept apart so they never count as an answer. */
+  unconfirmedResponses: Map<string, AppointmentResponseValue>
   responseSummaries: Map<string, AppointmentResponseSummary>
   respondableAppointmentIds: Set<number>
 }
@@ -273,6 +275,7 @@ export async function loadCalendarAppointments(
     occurrences: [],
     typesById: new Map(),
     ownResponses: new Map(),
+    unconfirmedResponses: new Map(),
     responseSummaries: new Map(),
     respondableAppointmentIds: new Set(),
   }
@@ -299,8 +302,8 @@ export async function loadCalendarAppointments(
   )
   const typesById = new Map(typeRows.map(row => [Number(row.id), toAppointmentType(row)]))
 
-  const responseRows = await query<Array<{ appointment_id: number, member_id: number, occurrence_date: string, response: AppointmentResponseValue }>>(
-    `SELECT appointment_id, member_id, occurrence_date, response
+  const responseRows = await query<Array<{ appointment_id: number, member_id: number, occurrence_date: string, response: AppointmentResponseValue, needs_reconfirmation: number }>>(
+    `SELECT appointment_id, member_id, occurrence_date, response, needs_reconfirmation
      FROM appointment_responses
      WHERE appointment_id IN (${appointmentIds.map(() => '?').join(',')})`,
     appointmentIds,
@@ -308,23 +311,26 @@ export async function loadCalendarAppointments(
   )
 
   const ownResponses = new Map<string, AppointmentResponseValue>()
+  const unconfirmedResponses = new Map<string, AppointmentResponseValue>()
   const responseSummaries = new Map<string, AppointmentResponseSummary>()
 
   for (const row of responseRows) {
     const key = occurrenceKey(Number(row.appointment_id), String(row.occurrence_date))
-    const summary = responseSummaries.get(key) ?? { yes: 0, no: 0, maybe: 0, pending: 0 }
-    summary[row.response] += 1
+    const summary = responseSummaries.get(key) ?? { yes: 0, no: 0, maybe: 0, pending: 0, unconfirmed: 0 }
+    const unconfirmed = Boolean(Number(row.needs_reconfirmation))
+    if (unconfirmed) summary.unconfirmed += 1
+    else summary[row.response] += 1
     responseSummaries.set(key, summary)
 
     if (viewer.memberId != null && Number(row.member_id) === viewer.memberId) {
-      ownResponses.set(key, row.response)
+      (unconfirmed ? unconfirmedResponses : ownResponses).set(key, row.response)
     }
   }
 
   const audienceCountByAppointment = await loadAudienceCounts(appointmentIds, conn)
   for (const occurrence of occurrences) {
     const key = occurrenceKey(occurrence.appointmentId, occurrence.occurrenceDate)
-    const summary = responseSummaries.get(key) ?? { yes: 0, no: 0, maybe: 0, pending: 0 }
+    const summary = responseSummaries.get(key) ?? { yes: 0, no: 0, maybe: 0, pending: 0, unconfirmed: 0 }
     const audienceCount = audienceCountByAppointment.get(occurrence.appointmentId) ?? 0
     summary.pending = Math.max(0, audienceCount - summary.yes - summary.no - summary.maybe)
     responseSummaries.set(key, summary)
@@ -354,7 +360,7 @@ export async function loadCalendarAppointments(
     for (const row of rows) respondableAppointmentIds.add(Number(row.id))
   }
 
-  return { series, occurrences, typesById, ownResponses, responseSummaries, respondableAppointmentIds }
+  return { series, occurrences, typesById, ownResponses, unconfirmedResponses, responseSummaries, respondableAppointmentIds }
 }
 
 export { occurrenceKey }
@@ -391,8 +397,9 @@ export function buildAppointmentEntries(source: CalendarAppointmentSource, user:
       typeName: type?.name ?? null,
       location: occurrence.location,
       ownResponse: source.ownResponses.get(key) ?? null,
+      unconfirmedResponse: source.unconfirmedResponses.get(key) ?? null,
       canRespond: source.respondableAppointmentIds.has(occurrence.appointmentId),
-      responseSummary: source.responseSummaries.get(key) ?? { yes: 0, no: 0, maybe: 0, pending: 0 },
+      responseSummary: source.responseSummaries.get(key) ?? { yes: 0, no: 0, maybe: 0, pending: 0, unconfirmed: 0 },
       isCancelled: occurrence.isCancelled,
       canEdit: series ? canEditAppointment(user, series) : false,
       eventId: null,
@@ -426,6 +433,7 @@ function readOnlyEntry(
     typeName: null,
     location: options.location ?? null,
     ownResponse: null,
+    unconfirmedResponse: null,
     canRespond: false,
     responseSummary: null,
     isCancelled: false,

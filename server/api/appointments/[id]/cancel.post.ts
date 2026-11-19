@@ -5,19 +5,20 @@ import { getNumericRouteParam } from '~/server/utils/api/request'
 import {
   canEditAppointment,
   copyAppointmentScope,
-  dropOrphanedOccurrenceData,
   insertAppointment,
   loadAppointment,
   loadScopeIds,
   loadTypeName,
   moveOccurrenceDataFrom,
   notifyAppointment,
+  reconcileOccurrenceData,
   truncateSeriesBefore,
   withdrawOccurrenceReminders,
 } from '~/server/utils/appointments'
 import { formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
 import type { AppointmentEditScope, SaveAppointmentBody } from '~/types/appointment'
 import { internalError } from '~/server/utils/api/errors'
+import { appNowLocalDateTime } from '~/server/utils/time'
 
 interface CancelAppointmentSuccess {
   ok: true
@@ -63,6 +64,16 @@ export default defineEventHandler(async (event): Promise<CancelAppointmentRespon
 
       if (!cancelled) {
         await query(`UPDATE appointments SET status = 'active' WHERE id = ?`, [appointment.id], conn)
+        // Answers from before the cancellation may no longer hold once it takes place after all.
+        if (appointment.status === 'cancelled') {
+          await query(
+            `UPDATE appointment_responses
+               SET needs_reconfirmation = 1, responded_at = responded_at
+             WHERE appointment_id = ? AND occurrence_date >= ? AND needs_reconfirmation = 0`,
+            [appointment.id, await appNowLocalDateTime(conn)],
+            conn,
+          )
+        }
         return { ok: true as const }
       }
 
@@ -136,7 +147,7 @@ export default defineEventHandler(async (event): Promise<CancelAppointmentRespon
         await query(`UPDATE appointments SET status = 'cancelled' WHERE id = ?`, [newId], conn)
         await copyAppointmentScope(appointment.id, newId, conn)
         await moveOccurrenceDataFrom(appointment.id, newId, occurrenceDate!, conn)
-        await dropOrphanedOccurrenceData(newId, conn)
+        await reconcileOccurrenceData(newId, { previous: appointment, now: await appNowLocalDateTime(conn) }, conn)
         await withdrawOccurrenceReminders(appointment.id, null, conn)
 
         const created = await loadAppointment(newId, conn)

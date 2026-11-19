@@ -8,19 +8,23 @@ import {
   canEditAppointment,
   copyAppointmentScope,
   describeAppointmentChanges,
-  dropOrphanedOccurrenceData,
   insertAppointment,
   loadAppointment,
+  loadOverrides,
   loadScopeIds,
   loadTypeName,
   moveOccurrenceDataFrom,
   notifyAppointment,
+  reconcileOccurrenceData,
+  requestOccurrenceReconfirmation,
   syncAppointmentScope,
   truncateSeriesBefore,
   updateAppointment,
   withdrawOccurrenceReminders,
 } from '~/server/utils/appointments'
 import { formatWallClock, parseWallClock } from '~/server/utils/appointments/recurrence'
+import { occurrenceTiming, reconfirmModeOf, sameTiming, type ReconfirmMode } from '~/server/utils/appointments/occurrenceData'
+import { appNowLocalDateTime } from '~/server/utils/time'
 import type { DbConn } from '~/server/utils/notifications/types'
 import type { AppointmentEditScope, AppointmentSeries, SaveAppointmentBody } from '~/types/appointment'
 import { internalError } from '~/server/utils/api/errors'
@@ -101,6 +105,8 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentRespon
       if (error) return { ok: false as const, error }
 
       const typeName = await loadTypeName(body.type_id ?? appointment.type_id, conn)
+      const now = await appNowLocalDateTime(conn)
+      const reconfirm = reconfirmModeOf(body.request_reconfirmation)
 
       if (scope === 'occurrence') {
         const forbidden = await findForbiddenOccurrenceChange(body, appointment, conn)
@@ -112,6 +118,8 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentRespon
           occurrenceDate: occurrenceDate!,
           typeName,
           userId: Number(current.user.id),
+          now,
+          reconfirm,
           conn,
         })
       }
@@ -123,6 +131,8 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentRespon
           occurrenceDate: occurrenceDate!,
           typeName,
           userId: Number(current.user.id),
+          now,
+          reconfirm,
           conn,
         })
       }
@@ -133,23 +143,19 @@ export default defineEventHandler(async (event): Promise<UpdateAppointmentRespon
       const updated = await loadAppointment(appointment.id, conn)
       if (!updated) return { ok: false as const, error: 'Der Termin wurde nicht gefunden.' }
 
-      const ruleChanged = updated.starts_at !== appointment.starts_at
-        || updated.recurrence_freq !== appointment.recurrence_freq
-        || updated.recurrence_interval !== appointment.recurrence_interval
-        || updated.recurrence_weekdays !== appointment.recurrence_weekdays
-        || updated.recurrence_monthly_mode !== appointment.recurrence_monthly_mode
-
-      if (ruleChanged) await dropOrphanedOccurrenceData(updated.id, conn)
+      // Moves answers along with a changed start, flags those of changed upcoming occurrences for
+      // reconfirmation, and never touches what already took place.
+      const reconciled = await reconcileOccurrenceData(updated.id, { previous: appointment, now, reconfirm }, conn)
 
       await withdrawOccurrenceReminders(updated.id, null, conn)
 
       const changes = describeAppointmentChanges(appointment, updated)
-      if (changes.length) {
+      if (changes.length || reconciled.reconfirm) {
         await notifyAppointment({
           type: 'appointment.changed',
           appointment: updated,
           typeName,
-          changes,
+          changes: changes.length ? changes : RECONFIRMATION_REQUESTED,
           createdByUserId: Number(current.user.id),
           conn,
         })
@@ -167,12 +173,18 @@ function normalizeOccurrenceDate(value: string | null | undefined): string | nul
   return parsed ? formatWallClock(parsed) : null
 }
 
+/** `{changes}` text when nothing but the request to answer again changed. */
+const RECONFIRMATION_REQUESTED = 'Bitte bestätige deine Rückmeldung zu diesem Termin erneut.'
+
 interface OccurrenceEditArgs {
   appointment: AppointmentSeries
   body: SaveAppointmentBody
   occurrenceDate: string
   typeName: string | null
   userId: number
+  /** Wall clock in the app time zone. */
+  now: string
+  reconfirm: ReconfirmMode
   conn: any
 }
 
@@ -194,6 +206,9 @@ async function updateSingleOccurrence(args: OccurrenceEditArgs): Promise<UpdateA
   )
   const scheduledStart = parseWallClock(occurrenceDate)
   const scheduledEnd = scheduledStart ? formatWallClock(new Date(scheduledStart.getTime() + seriesDurationMs)) : null
+
+  const existingOverride = ((await loadOverrides([appointment.id], conn)).get(appointment.id) ?? [])
+    .find(override => normalizeOccurrenceDate(override.occurrence_date) === occurrenceDate) ?? null
 
   const overrideValues = {
     title: title === appointment.title ? null : title,
@@ -220,6 +235,17 @@ async function updateSingleOccurrence(args: OccurrenceEditArgs): Promise<UpdateA
 
   if (overrideValues.starts_at) {
     await withdrawOccurrenceReminders(appointment.id, occurrenceDate, conn)
+  }
+
+  // Answers given for the old time — or for the date while it was cancelled — no longer say whether
+  // someone comes to this one. Past occurrences are left alone.
+  const before = occurrenceTiming(appointment, occurrenceDate, existingOverride)
+  const after = occurrenceTiming(appointment, occurrenceDate, overrideValues)
+  const restored = Boolean(existingOverride?.is_cancelled)
+  const wanted = args.reconfirm === 'all'
+    || (args.reconfirm === 'auto' && (restored || !sameTiming(before, after)))
+  if (after.startsAt >= args.now && wanted) {
+    await requestOccurrenceReconfirmation(appointment.id, occurrenceDate, conn)
   }
 
   await notifyAppointment({
@@ -252,7 +278,7 @@ async function splitSeries(args: OccurrenceEditArgs): Promise<UpdateAppointmentR
   }
 
   await moveOccurrenceDataFrom(appointment.id, newId, occurrenceDate, conn)
-  await dropOrphanedOccurrenceData(newId, conn)
+  await reconcileOccurrenceData(newId, { previous: appointment, now: args.now, reconfirm: args.reconfirm }, conn)
 
   await withdrawOccurrenceReminders(appointment.id, null, conn)
 

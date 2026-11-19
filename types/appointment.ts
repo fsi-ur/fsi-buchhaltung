@@ -80,13 +80,18 @@ export interface AppointmentResponseRow {
   response: AppointmentResponseValue
   comment: string | null
   responded_at: string
+  /** The occurrence changed after this answer; it counts as no answer until confirmed again. */
+  needs_reconfirmation: boolean
 }
 
 export interface AppointmentResponseSummary {
   yes: number
   no: number
   maybe: number
+  /** Members without a valid answer — includes those whose answer awaits reconfirmation. */
   pending: number
+  /** Of `pending`: answers given before the occurrence changed, awaiting reconfirmation. */
+  unconfirmed: number
 }
 
 export interface SaveAppointmentBody {
@@ -112,6 +117,11 @@ export interface SaveAppointmentBody {
   restricted?: boolean
   scope?: AppointmentEditScope
   occurrenceDate?: string | null
+  /**
+   * Edit only, upcoming occurrences only: true = everyone who answered must confirm again, false =
+   * nobody (even after a time change), absent = automatic (when start or end changed).
+   */
+  request_reconfirmation?: boolean
 }
 
 export type CalendarSource = 'appointment' | 'event' | 'shift' | 'task'
@@ -130,7 +140,10 @@ export interface CalendarEntry {
   typeId: number | null
   typeName: string | null
   location: string | null
+  /** Only a confirmed answer; one awaiting reconfirmation is in `unconfirmedResponse`. */
   ownResponse: AppointmentResponseValue | null
+  /** The viewer's answer from before the occurrence changed, awaiting reconfirmation. */
+  unconfirmedResponse: AppointmentResponseValue | null
   canRespond: boolean
   responseSummary: AppointmentResponseSummary | null
   isCancelled: boolean

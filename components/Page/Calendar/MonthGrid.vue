@@ -89,6 +89,12 @@
                 class="ml-auto shrink-0 text-[13px] opacity-80"
                 :aria-label="t(`calendar.rsvp.${entry.ownResponse}Short`)"
               />
+              <Icon
+                v-else-if="entry.unconfirmedResponse && !entry.isCancelled"
+                name="material-symbols:sync-problem-rounded"
+                class="ml-auto shrink-0 text-[13px] opacity-80"
+                :aria-label="t('calendar.rsvp.reconfirmShort')"
+              />
             </button>
 
             <button

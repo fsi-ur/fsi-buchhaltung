@@ -166,7 +166,7 @@ async function participantsByEvent(eventId: number, conn?: DbConn): Promise<Memb
 async function membersWhoDeclinedOccurrence(appointmentId: number, occurrenceDate: string, conn?: DbConn): Promise<Set<number>> {
   const rows = await query<Array<{ member_id: number }>>(
     `SELECT member_id FROM appointment_responses
-     WHERE appointment_id = ? AND occurrence_date = ? AND response = 'no'`,
+     WHERE appointment_id = ? AND occurrence_date = ? AND response = 'no' AND needs_reconfirmation = 0`,
     [appointmentId, occurrenceDate],
     conn,
   )

@@ -76,6 +76,13 @@
                   {{ t(`calendar.rsvp.${entry.ownResponse}Short`) }}
                 </span>
                 <span
+                  v-else-if="entry.unconfirmedResponse && entry.canRespond && !entry.isCancelled"
+                  class="inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-semibold text-warning-700"
+                >
+                  <Icon name="material-symbols:sync-problem-rounded" class="text-[13px]" />
+                  {{ t('calendar.rsvp.reconfirmShort') }}
+                </span>
+                <span
                   v-else-if="entry.canRespond && !entry.isCancelled"
                   class="rounded-full bg-base-100 px-2 py-0.5 text-[11px] font-semibold text-base-500"
                 >

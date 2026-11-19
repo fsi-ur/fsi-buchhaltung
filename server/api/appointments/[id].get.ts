@@ -52,7 +52,7 @@ export default defineEventHandler(async (event): Promise<GetAppointmentResponse>
 
   const responseRows = await query<Array<Record<string, any>>>(
     `SELECT ar.member_id, TRIM(CONCAT(m.first_name, ' ', m.last_name)) AS member_name,
-            ar.occurrence_date, ar.response, ar.comment, ar.responded_at
+            ar.occurrence_date, ar.response, ar.comment, ar.responded_at, ar.needs_reconfirmation
      FROM appointment_responses ar
      JOIN members m ON m.id = ar.member_id
      WHERE ar.appointment_id = ?
@@ -73,6 +73,7 @@ export default defineEventHandler(async (event): Promise<GetAppointmentResponse>
       response: row.response,
       comment: row.comment == null ? null : String(row.comment),
       responded_at: String(row.responded_at),
+      needs_reconfirmation: Boolean(Number(row.needs_reconfirmation)),
     })),
     participants,
   }

@@ -70,6 +70,20 @@
               :disabled="!canEdit"
             />
 
+            <section v-if="appointmentId && canEdit" class="border-t border-base-200 pt-6">
+              <label class="flex cursor-pointer items-start gap-3 text-sm text-base-700">
+                <CommonToggleSwitch
+                  v-model="requestReconfirmation"
+                  class="mt-0.5"
+                  :label="t('calendar.form.requestReconfirmation')"
+                />
+                <span>
+                  <span class="block font-medium text-base-800">{{ t('calendar.form.requestReconfirmation') }}</span>
+                  <span class="mt-0.5 block text-xs text-base-500">{{ reconfirmationHint }}</span>
+                </span>
+              </label>
+            </section>
+
             <PageCalendarWebsiteField
               v-if="showWebsite && isOccurrenceEdit"
               v-model="occurrenceWebsite"
@@ -134,6 +148,16 @@ const isLoading = ref(false)
 const isSaving = ref(false)
 const errors = ref<string[]>([])
 const canEdit = ref(true)
+/** Edit only: ask everyone who already answered to confirm again. */
+/**
+ * The organiser's explicit choice, or null to follow the automatic default. Only a choice that
+ * differs from the default is kept, so the server's precise automatic rule applies otherwise.
+ */
+const reconfirmationChoice = ref<boolean | null>(null)
+/** Start/end as loaded, to tell whether the time was changed in this editor. */
+const loadedTiming = ref<{ starts_at: string, ends_at: string, all_day: boolean } | null>(null)
+/** The edited occurrence was cancelled — saving it makes it take place again. */
+const loadedOccurrenceCancelled = ref(false)
 const existingTypeId = ref<number | null>(null)
 
 const members = ref<AppointmentMemberOption[]>([])
@@ -231,6 +255,9 @@ async function loadOptions() {
 }
 
 async function loadAppointment() {
+  reconfirmationChoice.value = null
+  loadedTiming.value = null
+  loadedOccurrenceCancelled.value = false
   const id = appointmentId.value
   if (!id) {
     form.value = emptyForm()
@@ -293,6 +320,8 @@ async function loadAppointment() {
       member_ids: [...appointment.member_ids],
       restricted: Boolean(appointment.subdivision_ids.length || appointment.member_ids.length),
     }
+    loadedTiming.value = { starts_at: occurrenceStart, ends_at: occurrenceEnd, all_day: appointment.all_day }
+    loadedOccurrenceCancelled.value = scope.value === 'occurrence' && Boolean(override?.is_cancelled)
 
     await loadWebsite(id)
   } catch {
@@ -324,6 +353,48 @@ async function loadWebsite(id: number) {
     visible_from: null,
   }
 }
+
+/**
+ * Why answers would be flagged without the organiser doing anything — mirrors the server's
+ * automatic rule. For a whole series only the time of day and the duration count: moving the
+ * series' first date alone does not change the occurrences that remain.
+ */
+const automaticReconfirmation = computed<'timing' | 'restored' | null>(() => {
+  const loaded = loadedTiming.value
+  if (!appointmentId.value || !loaded) return null
+  if (loadedOccurrenceCancelled.value) return 'restored'
+
+  const value = form.value
+  if (Boolean(value.all_day) !== loaded.all_day) return 'timing'
+
+  const start = wallClockMs(value.starts_at)
+  const end = wallClockMs(value.ends_at)
+  const loadedStart = wallClockMs(loaded.starts_at)
+  const loadedEnd = wallClockMs(loaded.ends_at)
+
+  if (scope.value === 'series') {
+    const timeOfDay = (ms: number) => ms % 86400000
+    const changed = timeOfDay(start) !== timeOfDay(loadedStart) || (end - start) !== (loadedEnd - loadedStart)
+    return changed ? 'timing' : null
+  }
+  return start !== loadedStart || end !== loadedEnd ? 'timing' : null
+})
+
+const requestReconfirmation = computed({
+  get: () => reconfirmationChoice.value ?? Boolean(automaticReconfirmation.value),
+  set: (value: boolean) => {
+    reconfirmationChoice.value = value === Boolean(automaticReconfirmation.value) ? null : value
+  },
+})
+
+const reconfirmationHint = computed(() => {
+  const automatic = automaticReconfirmation.value
+  if (reconfirmationChoice.value === true) return t('calendar.form.requestReconfirmationAllHint')
+  if (reconfirmationChoice.value === false && automatic) return t('calendar.form.requestReconfirmationOffHint')
+  if (automatic === 'restored') return t('calendar.form.requestReconfirmationRestoredHint')
+  if (automatic === 'timing') return t('calendar.form.requestReconfirmationAutoHint')
+  return t('calendar.form.requestReconfirmationHint')
+})
 
 function wallClockMs(value: string): number {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/)
@@ -378,7 +449,13 @@ async function save() {
       const res = appointmentId.value
         ? await apiFetch<{ ok: boolean, id?: number, error?: string }>(`/api/appointments/${appointmentId.value}`, {
           method: 'PUT',
-          body: { ...body, scope: scope.value, occurrenceDate: occurrenceDate.value },
+          body: {
+            ...body,
+            scope: scope.value,
+            occurrenceDate: occurrenceDate.value,
+            // Absent = the server decides per answer (only where start or end really changed).
+            ...(reconfirmationChoice.value === null ? {} : { request_reconfirmation: reconfirmationChoice.value }),
+          },
         })
         : await apiFetch<{ ok: boolean, id?: number, error?: string }>('/api/appointments/create', {
           method: 'POST',

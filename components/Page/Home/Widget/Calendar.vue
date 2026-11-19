@@ -50,14 +50,14 @@
                   responseBadgeClass(entry.ownResponse),
                   respondingKey === entry.key ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                 ]"
-                :aria-label="`${t('calendar.rsvp.yourAnswer')} ${responseBadgeLabel(entry.ownResponse)}`"
+                :aria-label="`${t('calendar.rsvp.yourAnswer')} ${badgeLabel(entry)}`"
               >
                 <Icon
-                  :name="respondingKey === entry.key ? 'material-symbols:progress-activity' : responseIcon(entry.ownResponse)"
+                  :name="respondingKey === entry.key ? 'material-symbols:progress-activity' : badgeIcon(entry)"
                   class="text-[13px]"
                   :class="respondingKey === entry.key ? 'animate-spin' : ''"
                 />
-                {{ responseBadgeLabel(entry.ownResponse) }}
+                {{ badgeLabel(entry) }}
                 <Icon name="material-symbols:keyboard-arrow-down-rounded" class="-mr-0.5 text-[13px] opacity-70" />
               </button>
             </template>
@@ -163,6 +163,19 @@ function responseBadgeLabel(response: AppointmentResponseValue | null) {
   return t('calendar.rsvp.pending')
 }
 
+/** An answer awaiting reconfirmation reads as "please confirm", not as an answer. */
+function needsReconfirmation(entry: CalendarEntry) {
+  return !entry.ownResponse && Boolean(entry.unconfirmedResponse)
+}
+
+function badgeLabel(entry: CalendarEntry) {
+  return needsReconfirmation(entry) ? t('calendar.rsvp.reconfirmShort') : responseBadgeLabel(entry.ownResponse)
+}
+
+function badgeIcon(entry: CalendarEntry) {
+  return needsReconfirmation(entry) ? 'material-symbols:sync-problem-rounded' : responseIcon(entry.ownResponse)
+}
+
 function canRespond(entry: CalendarEntry) {
   return entry.source === 'appointment' && entry.canRespond && !entry.isCancelled
 }
@@ -191,6 +204,7 @@ async function respond(entry: CalendarEntry, response: AppointmentResponseValue)
 
     toast.success(t('calendar.rsvp.saved'))
     entry.ownResponse = response
+    entry.unconfirmedResponse = null
   } catch {
     toast.error(t('calendar.rsvp.failed'))
   } finally {
