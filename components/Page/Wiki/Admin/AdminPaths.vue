@@ -204,7 +204,7 @@
           {{ t('actions.cancel') }}
         </button>
         <button type="button" class="btn-primary" :disabled="saving" @click="submit">
-          {{ t('wiki.editor.save') }}
+          {{ t('actions.save') }}
         </button>
       </div>
     </template>

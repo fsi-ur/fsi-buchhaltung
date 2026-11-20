@@ -119,7 +119,7 @@
           {{ t('actions.cancel') }}
         </button>
         <button type="button" class="btn-primary" :disabled="saving" @click="submit">
-          {{ isCreate ? t('wiki.space.create') : t('wiki.editor.save') }}
+          {{ isCreate ? t('wiki.space.createSubmit') : t('actions.save') }}
         </button>
       </div>
     </template>
