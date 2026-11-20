@@ -254,7 +254,7 @@ defineEmits<{
 const { t, locale } = useI18n()
 const { hasPermission } = useAuth()
 const toast = useToast()
-const { pageMeta, setPage } = usePage()
+const { pageMeta, setPage, setHashState } = usePage()
 const { formatDayHeading } = useLocaleFormatters()
 
 const canCreate = computed(() => hasPermission('calendar.create'))
@@ -408,7 +408,22 @@ function openFromDayModal(entry: CalendarEntry) {
 function closeDetail() {
   showDetail.value = false
   selectedEntry.value = null
+  // The deep link has been used up: without this a later remount (or reload) would reopen it.
+  if (pageMeta.value?.appointmentId != null) {
+    const { appointmentId: _id, occurrenceDate: _date, ...rest } = pageMeta.value
+    pageMeta.value = Object.keys(rest).length ? rest : null
+  }
 }
+
+watch(() => showDetail.value && selectedEntry.value?.source === 'appointment' ? selectedEntry.value : null, (entry) => {
+  if (!entry) {
+    setHashState(null)
+    return
+  }
+  setHashState(entry.occurrenceDate
+    ? { appointmentId: entry.id, occurrenceDate: entry.occurrenceDate }
+    : { appointmentId: entry.id })
+})
 
 function expandDay(dayKey: string) {
   expandedDayKey.value = dayKey

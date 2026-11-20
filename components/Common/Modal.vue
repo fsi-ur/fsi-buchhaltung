@@ -13,13 +13,13 @@
         ref="panelRef"
         tabindex="-1"
         :class="[
-          'w-full rounded-xl bg-white p-4 sm:p-6 shadow-xl',
-          'scroll-panel max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-none',
+          'w-full rounded-xl bg-white shadow-xl max-h-[calc(100vh-2rem)]',
+          stickyFooter ? 'flex flex-col overflow-hidden py-4 sm:py-6' : 'scroll-panel overflow-y-auto overscroll-none p-4 sm:p-6',
           widthClass,
           panelClass,
         ]"
       >
-        <header v-if="$slots.title || title" :class="headerClass">
+        <header v-if="$slots.title || title" :class="[headerClass, stickyFooter ? 'shrink-0 px-4 sm:px-6' : '']">
           <slot name="title">
             <h3 :id="titleId" class="text-lg font-semibold text-base-900">
               {{ title }}
@@ -27,11 +27,19 @@
           </slot>
         </header>
 
-        <div :class="bodyClass">
+        <div
+          :class="[
+            bodyClass,
+            stickyFooter ? 'scroll-panel mr-1 min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1 pl-4 pr-1 pointer-coarse:pr-3 sm:mr-2 sm:pl-6 sm:pr-2 sm:pointer-coarse:pr-4' : '',
+          ]"
+        >
           <slot />
         </div>
 
-        <footer v-if="$slots.footer" :class="footerClass">
+        <footer
+          v-if="$slots.footer"
+          :class="[footerClass, stickyFooter ? 'shrink-0 border-t border-base-100 mt-4! px-4 pt-4 sm:px-6' : '']"
+        >
           <slot name="footer" />
         </footer>
       </section>
@@ -54,6 +62,8 @@ const props = withDefaults(defineProps<{
   closeOnBackdrop?: boolean
   closeOnEscape?: boolean
   teleportTo?: string
+  /** Keep header and footer in view and scroll only the body, so the footer buttons never scroll away. */
+  stickyFooter?: boolean
 }>(), {
   title: '',
   widthClass: 'max-w-md',
@@ -64,6 +74,7 @@ const props = withDefaults(defineProps<{
   closeOnBackdrop: true,
   closeOnEscape: true,
   teleportTo: 'body',
+  stickyFooter: false,
 })
 
 const emit = defineEmits<{

@@ -8,12 +8,15 @@ const pendingLoginTarget = ref<{ page: PageName; meta: Record<string, any> | nul
 // Only these meta keys are persisted in the URL hash; ephemeral keys like returnTarget are excluded
 const HASH_META_KEYS = ['eventId', 'tab', 'articleId', 'spaceId', 'slug', 'pathId', 'tag']
 
-function buildHash(page: PageName, meta: Record<string, any> | null): string {
+function buildHash(page: PageName, meta: Record<string, any> | null, extra?: Record<string, string | number>): string {
   const params = new URLSearchParams()
   if (meta) {
     for (const key of HASH_META_KEYS) {
       if (meta[key] != null) params.set(key, String(meta[key]))
     }
+  }
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) params.set(key, String(value))
   }
   const paramStr = params.toString()
   return paramStr ? `${page}?${paramStr}` : page
@@ -79,11 +82,24 @@ export const usePage = () => {
     }
   }
 
+  /**
+   * Puts page-local state (e.g. which detail modal is open) into the URL hash without navigating,
+   * so a full reload — the PWA reloads itself when a new service worker takes over — lands on the
+   * same state. `replaceState` fires no `hashchange`, and the hash parser hands the params back as
+   * `pageMeta` on load. Pass `null` to drop them again.
+   */
+  function setHashState(extra: Record<string, string | number> | null) {
+    if (!import.meta.client || currentPage.value === 'Login') return
+    const hash = buildHash(currentPage.value, pageMeta.value, extra ?? undefined)
+    if (window.location.hash.slice(1) === hash) return
+    window.history.replaceState(window.history.state, '', `#${hash}`)
+  }
+
   function consumePendingLoginTarget() {
     const target = pendingLoginTarget.value
     pendingLoginTarget.value = null
     return target
   }
 
-  return { currentPage, setPage, pageMeta, consumePendingLoginTarget }
+  return { currentPage, setPage, pageMeta, setHashState, consumePendingLoginTarget }
 }

@@ -3,6 +3,7 @@
     :model-value="modelValue"
     :title="entry?.title || ''"
     width-class="max-w-2xl"
+    sticky-footer
     @update:model-value="$emit('update:modelValue', $event)"
     @close="$emit('close')"
   >
@@ -135,55 +136,7 @@
             <p v-else class="text-sm text-base-400">{{ t('calendar.detail.noAgenda') }}</p>
           </section>
 
-          <section>
-            <h4 class="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs font-semibold uppercase tracking-wide text-base-400">
-              <span>{{ t('calendar.detail.participants') }}</span>
-              <span v-if="entry.responseSummary" class="font-medium normal-case tracking-normal text-base-500">
-                {{ t('calendar.rsvp.summary', {
-                  yes: entry.responseSummary.yes,
-                  no: entry.responseSummary.no,
-                  maybe: entry.responseSummary.maybe,
-                }) }}
-                <template v-if="entry.responseSummary.pending">
-                  · {{ t('calendar.detail.pendingCount', { count: entry.responseSummary.pending }) }}
-                </template>
-                <template v-if="entry.responseSummary.unconfirmed">
-                  ({{ t('calendar.detail.unconfirmedCount', { count: entry.responseSummary.unconfirmed }) }})
-                </template>
-              </span>
-            </h4>
-
-            <ul
-              v-if="participantRows.length"
-              class="max-h-64 divide-y divide-base-100 overflow-y-auto rounded-xl border border-base-200"
-            >
-              <li
-                v-for="participant in participantRows"
-                :key="participant.id"
-                class="flex items-center justify-between gap-3 px-3 py-1.5 text-sm"
-              >
-                <span class="truncate text-base-800">{{ participant.name }}</span>
-                <span
-                  v-if="participant.unconfirmed"
-                  class="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-base-300 px-2 py-0.5 text-[11px] font-semibold text-base-500"
-                  :title="t('calendar.rsvp.unconfirmedTitle')"
-                >
-                  <Icon name="material-symbols:sync-problem-rounded" class="text-[13px]" />
-                  {{ t('calendar.rsvp.unconfirmed', { answer: t(`calendar.rsvp.${participant.unconfirmed}Short`) }) }}
-                </span>
-                <span
-                  v-else
-                  class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                  :class="participant.response ? responseBadgeClass(participant.response) : 'bg-base-100 text-base-500'"
-                >
-                  <Icon v-if="participant.response" :name="responseIcon(participant.response)" class="text-[13px]" />
-                  {{ participant.response ? t(`calendar.rsvp.${participant.response}Short`) : t('calendar.rsvp.pending') }}
-                </span>
-              </li>
-            </ul>
-
-            <p v-else class="text-sm text-base-400">{{ t('calendar.detail.noParticipants') }}</p>
-          </section>
+          <PageCalendarResponseList :participants="participantRows" />
         </template>
       </template>
     </div>
@@ -345,21 +298,10 @@ const participantRows = computed(() => {
       ...participant,
       response: row && !row.needs_reconfirmation ? row.response : null,
       unconfirmed: row?.needs_reconfirmation ? row.response : null,
+      comment: row?.comment ?? null,
     }
   })
 })
-
-function responseBadgeClass(response: AppointmentResponseValue) {
-  if (response === 'yes') return 'bg-success-100 text-success-700'
-  if (response === 'no') return 'bg-danger-100 text-danger-700'
-  return 'bg-warning-100 text-warning-700'
-}
-
-function responseIcon(response: AppointmentResponseValue) {
-  if (response === 'yes') return 'material-symbols:check-circle-rounded'
-  if (response === 'no') return 'material-symbols:cancel-rounded'
-  return 'material-symbols:help-rounded'
-}
 
 function openEvent() {
   const entry = props.entry

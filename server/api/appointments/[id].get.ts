@@ -99,13 +99,13 @@ async function loadParticipants(appointmentId: number) {
   }
 
   const rows = await query<Array<{ id: number, name: string }>>(
-    `SELECT DISTINCT m.id, TRIM(CONCAT(m.first_name, ' ', m.last_name)) AS name
+    `SELECT DISTINCT m.id, TRIM(CONCAT(m.first_name, ' ', m.last_name)) AS name, m.last_name, m.first_name
      FROM members m
      LEFT JOIN subdivision_members sm ON sm.member_id = m.id
      LEFT JOIN appointment_subdivisions asub ON asub.subdivision_id = sm.subdivision_id AND asub.appointment_id = ?
      LEFT JOIN appointment_members am ON am.member_id = m.id AND am.appointment_id = ?
      WHERE m.status != 'left' AND (asub.appointment_id IS NOT NULL OR am.appointment_id IS NOT NULL)
-     ORDER BY name`,
+     ORDER BY m.last_name, m.first_name`,
     [appointmentId, appointmentId],
   )
   return rows.map(row => ({ id: Number(row.id), name: String(row.name) }))
