@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+  last_active_at TIMESTAMP NULL DEFAULT NULL,
   calendar_token_hash CHAR(64) NULL,
   calendar_token_created_at TIMESTAMP NULL DEFAULT NULL
 );

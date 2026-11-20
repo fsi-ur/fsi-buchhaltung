@@ -1,5 +1,5 @@
 import { getCookie } from 'h3'
-import { getSessionByToken, touchSession, inactivityMinutes, deleteSessionByToken } from './auth'
+import { getSessionByToken, touchSession, touchUserLastActive, inactivityMinutes, deleteSessionByToken } from './auth'
 import { getUserPermissions, getUserPositionIds, getUserRoleIds } from './permissions'
 import { normalizeBigInt } from '~/server/utils/normalize'
 import type { User } from '~/types/user'
@@ -48,7 +48,10 @@ export async function getCurrentUserFromEvent(event: any, touch: boolean): Promi
     return { ok: false, error: "user has been inactive for too long" }
   }
   
-  if (touch) await touchSession(token)
+  if (touch) {
+    await touchSession(token)
+    await touchUserLastActive(Number(session.user_id), now)
+  }
 
   const roles = await getUserRoleIds(Number(session.user_id))
   const positionIds = await getUserPositionIds(Number(session.user_id))

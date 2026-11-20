@@ -58,6 +58,7 @@ export async function createSession(userId: number, token: string) {
      VALUES (?, ?, ?, ?, ?)`,
     [userId, tokenHash, createdAt, lastActiveAt, expiresAt]
   )
+  await touchUserLastActive(userId, now)
 
   return true
 }
@@ -73,6 +74,20 @@ export async function getSessionByToken(token: string) {
   )
   const arr = rows as any[]
   return arr[0] || null
+}
+
+/** Written at most this often, so an active user costs one extra UPDATE every few minutes, not per request. */
+const LAST_ACTIVE_THROTTLE_MS = 5 * 60 * 1000
+
+/**
+ * Remembers when the user was last active (shown in the user list). Kept on the user row because
+ * sessions are deleted on logout, timeout and password change. The audit triggers ignore the column.
+ */
+export async function touchUserLastActive(userId: number, now = new Date()) {
+  await query(
+    `UPDATE users SET last_active_at = ? WHERE id = ? AND (last_active_at IS NULL OR last_active_at < ?)`,
+    [instantToSql(now), userId, instantToSql(new Date(now.getTime() - LAST_ACTIVE_THROTTLE_MS))]
+  )
 }
 
 export async function touchSession(token: string) {

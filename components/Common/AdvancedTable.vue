@@ -193,12 +193,37 @@
               v-for="column in visibleColumns"
               :key="column.key"
               class="py-2"
-              :class="column.cellClass"
+              :class="[column.cellClass, isMuted(row) ? 'opacity-50' : '']"
             >
               <slot :name="`cell-${column.key}`" :row="row">{{ cellText(column, row) }}</slot>
             </td>
             <td v-if="showActions" class="py-2 text-right">
-              <div class="inline-flex items-center justify-end gap-3">
+              <MenuDropdown
+                v-if="actionsMenu && $slots.actions && rowShowsActions(row)"
+                v-model="actionMenuKey"
+                :id="`table-${rowKeyOf(row, index)}`"
+                wrapper-class="relative inline-flex"
+              >
+                <template #trigger>
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-base-400 transition cursor-pointer hover:bg-base-100 hover:text-base-600"
+                    :aria-label="t('common.actions')"
+                  >
+                    <Icon name="material-symbols:more-vert" class="text-xl" />
+                  </button>
+                </template>
+
+                <template #default>
+                  <div
+                    class="flex min-w-40 flex-col text-left [&>div]:contents [&_button]:flex [&_button]:w-full [&_button]:items-center [&_button]:gap-2 [&_button]:rounded-md [&_button]:px-3 [&_button]:py-2 [&_button]:text-left [&_button]:text-sm [&_button]:whitespace-nowrap [&_button]:transition [&_button]:hover:bg-base-100 [&_button]:hover:no-underline"
+                    @click="actionMenuKey = null"
+                  >
+                    <slot name="actions" :row="row" />
+                  </div>
+                </template>
+              </MenuDropdown>
+              <div v-else-if="!actionsMenu" class="inline-flex items-center justify-end gap-3">
                 <slot name="actions" :row="row">
                   <button
                     class="text-link-600 not-disabled:hover:underline disabled:opacity-40 disabled:cursor-not-allowed not-disabled:cursor-pointer"
@@ -260,7 +285,7 @@
           :is="openable ? 'button' : 'div'"
           :type="openable ? 'button' : undefined"
           class="flex min-w-0 flex-1 items-center gap-3 bg-white px-3 py-2.5 text-left transition not-disabled:cursor-pointer not-disabled:hover:bg-base-50 disabled:cursor-default"
-          :class="openable ? '' : 'cursor-default! hover:bg-white!'"
+          :class="[openable ? '' : 'cursor-default! hover:bg-white!', isMuted(row) ? 'opacity-50' : '']"
           :disabled="openable ? !canOpen(row) : undefined"
           @click="openable && $emit('row-open', row)"
         >
@@ -521,6 +546,10 @@ const props = withDefaults(defineProps<{
   tableClass?: string
   /** Unique, stable key to persist sort/filter/search state across page navigation. Omit to keep state local to this mount. */
   persistKey?: string
+  /** Rows drawn greyed out (e.g. inactive records) — still listed, openable and actionable. */
+  rowMuted?: (row: T) => boolean
+  /** Show the `actions` slot in a ⋮ menu in the table view too (the compact view always uses one). */
+  actionsMenu?: boolean
   /** Adds row checkboxes and a selection bar; the selection (row keys) is bound via `v-model:selected`. */
   selectable?: boolean
 }>(), {
@@ -528,6 +557,7 @@ const props = withDefaults(defineProps<{
   emptyIcon: 'material-symbols:inbox-rounded',
   showActions: true,
   openable: true,
+  actionsMenu: false,
   tableClass: 'min-w-5xl',
 })
 
@@ -675,6 +705,10 @@ watch(() => props.rows, (rows) => {
 function canOpen(row: T): boolean {
   if (!props.openable) return false
   return props.canOpenRow ? props.canOpenRow(row) : true
+}
+
+function isMuted(row: T): boolean {
+  return props.rowMuted ? props.rowMuted(row) : false
 }
 
 function rowShowsActions(row: T): boolean {

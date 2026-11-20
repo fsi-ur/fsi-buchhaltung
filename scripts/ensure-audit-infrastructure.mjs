@@ -41,6 +41,8 @@ const TABLE_COMPARISON_IGNORED_COLUMNS = new Map([
   ['api_keys', ['last_used_at']],
   // Internal flag written next to every member save (SEC-19).
   ['members', ['account_deactivation_skipped']],
+  // Refreshed (throttled) by every authenticated request.
+  ['users', ['last_active_at']],
 ])
 
 function buildComparisonColumns(table) {

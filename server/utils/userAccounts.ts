@@ -1,5 +1,5 @@
 import type * as mariadb from 'mariadb'
-import { hashPassword } from '~/server/utils/auth'
+import { hashPassword, inactivityMinutes } from '~/server/utils/auth'
 import { query } from '~/server/utils/db'
 import { assignDefaultRoleToUser } from '~/server/utils/roles'
 import { passwordPolicyError } from '~/config/validation'
@@ -7,6 +7,53 @@ import type { PermissionKey } from '~/config/permissions'
 import { getEffectivePermissions, getPositionPermissionKeys, getPositionSubdivisionPermissionKeys, permissionsBeyond } from '~/server/utils/permissions'
 import { appTodayLocalDate } from '~/server/utils/time'
 import { subdivisionPermissionsBeyond } from '~/shared/subdivisionAccess'
+import { instantToSql } from '~/shared/time'
+
+export interface UserListRow {
+  id: number
+  username: string
+  is_active: number
+  must_change_password: number
+  /** Instant (ISO, UTC); null = never active since the column was introduced. */
+  last_active_at: string | null
+  /**
+   * 1 = the user has a session that is neither expired nor idle past SESSION_INACTIVITY_MINUTES,
+   * i.e. would still be let in right now.
+   */
+  is_online: number
+  member_id: number | null
+  member_name: string | null
+}
+
+export async function listUsersWithActivity(now: Date = new Date()): Promise<UserListRow[]> {
+  const nowSql = instantToSql(now)
+  const idleLimitSql = instantToSql(new Date(now.getTime() - inactivityMinutes * 60 * 1000))
+
+  const rows = await query<UserListRow[]>(`
+    SELECT
+      u.id,
+      u.username,
+      u.is_active,
+      u.must_change_password,
+      u.last_active_at,
+      CASE WHEN u.is_active = 1 AND EXISTS (
+        SELECT 1 FROM sessions s
+        WHERE s.user_id = u.id
+          AND (s.expires_at IS NULL OR s.expires_at > ?)
+          AND s.last_active_at > ?
+      ) THEN 1 ELSE 0 END AS is_online,
+      m.id AS member_id,
+      CASE
+        WHEN m.id IS NULL THEN NULL
+        ELSE TRIM(CONCAT(m.first_name, ' ', m.last_name))
+      END AS member_name
+    FROM users u
+    LEFT JOIN members m ON m.account = u.id
+    ORDER BY u.id ASC
+  `, [nowSql, idleLimitSql])
+
+  return rows.map(row => ({ ...row, is_online: Number(row.is_online) }))
+}
 
 export interface CreateUserAccountInput {
   username: string

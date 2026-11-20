@@ -20,38 +20,70 @@
       :rows="users"
       :columns="columns"
       :empty-text="t('settings.permissions.noUsers')"
+      :row-muted="row => !row.is_active"
+      actions-menu
       @row-open="openEditUserModal($event)"
     >
       <template #cell-username="{ row }">
-        <div class="flex flex-col gap-1">
-          <span>{{ row.username }}</span>
+        <span class="inline-flex items-center gap-2">
           <span
-            v-if="row.must_change_password"
-            class="w-fit rounded-full bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-800"
-          >
-            {{ t('settings.users.passwordChangeRequired') }}
-          </span>
-        </div>
+            v-if="row.is_online"
+            class="h-2 w-2 shrink-0 rounded-full bg-success-500"
+            :title="t('settings.users.online')"
+            role="img"
+            :aria-label="t('settings.users.online')"
+          />
+          <span>{{ row.username }}</span>
+          <CommonStatusBadge v-if="row.id === currentUser?.id" :label="t('settings.users.you')" tone="base" />
+        </span>
       </template>
+
+      <template #cell-status="{ row }">
+        <span class="inline-flex flex-wrap items-center gap-1.5">
+          <CommonStatusBadge
+            :label="row.is_active ? t('common.active') : t('common.inactive')"
+            :tone="row.is_active ? 'success' : 'baseMuted'"
+          />
+          <CommonStatusBadge
+            v-if="row.must_change_password"
+            :label="t('settings.users.passwordChangeRequired')"
+            tone="warning"
+          />
+        </span>
+      </template>
+
+      <template #cell-lastActive="{ row }">
+        <span v-if="row.last_active_at" :title="formatDateTime(row.last_active_at)">
+          {{ formatRelativeTime(row.last_active_at) }}
+        </span>
+        <span v-else class="text-base-400">{{ t('settings.users.neverActive') }}</span>
+      </template>
+
       <template #actions="{ row }">
-        <button class="text-link-600 hover:underline cursor-pointer" @click="openEditUserModal(row)">
+        <button class="text-base-700 cursor-pointer" @click="openEditUserModal(row)">
+          <Icon name="material-symbols:edit-outline-rounded" class="text-base" />
           {{ t('actions.edit') }}
         </button>
 
         <button
           v-if="!row.must_change_password"
-          class="text-warning-700 hover:underline cursor-pointer"
+          class="text-warning-700 cursor-pointer"
           @click="requirePasswordChange(row)"
         >
+          <Icon name="material-symbols:lock-reset-rounded" class="text-base" />
           {{ t('settings.users.requirePasswordChange') }}
         </button>
 
         <button
           v-if="row.id !== currentUser?.id"
-          class="hover:underline cursor-pointer"
-          :class="row.is_active ? 'text-danger-500' : 'text-base-500'"
-          @click="toggleUserActive(row)"
+          class="cursor-pointer"
+          :class="row.is_active ? 'text-danger-600' : 'text-success-700'"
+          @click="row.is_active ? openDeactivateModal(row) : setUserActive(row, true)"
         >
+          <Icon
+            :name="row.is_active ? 'material-symbols:person-off-outline-rounded' : 'material-symbols:person-check-outline-rounded'"
+            class="text-base"
+          />
           {{ row.is_active ? t('actions.deactivate') : t('actions.activate') }}
         </button>
       </template>
@@ -64,58 +96,77 @@
     footer-class="relative z-10 mt-4 flex justify-end gap-3 bg-white pt-2"
     @close="closeCreateModal"
   >
-    <div class="grid gap-4">
-      <div class="field">
-        <label>{{ t('login.username') }}</label>
-        <input
-          v-model="form.username"
-          class="input"
-          name="settings-user-username"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          data-lpignore="true"
-        >
-      </div>
+    <div class="grid gap-6">
+      <section class="grid gap-4">
+        <div>
+          <h4 class="font-semibold text-base-800">{{ t('settings.users.sections.account') }}</h4>
+          <p class="text-sm text-base-500">{{ t('settings.users.sections.accountCreateHint') }}</p>
+        </div>
 
-      <div class="field">
-        <label>{{ t('login.password') }}</label>
-        <input
-          v-model="form.password"
-          type="password"
-          class="input"
-          name="settings-user-password"
-          autocomplete="new-password"
-          autocapitalize="off"
-          spellcheck="false"
-          data-lpignore="true"
-        >
-      </div>
+        <div class="field">
+          <label>{{ t('login.username') }}</label>
+          <input
+            v-model="form.username"
+            class="input"
+            name="settings-user-username"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            data-lpignore="true"
+          >
+        </div>
 
-      <div class="field relative z-20">
-        <label>{{ t('settings.users.linkedMember') }}</label>
-        <CommonSearchSelect
-          v-model="createMemberQuery"
-          :options="createMemberOptions"
-          :selected-label="selectedCreateMemberLabel"
-          :placeholder="t('settings.users.memberPlaceholder')"
-          :empty-text="t('settings.users.noAvailableMembers')"
-          @select="selectCreateMember"
-          @clear-selection="form.member_id = null"
-        />
-      </div>
-    </div>
+        <div class="field">
+          <label>{{ t('settings.users.initialPassword') }}</label>
+          <input
+            v-model="form.password"
+            type="password"
+            class="input"
+            name="settings-user-password"
+            autocomplete="new-password"
+            autocapitalize="off"
+            spellcheck="false"
+            data-lpignore="true"
+          >
+          <p class="mt-1 text-xs text-base-500">{{ t('settings.users.passwordMinLength', { min: MIN_PASSWORD_LENGTH }) }}</p>
+        </div>
 
-    <div class="flex gap-3">
-      <label class="inline-flex items-center gap-2 text-sm text-base-700 cursor-pointer">
-        <input v-model="form.is_active" type="checkbox" class="checkbox">
-        {{ t('settings.users.active') }}
-      </label>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-base-700">{{ t('settings.users.active') }}</p>
+            <p class="text-xs text-base-500">{{ t('settings.users.activeHint') }}</p>
+          </div>
+          <CommonToggleSwitch v-model="form.is_active" :label="t('settings.users.active')" />
+        </div>
 
-      <label class="inline-flex items-center gap-2 text-sm text-base-700 cursor-pointer">
-        <input v-model="form.must_change_password" type="checkbox" class="checkbox">
-        {{ t('settings.users.mustChangePassword') }}
-      </label>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-base-700">{{ t('settings.users.mustChangePassword') }}</p>
+            <p class="text-xs text-base-500">{{ t('settings.users.mustChangePasswordHint') }}</p>
+          </div>
+          <CommonToggleSwitch v-model="form.must_change_password" :label="t('settings.users.mustChangePassword')" />
+        </div>
+      </section>
+
+      <section class="grid gap-4 border-t border-base-200 pt-4">
+        <div>
+          <h4 class="font-semibold text-base-800">{{ t('settings.users.sections.member') }}</h4>
+          <p class="text-sm text-base-500">{{ t('settings.users.sections.memberHint') }}</p>
+        </div>
+
+        <div class="field relative z-20">
+          <label>{{ t('settings.users.linkedMember') }}</label>
+          <CommonSearchSelect
+            v-model="createMemberQuery"
+            :options="createMemberOptions"
+            :selected-label="selectedCreateMemberLabel"
+            :placeholder="t('settings.users.memberPlaceholder')"
+            :empty-text="t('settings.users.noAvailableMembers')"
+            @select="selectCreateMember"
+            @clear-selection="form.member_id = null"
+          />
+        </div>
+      </section>
     </div>
 
     <template #footer>
@@ -137,51 +188,102 @@
     @update:model-value="!$event && closeEditUserModal()"
     @close="closeEditUserModal"
   >
-    <div class="grid gap-4">
-      <div class="field">
-        <label>{{ t('login.username') }}</label>
-        <input
-          v-model="editingUsernameInput"
-          class="input"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          data-lpignore="true"
-        >
-      </div>
+    <div class="grid gap-6">
+      <section class="grid gap-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h4 class="font-semibold text-base-800">{{ t('settings.users.sections.account') }}</h4>
+            <p class="text-sm text-base-500">{{ t('settings.users.sections.accountHint') }}</p>
+          </div>
+          <CommonStatusBadge
+            v-if="editingUser.must_change_password"
+            :label="t('settings.users.passwordChangeRequired')"
+            tone="warning"
+          />
+        </div>
 
-      <div class="field">
-        <label>{{ t('settings.general.newPassword') }}</label>
-        <input
-          v-model="editingPasswordNew"
-          type="password"
-          class="input"
-          autocomplete="new-password"
-        >
-      </div>
+        <div class="field">
+          <label>{{ t('login.username') }}</label>
+          <input
+            v-model="editingUsernameInput"
+            class="input"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            data-lpignore="true"
+          >
+        </div>
 
-      <div class="field">
-        <label>{{ t('settings.general.confirmPassword') }}</label>
-        <input
-          v-model="editingPasswordConfirm"
-          type="password"
-          class="input"
-          autocomplete="new-password"
-        >
-      </div>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-base-700">{{ t('settings.users.active') }}</p>
+            <p class="text-xs text-base-500">
+              {{ editingUser.id === currentUser?.id ? t('settings.users.cannotDeactivateSelf') : t('settings.users.activeHint') }}
+            </p>
+          </div>
+          <CommonToggleSwitch
+            v-model="editingIsActive"
+            :label="t('settings.users.active')"
+            :disabled="editingUser.id === currentUser?.id"
+          />
+        </div>
 
-      <div class="field relative z-20">
-        <label>{{ t('settings.users.linkedMember') }}</label>
-        <CommonSearchSelect
-          v-model="editMemberQuery"
-          :options="editMemberOptions"
-          :selected-label="selectedEditMemberLabel"
-          :placeholder="t('settings.users.memberPlaceholder')"
-          :empty-text="t('settings.users.noAvailableMembers')"
-          @select="selectEditMember"
-          @clear-selection="editingMemberId = null"
-        />
-      </div>
+        <p
+          v-if="editingUser.is_active && !editingIsActive"
+          class="rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-800"
+        >
+          {{ t('settings.users.deactivateConsequences') }}
+        </p>
+      </section>
+
+      <section class="grid gap-4 border-t border-base-200 pt-4">
+        <div>
+          <h4 class="font-semibold text-base-800">{{ t('settings.users.sections.password') }}</h4>
+          <p class="text-sm text-base-500">{{ t('settings.users.sections.passwordHint') }}</p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="field">
+            <label>{{ t('settings.general.newPassword') }}</label>
+            <input
+              v-model="editingPasswordNew"
+              type="password"
+              class="input"
+              autocomplete="new-password"
+            >
+          </div>
+
+          <div class="field">
+            <label>{{ t('settings.general.confirmPassword') }}</label>
+            <input
+              v-model="editingPasswordConfirm"
+              type="password"
+              class="input"
+              autocomplete="new-password"
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="grid gap-4 border-t border-base-200 pt-4">
+        <div>
+          <h4 class="font-semibold text-base-800">{{ t('settings.users.sections.member') }}</h4>
+          <p class="text-sm text-base-500">{{ t('settings.users.sections.memberHint') }}</p>
+        </div>
+
+        <div class="field relative z-20">
+          <label>{{ t('settings.users.linkedMember') }}</label>
+          <CommonSearchSelect
+            v-model="editMemberQuery"
+            :options="editMemberOptions"
+            :selected-label="selectedEditMemberLabel"
+            :placeholder="t('settings.users.memberPlaceholder')"
+            :empty-text="t('settings.users.noAvailableMembers')"
+            @select="selectEditMember"
+            @clear-selection="editingMemberId = null"
+          />
+        </div>
+      </section>
     </div>
 
     <template #footer>
@@ -191,6 +293,31 @@
 
       <button class="btn-primary" :disabled="isSavingUserEdit" :class="{ 'opacity-50 cursor-not-allowed': isSavingUserEdit }" @click="saveUserEdit">
         {{ t('actions.save') }}
+      </button>
+    </template>
+  </CommonModal>
+
+  <CommonModal
+    v-if="deactivatingUser"
+    :model-value="!!deactivatingUser"
+    :title="t('settings.users.deactivateTitle', { username: deactivatingUser.username })"
+    @update:model-value="!$event && (deactivatingUser = null)"
+    @close="deactivatingUser = null"
+  >
+    <p class="text-sm text-base-700">{{ t('settings.users.deactivateConsequences') }}</p>
+
+    <template #footer>
+      <button class="btn-secondary" :disabled="isTogglingActive" @click="deactivatingUser = null">
+        {{ t('actions.cancel') }}
+      </button>
+
+      <button
+        class="btn-primary"
+        :disabled="isTogglingActive"
+        :class="{ 'opacity-50 cursor-not-allowed': isTogglingActive }"
+        @click="confirmDeactivate"
+      >
+        {{ t('actions.deactivate') }}
       </button>
     </template>
   </CommonModal>
@@ -209,6 +336,8 @@ interface UserListRow {
   username: string
   is_active: number | boolean
   must_change_password: number | boolean
+  last_active_at: string | null
+  is_online: number
   member_id: number | null
   member_name: string | null
 }
@@ -223,6 +352,7 @@ interface MemberOptionRow {
 const { t } = useI18n()
 const toast = useToast()
 const { hasPermission, user: currentUser, fetchSession } = useAuth()
+const { formatDateTime, formatRelativeTime } = useLocaleFormatters()
 
 const hasAccess = computed(() => hasPermission('users.manage'))
 const users = ref<UserListRow[]>([])
@@ -243,6 +373,9 @@ const editingMemberId = ref<number | null>(null)
 const editingUsernameInput = ref('')
 const editingPasswordNew = ref('')
 const editingPasswordConfirm = ref('')
+const editingIsActive = ref(true)
+const deactivatingUser = ref<UserListRow | null>(null)
+const isTogglingActive = ref(false)
 const isCreatingUser = ref(false)
 const isSavingUserEdit = ref(false)
 const search = ref('')
@@ -262,6 +395,19 @@ const columns = computed<AdvancedTableColumn<UserListRow>[]>(() => [
     filterable: false,
     globalSearchable: true,
     getValue: user => user.member_name || t('settings.users.noLinkedMember'),
+    mobileLabel: true,
+  },
+  {
+    key: 'status',
+    label: t('common.status'),
+    getValue: user => (user.is_active ? t('common.active') : t('common.inactive')),
+  },
+  {
+    key: 'lastActive',
+    label: t('settings.users.lastActive'),
+    // ISO instants sort chronologically as strings; never-active users sort as oldest.
+    getValue: user => user.last_active_at ?? '',
+    filterValue: user => (user.is_online ? t('settings.users.online') : t('settings.users.offline')),
     mobileLabel: true,
   },
 ])
@@ -320,6 +466,7 @@ function openEditUserModal(user: UserListRow) {
   editMemberQuery.value = user.member_name || ''
   editingPasswordNew.value = ''
   editingPasswordConfirm.value = ''
+  editingIsActive.value = Boolean(user.is_active)
 }
 
 function closeEditUserModal() {
@@ -497,6 +644,18 @@ async function saveUserEdit() {
       return
     }
 
+    if (editingIsActive.value !== Boolean(editingUser.value.is_active)) {
+      const activeRes = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/activate', {
+        method: 'POST',
+        body: { id: editingUser.value.id, is_active: editingIsActive.value },
+      })
+      if (!activeRes.ok) {
+        toast.error(`${t('settings.users.activationFailed')}: ${activeRes.error}`)
+        await loadUsers()
+        return
+      }
+    }
+
     toast.success(t('settings.users.userEditSaved'))
     isSavingUserEdit.value = false
     closeEditUserModal()
@@ -506,21 +665,38 @@ async function saveUserEdit() {
   }
 }
 
-async function toggleUserActive(user: UserListRow) {
-  const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/activate', {
-    method: 'POST',
-    body: {
-      id: user.id,
-      is_active: !Boolean(user.is_active),
-    },
-  })
+function openDeactivateModal(user: UserListRow) {
+  deactivatingUser.value = user
+}
 
-  if (!res.ok) {
-    toast.error(`${t('settings.users.activationFailed')}: ${res.error}`)
-    return
+async function confirmDeactivate() {
+  if (!deactivatingUser.value) return
+  const done = await setUserActive(deactivatingUser.value, false)
+  if (done) deactivatingUser.value = null
+}
+
+async function setUserActive(user: UserListRow, isActive: boolean): Promise<boolean> {
+  if (isTogglingActive.value) return false
+  try {
+    isTogglingActive.value = true
+    const res = await apiFetch<{ ok: boolean, error?: string }>('/api/auth/activate', {
+      method: 'POST',
+      body: { id: user.id, is_active: isActive },
+    })
+
+    if (!res.ok) {
+      toast.error(`${t('settings.users.activationFailed')}: ${res.error}`)
+      return false
+    }
+
+    toast.success(isActive
+      ? t('settings.users.activated', { username: user.username })
+      : t('settings.users.deactivated', { username: user.username }))
+    await loadUsers()
+    return true
+  } finally {
+    isTogglingActive.value = false
   }
-
-  await loadUsers()
 }
 
 async function requirePasswordChange(user: UserListRow) {
@@ -550,6 +726,22 @@ onMounted(async () => {
     return
   }
   await loadSupportData()
+})
+
+// The online dot reflects the moment of loading, so keep it (and the relative times) fresh.
+const ONLINE_REFRESH_MS = 60_000
+let onlineRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  if (!hasAccess.value) return
+  onlineRefreshTimer = setInterval(() => {
+    if (document.hidden) return
+    loadUsers().catch(() => {})
+  }, ONLINE_REFRESH_MS)
+})
+
+onBeforeUnmount(() => {
+  if (onlineRefreshTimer) clearInterval(onlineRefreshTimer)
 })
 
 useAppRefresh().onRefresh(async () => {

@@ -27,4 +27,5 @@ export const MIGRATION_SCRIPTS = [
   'migrate-finance-analysis-tab.mjs',
   'migrate-appointment-response-reconfirmation.mjs',
   'migrate-event-task-description.mjs',
+  'migrate-user-last-active.mjs',
 ]

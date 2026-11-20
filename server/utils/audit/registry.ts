@@ -573,6 +573,7 @@ export const AUDIT_TABLES: Record<string, AuditTableDefinition> = {
     viewPermissions: ['users.view'],
     restricted: true,
     redactedColumns: ['password_hash', 'calendar_token_hash'],
+    ignoredColumns: ['last_active_at'],
     describe: state => state.username ?? null,
   },
   roles: {

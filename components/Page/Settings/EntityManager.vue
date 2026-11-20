@@ -20,8 +20,16 @@
       :rows="displayItems"
       :columns="columns"
       :empty-text="emptyLabel"
+      :row-muted="row => !row.is_active"
       @row-open="editItem($event)"
     >
+      <template #cell-status="{ row }">
+        <CommonStatusBadge
+          :label="row.is_active ? t('common.active') : t('common.inactive')"
+          :tone="row.is_active ? 'success' : 'baseMuted'"
+        />
+      </template>
+
       <template
         v-for="column in columnsWithSlot"
         :key="column.key"
@@ -260,6 +268,11 @@ const columns = computed<AdvancedTableColumn<SettingsEntityRow>[]>(() => [
     getValue: (item: SettingsEntityRow) => column.getValue?.(item, items.value) ?? getFallbackColumnValue(item, column.key),
     mobileLabel: true,
   })),
+  {
+    key: 'status',
+    label: t('common.status'),
+    getValue: item => (item.is_active ? t('common.active') : t('common.inactive')),
+  },
 ])
 
 const columnsWithSlot = computed(() => columns.value.filter(column => !!slots[cellSlotName(column.key)]))

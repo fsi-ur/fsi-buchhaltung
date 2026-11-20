@@ -8,6 +8,11 @@ export interface TableColumnConfig<T, K extends string = string> {
   key: K
   filterType?: TableFilterType
   getValue: (row: T) => unknown
+  /**
+   * Value for the text filter (options and matching) when it should differ from `getValue`, which
+   * still drives sorting and search — e.g. sort by a timestamp but filter by "online / offline".
+   */
+  filterValue?: (row: T) => unknown
   sortable?: boolean
   filterable?: boolean
   globalSearchable?: boolean
@@ -160,7 +165,7 @@ export function useAdvancedTable<T, K extends string>(
       if (column.filterable === false || (column.filterType ?? 'text') !== 'text') continue
       const counts = new Map<string, number>()
       for (const row of rows.value) {
-        const value = column.getValue(row)
+        const value = (column.filterValue ?? column.getValue)(row)
         const text = value === null || value === undefined || value === '' ? '-' : String(value)
         counts.set(text, (counts.get(text) ?? 0) + 1)
       }
@@ -262,7 +267,8 @@ export function useAdvancedTable<T, K extends string>(
         const value = column.getValue(row)
 
         if (filter?.type === 'text' && filter.selected.length > 0) {
-          const normalizedValue = normalizeText(value === null || value === undefined || value === '' ? '-' : String(value))
+          const filterValue = column.filterValue ? column.filterValue(row) : value
+          const normalizedValue = normalizeText(filterValue === null || filterValue === undefined || filterValue === '' ? '-' : String(filterValue))
           const selected = new Set(filter.selected.map(item => normalizeText(item)))
           if (!selected.has(normalizedValue)) return false
         }
